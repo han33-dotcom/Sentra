@@ -4,9 +4,8 @@ Final-year project exploring privacy-conscious wellness and safety insights. The
 
 ## Project workspace
 
-- [FYP project home](https://app.notion.com/p/3e87b9b98086806d973efef0204f2e7b)
+- [FYP project home and task board](https://app.notion.com/p/3e87b9b98086806d973efef0204f2e7b)
 - [Plan 1](https://app.notion.com/p/3e87b9b98086819296bef0a655f38961)
-- [Task board](https://app.notion.com/p/3e87b9b98086804c9dffeae47b5c8a4e) — filter by Project = FYP
 - [Decisions and open questions](https://app.notion.com/p/3e87b9b9808681eaa878f5634c60801c)
 
 Notion holds the shared plan, tasks, meetings, and decisions. This repository holds code, setup instructions, made-up example data, and reviewed changes. Link a code change from its Notion task.
