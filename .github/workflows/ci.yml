@@ -1,5 +1,7 @@
 # CI/CD for the backend.
+# Branches: feature/* -> PR into develop -> PR develop into main (release). See CONTRIBUTING.md.
 #   every PR and push:  data guard + secret scan -> lint + tests (Linux & Windows) -> Docker image build + smoke test
+#   push to develop:    + publish image tagged develop / sha-xxxxxxx (no deploy)
 #   push to main:       + publish image to GHCR  -> deploy to the backend host (self-hosted runner, opt-in)
 #   tag vX.Y.Z:         + publish image with that version
 name: CI
@@ -7,7 +9,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, develop]
     tags: ["v*"]
   workflow_dispatch:
 
@@ -75,6 +77,7 @@ jobs:
           images: ghcr.io/${{ github.repository }}/backend
           tags: |
             type=ref,event=pr
+            type=ref,event=branch
             type=sha,prefix=sha-,format=short
             type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}

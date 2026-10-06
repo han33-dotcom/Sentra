@@ -14,14 +14,28 @@ wearables-pipeline\.venv\Scripts\pre-commit install     # blocks data/secrets be
 
 Credentials (`secrets/`) and the database (`data/`) are shared outside git (ask Mohamad); never commit them.
 
+## Branches
+
+| Branch | Purpose | Who writes to it |
+|---|---|---|
+| `main` | Released, demo-ready. Every merge publishes `backend:latest` and (if enabled) deploys the backend. | PRs from `develop` (or `hotfix/*`) only |
+| `develop` | Integration branch for the sprint. Every merge publishes `backend:develop`. | PRs from feature branches |
+| `feat/<short-name>` | One task / issue | You |
+| `fix/<short-name>` | Bug fix on `develop` | You |
+| `hotfix/<short-name>` | Urgent fix branched from `main`, merged into `main` **and** `develop` | You |
+| `chore/`, `docs/`, `ci/` | Tooling, docs, pipelines | You |
+
+Both `main` and `develop` are protected: no direct pushes, PR + green CI + 1 review, squash merge.
+
 ## Flow
 
 1. Pick or open an issue (Task / Bug template). Sprint = one GitHub milestone per week.
-2. Branch from `main`: `feat/<short-name>`, `fix/<short-name>`, `chore/<...>`, `docs/<...>`.
+2. `git switch develop && git pull` then `git switch -c feat/<short-name>`.
 3. Commit in small steps. Message style: `feat(ingest): add Garmin sleep`, `fix(api): ...`, `ci: ...`.
-4. Push and open a PR (template fills itself). CI must be green.
+4. `git push -u origin feat/<short-name>` and open a PR **into `develop`**. CI must be green.
 5. One teammate reviews. Squash-merge. The branch is deleted automatically.
-6. Merging to `main` publishes a new backend image; if deploys are enabled the backend PC updates itself.
+6. Release (end of sprint / before a demo): PR `develop` -> `main`, merge commit, tag `vX.Y.Z`.
+   That publishes the backend image and, if deploys are enabled, updates the backend PC.
 
 ## Tests
 

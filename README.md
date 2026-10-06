@@ -47,7 +47,8 @@ curl http://localhost:8000/health
 
 | When | What runs |
 |---|---|
-| Every PR / push | data guard + gitleaks → ruff + pytest (Ubuntu 3.11/3.12, Windows 3.12) → Docker build + smoke test |
+| Every PR / push to `develop` | data guard + gitleaks → ruff + pytest (Ubuntu 3.11/3.12, Windows 3.12) → Docker build + smoke test |
+| Merge to `develop` | image published as `backend:develop` (no deploy) |
 | Merge to `main` | image published to `ghcr.io/<org>/<repo>/backend:latest` and `:sha-xxxxxxx` → deploy job on the backend PC (opt-in, see `docs/DEPLOYMENT.md`) |
 | Change under `website/` on `main` | site deployed to GitHub Pages |
 | Tag `v1.2.3` | image also tagged `1.2.3` |
@@ -55,4 +56,4 @@ curl http://localhost:8000/health
 ## Rules
 
 - **No personal data in git, ever**: `data/`, `secrets/`, `reports/`, `*.db`, `*.parquet`, exports, tokens. `.gitignore`, the pre-commit hook and CI all enforce it.
-- `main` is protected: branch → PR → green CI → 1 review → squash merge. See `CONTRIBUTING.md`.
+- Branching: `feat/*` → PR into `develop` → release PR `develop` → `main`. Both protected (PR + green CI + 1 review). See `CONTRIBUTING.md`.
