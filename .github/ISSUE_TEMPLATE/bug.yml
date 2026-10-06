@@ -1,0 +1,20 @@
+name: Bug
+description: Something is broken
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: Commands, account type (Fitbit / WHOOP), log lines. Never paste tokens, emails or health values.
+  - type: input
+    id: where
+    attributes:
+      label: Where
+      placeholder: Windows scheduled task / Docker worker / API / website

@@ -1,0 +1,51 @@
+# Sentra backend.   docker compose up -d --build     (local build)
+#                   docker compose pull && docker compose up -d   (image published by CI)
+# Settings come from .env (copy .env.example). Health data lives in the wp-data volume, never in git.
+name: sentra
+
+x-backend: &backend
+  image: ${BACKEND_IMAGE:-sentra-backend:local}
+  build:
+    context: ./wearables-pipeline
+    args:
+      WP_VERSION: ${WP_VERSION:-local}
+  env_file: ${ENV_FILE:-.env}        # deploy job points this at the server copy
+  restart: unless-stopped
+  volumes:
+    - wp-data:/data
+    - ${SECRETS_DIR:-./wearables-pipeline/secrets}:/secrets   # OAuth clients + per-person tokens (refreshed in place)
+
+services:
+  worker:
+    <<: *backend
+    command: ["python", "-m", "wp", "worker"]
+    healthcheck:
+      test: ["CMD", "python", "-m", "wp", "healthcheck"]
+      interval: 60s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+
+  api:
+    <<: *backend
+    command: ["uvicorn", "wp.api:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"     # local only; expose through the tunnel profile
+    depends_on: [worker]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Public HTTPS URL for the WHOOP webhook (https://<your-tunnel>/webhooks/whoop) without opening ports.
+  # docker compose --profile public up -d     needs CLOUDFLARE_TUNNEL_TOKEN in .env
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    profiles: ["public"]
+    command: ["tunnel", "--no-autoupdate", "run", "--token", "${CLOUDFLARE_TUNNEL_TOKEN:-}"]
+    restart: unless-stopped
+    depends_on: [api]
+
+volumes:
+  wp-data:

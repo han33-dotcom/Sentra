@@ -1,0 +1,11 @@
+# name | color | description   (applied by scripts/github_setup.ps1)
+- [bug, d73a4a, Something is broken]
+- [task, 0e8a16, Sprint work item]
+- [ingestion, 1d76db, Device APIs, sync, storage]
+- [processing, 5319e7, Features, baselines, flags]
+- [backend, 0052cc, Worker, API, Docker]
+- [infra, 6f42c1, CI/CD, GitHub, deployment]
+- [website, fbca04, Marketing site]
+- [data-medical, e99695, Needs the medical expert's input]
+- [security, b60205, Privacy / security]
+- [dependencies, cccccc, Dependabot updates]

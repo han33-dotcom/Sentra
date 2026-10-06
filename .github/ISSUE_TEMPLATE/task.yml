@@ -1,0 +1,23 @@
+name: Task
+description: A piece of work for the sprint
+labels: ["task"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What needs to happen
+      description: Outcome, not steps.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [ingestion, processing, api / backend, infra / CI, website, data / medical, docs]
+    validations:
+      required: true
+  - type: textarea
+    id: done
+    attributes:
+      label: Done when
+      placeholder: "- tests pass\n- daily features include X"

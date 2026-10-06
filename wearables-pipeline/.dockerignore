@@ -1,0 +1,9 @@
+.venv
+data
+secrets
+reports
+tests
+**/__pycache__
+*.bat
+*.ps1
+*.db

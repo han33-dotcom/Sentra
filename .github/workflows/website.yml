@@ -1,0 +1,38 @@
+# Publishes website/ to GitHub Pages whenever it changes on main.
+name: Website
+
+on:
+  push:
+    branches: [main]
+    paths: ["website/**", ".github/workflows/website.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check every local link resolves
+        run: |
+          cd website
+          grep -oE '(src|href)="[^"#?]+' index.html | cut -d'"' -f2 | grep -vE '^(https?:|mailto:|//)' | sort -u | while read -r f; do
+            test -e "$f" || { echo "missing: $f"; exit 1; }
+          done
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: website
+      - id: pages
+        uses: actions/deploy-pages@v4

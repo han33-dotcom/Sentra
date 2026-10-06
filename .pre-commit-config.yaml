@@ -1,0 +1,32 @@
+# One-time:  pip install pre-commit  &&  pre-commit install
+repos:
+  - repo: local
+    hooks:
+      - id: data-guard
+        name: no health data / secrets in git
+        entry: python scripts/check_no_data.py --staged
+        language: system
+        pass_filenames: false
+        always_run: true
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=2000"]
+      - id: detect-private-key
+      - id: check-yaml
+      - id: check-json
+      - id: end-of-file-fixer
+        exclude: ^website/vendor/
+      - id: trailing-whitespace
+        exclude: ^website/vendor/
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: ["--config", "wearables-pipeline/pyproject.toml"]
+        files: ^wearables-pipeline/
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks

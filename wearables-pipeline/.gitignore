@@ -1,0 +1,9 @@
+# personal health data and credentials never go to git (see ../SECURITY.md)
+data/
+secrets/
+reports/
+*.db
+*.parquet
+__pycache__/
+.venv/
+CONNECT_*.bat

@@ -1,0 +1,17 @@
+{
+  "_note": "v0 PLACEHOLDERS. Every value here must be confirmed or replaced after the medical expert session.",
+  "default_age": 30,
+  "valid_day_min_wear_minutes": 600,
+  "hr_valid_range_bpm": [30, 220],
+  "shift_window_local": ["08:00", "18:00"],
+  "baseline_days": 28,
+  "baseline_min_days": 7,
+  "z_alert": 2.0,
+  "short_sleep_minutes": 360,
+  "sustained_hr_rule": "hr > 180 - age",
+  "sustained_hr_min_minutes": 5,
+  "active_met": 3.0,
+  "sedentary_met": 1.5,
+  "long_inactivity_minutes": 90,
+  "cohort_k_anonymity": 5
+}

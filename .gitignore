@@ -1,0 +1,49 @@
+# ========================================================================
+#  NEVER IN GIT: personal health data, credentials, generated outputs.
+#  scripts/check_no_data.py enforces this in pre-commit and in CI.
+# ========================================================================
+**/data/
+**/secrets/
+**/tokens/
+**/reports/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+*.parquet
+*.log
+.env
+.env.*
+!.env.example
+
+# one-off helpers that held real sign-in codes
+wearables-pipeline/CONNECT_*.bat
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Website QA screenshots (regenerate locally)
+website/qa/
+
+# Office docs, PDFs and archives at the root live in Notion / Drive, not in git
+/*.docx
+/*.pdf
+/*.pptx
+/*.xlsx
+/*.zip
+/*.png
+~$*
+
+# OS / editors
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
