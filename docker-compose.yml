@@ -5,10 +5,6 @@ name: sentra
 
 x-backend: &backend
   image: ${BACKEND_IMAGE:-sentra-backend:local}
-  build:
-    context: ./wearables-pipeline
-    args:
-      WP_VERSION: ${WP_VERSION:-local}
   env_file: ${ENV_FILE:-.env}        # deploy job points this at the server copy
   restart: unless-stopped
   volumes:
@@ -18,6 +14,12 @@ x-backend: &backend
 services:
   worker:
     <<: *backend
+    build:                             # only one service builds; api reuses the same image tag
+      context: ./wearables-pipeline
+      args:
+        WP_VERSION: ${WP_VERSION:-local}
+    environment:
+      WP_WORKER_OWNS_DATA: "1"         # sole writer on wp-data: clear a lock left by a killed container
     command: ["python", "-m", "wp", "worker"]
     healthcheck:
       test: ["CMD", "python", "-m", "wp", "healthcheck"]

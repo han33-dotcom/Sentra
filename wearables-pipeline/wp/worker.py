@@ -102,6 +102,14 @@ class RunLock:
     def __exit__(self, *exc):
         self.path.unlink(missing_ok=True)
 
+    def clear_leftover(self):
+        """Drop a lock left by a previous worker that was killed mid-run (container restart / redeploy).
+        Only for a worker that is the sole writer on its data folder (WP_WORKER_OWNS_DATA=1)."""
+        if self.path.exists():
+            self.path.unlink(missing_ok=True)
+            return True
+        return False
+
 
 # ------------------------------------------------------------------ triggers ----------------------------
 def request_sync(provider="all", reason=""):
@@ -181,7 +189,9 @@ def run_forever(every_min=None, log=print):
         heartbeat()
         outer(msg)
     next_full = 0.0
-    log(f"[worker] up: full sync every {every // 60} min, refresh at most every {PROCESS_MIN_GAP_MIN} min, "
+    if os.environ.get("WP_WORKER_OWNS_DATA") == "1" and RunLock().clear_leftover():
+        log("[worker] cleared a lock left by a previous worker")
+    log(f"[worker] up:full sync every {every // 60} min, refresh at most every {PROCESS_MIN_GAP_MIN} min, "
         f"triggers in {trigger_dir()}")
     while True:
         heartbeat()

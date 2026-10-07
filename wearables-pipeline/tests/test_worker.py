@@ -94,3 +94,17 @@ def test_triggers_and_lock(wp_home):
                 raise AssertionError("second lock must fail")
         except worker.Busy:
             pass
+
+
+def test_owning_worker_clears_a_leftover_lock(wp_home):
+    lock = worker.RunLock()
+    lock.path.write_text("1 0")                           # a killed container left this behind
+    try:
+        with worker.RunLock():
+            raise AssertionError("leftover lock must block until cleared")
+    except worker.Busy:
+        pass
+    assert lock.clear_leftover() is True
+    with worker.RunLock():                                # free again
+        pass
+    assert lock.clear_leftover() is False
