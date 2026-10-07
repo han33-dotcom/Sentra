@@ -39,9 +39,8 @@ class FakeClient:
         yield from fake_points(dt)
 
 
-def test_sync_is_idempotent(tmp_path=None):
-    path = (tmp_path or Path("/tmp")) / "t.db"
-    path.unlink(missing_ok=True)
+def test_sync_is_idempotent(tmp_path):
+    path = tmp_path / "t.db"
     con = db.connect(path)
     sync.register(con, "mohamad")
     for _ in range(3):  # three overlapping runs must not duplicate anything
@@ -55,8 +54,12 @@ def test_sync_is_idempotent(tmp_path=None):
     assert q("SELECT COUNT(*) FROM observations WHERE metric = 'daily_respiratory_rate'") == 1
     assert q("SELECT COUNT(*) FROM sessions") == 1
     assert q("SELECT device FROM observations WHERE metric='heart_rate' LIMIT 1") == "Fitbit Air"
+    con.close()
     print("sync test OK")
 
 
 if __name__ == "__main__":
-    test_sync_is_idempotent()
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as d:
+        test_sync_is_idempotent(Path(d))
