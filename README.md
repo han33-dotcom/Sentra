@@ -1,6 +1,8 @@
 # FYP — Wellness & Safety
 
-Final-year project exploring privacy-conscious wellness and safety insights. The current phase is **Plan 1: Fitbit Air data feasibility** with the Google Health API. The final use case will be chosen after the team measures what data is available and how timely it is.
+Final-year project exploring institutional health and safety through consumer wearable data. No first customer industry has been selected. The current phase is **Stage 3: private shared storage and capacity controls**, with one Fitbit Air participant and one WHOOP participant using an existing membership. The final use case will be chosen after the team measures what data is available and how timely it is.
+
+Read the [Stage 0 feasibility report and implementation checklist](docs/stage-0-feasibility.md), [Stage 1 setup/status](docs/stage-1-setup.md) and [schema review](docs/schema.md). Stage 1 acceptance checks passed on 8 October 2026: a Python CLI, encrypted local authorization/sample storage, a PostgreSQL schema draft, and real authorization, populated samples and token renewal for Google Health (`sentra-510913`) and WHOOP. Google Testing mode still requires reconnecting after seven days. Manual Fitbit export ingestion remains a fallback if later access checks fail; it does not provide automated daily updates. Subsequent stages require explicit approval.
 
 ## Project workspace
 
@@ -12,13 +14,16 @@ Notion holds the shared plan, tasks, meetings, and decisions. This repository ho
 
 ## First milestone
 
-Both Fitbit Air owners can run the same retrieval process with their own accounts. The team has a data dictionary and a short report on missing data and arrival delay. The team then chooses one FYP question and an evaluation method with supervisor input.
+Establish reproducible authorization and retrieval for WHOOP, verify the existing Google Health project's Fitbit access, document the manual-export fallback, and define a reviewable audit schema. Subsequent stages will establish a data dictionary and findings on missing data and arrival delay. The team then chooses one FYP question and an evaluation method with supervisor input.
 
 ## Working rules
 
 - Assign one owner to each Notion task and define what "done" means.
 - Work on a branch for each code change and ask a teammate to review it.
+- After each stage, report completion, changes, checks, open dependencies and the next stage, and propose a commit message. Wait for explicit approval before committing/pushing and before starting the next stage.
 - Do not commit raw wearable records, credentials, tokens, or consent documents. Use synthetic examples in the repository.
 - Confirm ethics and approved storage requirements with the supervisor before using participant data as research findings.
 
-The application structure and run instructions will be added with the first implementation task.
+Follow [Stage 1 setup](docs/stage-1-setup.md) to install and authorize accounts, then [Stage 2 collection instructions and evidence](docs/stage-2-collection.md) to import, resume, inspect status, verify sources and create private extracts. [Stage 3 storage instructions and evidence](docs/stage-3-storage.md) cover deployed Supabase Free storage, private originals, separate collector/viewer permissions, quota stops and encrypted backup restoration. The daily workflow and browser viewer require approval of Stages 4 and 5. Read the Stage 3 capacity finding before enabling ongoing minute-data collection.
+
+The planned Stage 7 observation is now a [three-day initial audit](docs/stage-7-audit-plan.md), with preliminary findings and existing imports retained. It starts only after Stages 4–6 and explicit approval of the observation period. Further collection beyond that window requires review and approval; the capacity guards remain in force.

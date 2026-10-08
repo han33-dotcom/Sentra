@@ -1,0 +1,13 @@
+{
+  "confirmed_free_plan": false,
+  "url": "https://YOUR_PROJECT_REF.supabase.co",
+  "publishable_key": "COPY_PUBLISHABLE_KEY",
+  "secret_key": "COPY_SECRET_KEY_FOR_BOOTSTRAP_ONLY",
+  "db": {
+    "host": "COPY_SESSION_POOLER_HOST",
+    "port": 5432,
+    "dbname": "postgres",
+    "user": "postgres.YOUR_PROJECT_REF",
+    "password": "YOUR_DATABASE_PASSWORD"
+  }
+}

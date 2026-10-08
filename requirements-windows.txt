@@ -1,0 +1,26 @@
+# Tested on Windows / Python 3.11. Install before pip install --no-deps -e .
+backports.tarfile==1.2.0
+certifi==2026.7.22
+cffi==2.1.1
+charset-normalizer==3.5.2
+cryptography==46.0.7
+filelock==3.32.7
+idna==3.20
+importlib_metadata==9.0.1
+jaraco.classes==3.4.0
+jaraco.context==6.1.2
+jaraco.functools==4.6.0
+keyring==25.7.0
+more-itertools==11.1.0
+oauthlib==4.0.0
+pglast==7.20
+psycopg==3.3.6
+psycopg-binary==3.3.6
+pycparser==3.0
+pywin32-ctypes==0.2.3
+requests-oauthlib==2.0.0
+requests==2.34.2
+tzdata==2026.5
+typing_extensions==4.16.0
+urllib3==2.8.0
+zipp==4.1.1
