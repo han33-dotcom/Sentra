@@ -1,6 +1,6 @@
 # FYP — Wellness & Safety
 
-Final-year project exploring institutional health and safety through consumer wearable data. No first customer industry has been selected. The current phase is **Stage 4: daily cloud collection, awaiting publication and GitHub acceptance**, with one Fitbit Air participant and one WHOOP participant using an existing membership. The final use case will be chosen after the team measures what data is available and how timely it is.
+Final-year project exploring institutional health and safety through consumer wearable data. No first customer industry has been selected. **Stage 4: daily cloud collection is complete**; the private viewer in Stage 5 awaits approval. The pipeline has one Fitbit Air participant and one WHOOP participant using an existing membership. The final use case will be chosen after the team measures what data is available and how timely it is.
 
 Read the [Stage 0 feasibility report and implementation checklist](docs/stage-0-feasibility.md), [Stage 1 setup/status](docs/stage-1-setup.md) and [schema review](docs/schema.md). Stage 1 acceptance checks passed on 8 October 2026: a Python CLI, encrypted local authorization/sample storage, a PostgreSQL schema draft, and real authorization, populated samples and token renewal for Google Health (`sentra-510913`) and WHOOP. Google Testing mode still requires reconnecting after seven days. Manual Fitbit export ingestion remains a fallback if later access checks fail; it does not provide automated daily updates. Subsequent stages require explicit approval.
 
