@@ -1,0 +1,75 @@
+name: Private wearable collection
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+      timezone: Asia/Beirut
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Daily approved observation, initial history import, or bounded recovery
+        type: choice
+        options: [daily, initial, recovery]
+        default: daily
+      provider:
+        description: Provider to collect
+        type: choice
+        options: [all, google_health, whoop]
+        default: all
+      start:
+        description: Inclusive Beirut date for initial/recovery (YYYY-MM-DD)
+        type: string
+      end:
+        description: Exclusive Beirut date for initial/recovery (YYYY-MM-DD)
+        type: string
+      dataset:
+        description: Optional dataset; leave empty for all selected provider datasets
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sentra-collection
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    # Stage 7 approval sets this variable; manual acceptance/recovery remains available.
+    if: vars.SENTRA_ZERO_SPEND_CONFIRMED == 'true' && (github.event_name == 'workflow_dispatch' || vars.SENTRA_COLLECTION_ENABLED == 'true')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+      - name: Install pinned collector dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -r requirements-cloud.txt
+          python -m pip install --disable-pip-version-check --no-deps .
+          python -m pip check
+      - name: Collect into private shared storage
+        env:
+          SENTRA_COLLECTOR_CONFIG: ${{ secrets.SENTRA_COLLECTOR_CONFIG }}
+          SENTRA_TOKEN_KEY: ${{ secrets.SENTRA_TOKEN_KEY }}
+          COLLECTION_MODE: ${{ inputs.mode || 'daily' }}
+          COLLECTION_PROVIDER: ${{ inputs.provider || 'all' }}
+          COLLECTION_START: ${{ inputs.start }}
+          COLLECTION_END: ${{ inputs.end }}
+          COLLECTION_DATASET: ${{ inputs.dataset }}
+          PYTHONUNBUFFERED: '1'
+        # Inputs enter argv as values; no shell evaluation/interpolation of user input.
+        run: |
+          python - <<'PY'
+          import os
+          from sentra.cloud_run import main
+          args = ['--mode', os.environ['COLLECTION_MODE'], '--provider', os.environ['COLLECTION_PROVIDER']]
+          for field in ('start', 'end', 'dataset'):
+              value = os.environ['COLLECTION_' + field.upper()]
+              if value:
+                  args.extend(['--' + field, value])
+          raise SystemExit(main(args))
+          PY

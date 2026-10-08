@@ -71,6 +71,15 @@ def token_state(token, previous=None):
 
 
 def authorize(connection, vault, *, timeout=300):
+    with vault.lock:
+        try: previous=vault.read()
+        except SentraError: previous={}
+        if previous.get('cloud_owned'):
+            raise SentraError('Connection is cloud-managed; use cloud-connect --reauthorize for serialized reconnect.')
+        return _authorize_locked(connection,vault,timeout=timeout)
+
+
+def _authorize_locked(connection, vault, *, timeout=300):
     require_agreement(connection)
     provider = PROVIDERS[connection.provider]
     state = secrets.token_urlsafe(6) if connection.provider == "whoop" else secrets.token_urlsafe(32)
@@ -130,6 +139,8 @@ def access_token(connection, vault, *, force_refresh=False):
     require_agreement(connection)
     with vault.lock:
         previous = vault.read()
+        if previous.get('cloud_owned'):
+            raise SentraError('Connection is cloud-managed; use cloud collection or cloud-connect --reauthorize. Local token copy must not refresh.')
         if previous.get("reconnect_required"):
             raise SentraError("Connection requires reauthorization; run sentra authorize.")
         if previous.get("refresh_expires_at", float("inf")) <= time.time():

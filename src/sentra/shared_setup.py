@@ -71,7 +71,7 @@ def bootstrap(private, cipher, *, baseline):
         def checkpoint():
             atomic_write(journal,cipher.encrypt(json.dumps(state).encode()))
         repo = Path(__file__).resolve().parents[2]
-        for migration in ('001_foundation.sql','002_permissions.sql','003_numeric_precision.sql'):
+        for migration in ('001_foundation.sql','002_permissions.sql','003_numeric_precision.sql','004_daily_collection.sql'):
             content = (repo / 'sql' / migration).read_text(encoding='utf-8')
             digest = hashlib.sha256(content.encode()).hexdigest()
             installed = None

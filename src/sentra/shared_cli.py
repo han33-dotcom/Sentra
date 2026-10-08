@@ -63,6 +63,8 @@ def check_access(config,cipher,backend):
         for statement in ('update audit.records set content_sha256=content_sha256 where false',
                           'select encrypted_token_bundle from collector_private.provider_credentials limit 0',
                           'select * from collector_private.storage_members limit 0',
+                          'select * from collector_private.daily_jobs limit 0',
+                          'select * from collector_private.observation_control limit 0',
                           'set role sentra_collector'):
             try: db.execute(statement)
             except psycopg.errors.InsufficientPrivilege: continue
@@ -121,6 +123,11 @@ def run_command(args):
                 try:
                     connection = load_connection(args.config,provider,require_client=False)
                     require_agreement(connection)
+                    if args.command == 'shared-sync':
+                        backend.reserve(16384)
+                        if backend.db.execute('select 1 from collector_private.provider_credentials where participant_id=%s and provider=%s',
+                                              (connection.participant_id,provider)).fetchone():
+                            raise SentraError('Connection is cloud-managed; use cloud collection. An old local snapshot must not overwrite cloud corrections or coverage.')
                     store = LocalStore(connection,cipher)
                     if args.command == 'shared-sync':
                         result = sync_store(store,backend,notify=lambda dataset: print(f'{provider} {dataset}: shared transfer',flush=True))
