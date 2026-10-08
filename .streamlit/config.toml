@@ -1,0 +1,17 @@
+[browser]
+gatherUsageStats = false
+
+[server]
+headless = true
+enableXsrfProtection = true
+enableCORS = true
+enableStaticServing = false
+fileWatcherType = "none"
+
+[client]
+showErrorDetails = "none"
+toolbarMode = "minimal"
+
+[theme]
+base = "light"
+primaryColor = "#12634d"

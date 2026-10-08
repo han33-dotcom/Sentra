@@ -8,6 +8,8 @@ __pycache__/
 .env.*
 !.env.example
 config/local.toml
+.streamlit/secrets.toml
+viewer/.streamlit/secrets.toml
 client_secret*.json
 credentials*.json
 *.enc
