@@ -27,3 +27,8 @@ Establish reproducible authorization and retrieval for WHOOP, verify the existin
 Follow [Stage 1 setup](docs/stage-1-setup.md) to install and authorize accounts, then [Stage 2 collection instructions and evidence](docs/stage-2-collection.md) to import, resume, inspect status, verify sources and create private extracts. [Stage 3 storage instructions and evidence](docs/stage-3-storage.md) cover deployed Supabase Free storage, private originals, separate collector/viewer permissions, quota stops and encrypted backup restoration. [Stage 4 collection instructions and evidence](docs/stage-4-collection.md) cover cloud credential ownership, recovery, midnight Beirut scheduling and the publication/acceptance gate. [Stage 5 viewer instructions](docs/stage-5-viewer.md) cover the deployed private viewer, sign-in, filters, audit evidence, verified CSV/original downloads, capacity and free hosting. Read the capacity finding before enabling ongoing minute-data collection.
 
 The planned Stage 7 observation is now a [three-day initial audit](docs/stage-7-audit-plan.md), with preliminary findings and existing imports retained. It starts only after Stages 4–6 and explicit approval of the observation period. Further collection beyond that window requires review and approval; the capacity guards remain in force.
+
+**Stage 6 validation is complete**, including user-confirmed matches for the two
+selected participant-app values. Read the [evidence and practical limits](docs/stage-6-validation.md)
+and the [operating guide](docs/operating-guide.md). Stage 7 remains paused pending
+explicit approval and current capacity/billing checks.

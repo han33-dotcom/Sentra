@@ -45,6 +45,18 @@ class DailyPlanTests(unittest.TestCase):
         self.assertEqual(m.window_status(window,date(2026,10,13)),'ended')
         with self.assertRaises(SentraError): m.window_status({**window,'end':'2026-10-24'},date(2026,10,10))
 
+    def test_autumn_repeated_hour_stays_in_same_day_for_collector_and_viewer(self):
+        from sentra.viewer_data import Selection
+        m=self.module()
+        job=m.day_jobs('whoop',date(2026,10,24))[0]
+        selection=Selection('p99','whoop','cycle',date(2026,10,24),date(2026,10,25))
+        self.assertEqual((selection.end_utc-selection.start_utc).total_seconds(),25*3600)
+        self.assertEqual(datetime.fromisoformat(job.start.replace('Z','+00:00')),selection.start_utc)
+        self.assertEqual(datetime.fromisoformat(job.end.replace('Z','+00:00')),selection.end_utc)
+        # Beirut repeats 23:00 when clocks fall back; midnight arrives at 22:00 UTC.
+        for hour,minute,expected in ((20,59,24),(21,0,24),(21,59,24),(22,0,25)):
+            self.assertEqual(m.collection_day(datetime(2026,10,24,hour,minute,tzinfo=timezone.utc)),date(2026,10,expected))
+
     def test_old_recovery_or_unknown_coverage_requires_bounded_manual_import(self):
         m=self.module()
         with self.assertRaises(SentraError): m.request_days([],date(2026,10,10))
