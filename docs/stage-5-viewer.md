@@ -1,12 +1,20 @@
 # Stage 5 — private team audit viewer
 
-Implemented on `ETL-pipeline`, 8 October 2026. **Hosted acceptance is pending
-private deployment and an authorized teammate's check.**
+Implemented on `ETL-pipeline`, 8 October 2026; **private hosted acceptance completed
+9 October 2026** using the authorized owner's real Google session.
+Open the [private team viewer](https://sentra-wearable-audit.streamlit.app).
 The Stage 4 documentation approval was committed/pushed as `9cf2856`; Stage 5
 commit message and branch publication received explicit approval after review.
+The host runs viewer commit `70c0b7d` from `ETL-pipeline`.
 No observation/daily collection was enabled.
 
 ## Review and try
+
+Use the hosted link above, sign in with a consented allowlisted Google account,
+and follow the same filter/load/download steps described below. Streamlit sharing
+is set to **Only specific people can view this app**; the approved two additional
+viewer addresses were saved in its sharing list. The application independently
+permits the approved three accounts. Email receipt was not checked.
 
 Entrypoint: `viewer/app.py`. Viewer code is in `src/sentra/viewer_*.py`; the narrow
 status/egress migration is `sql/005_viewer_status.sql`. Use Python 3.11 locally
@@ -76,7 +84,7 @@ data link only after authorization, so there is no separate URL an unlisted visi
 can request. No vendor HTML is executed. Downloads remain on the teammate's device;
 they are responsible for keeping these private. Unexpected errors are sanitized.
 
-## Publish one free private app after commit approval
+## Reproduce the free private deployment
 
 [Community Cloud sharing](https://docs.streamlit.io/deploy/streamlit-community-cloud/share-your-app)
 supports one private app. Apps from private repositories default to private, and
@@ -87,6 +95,9 @@ even when repository developers or other platform-invited viewers reach the app.
    branch in Streamlit; deploying `ETL-pipeline` avoids a needless merge into main.
    Entrypoint: `viewer/app.py`; Python **3.11**. `viewer/requirements.txt` takes
    precedence over the root package definition; it pins viewer/cloud dependencies.
+   The deployed runtime is Python 3.11.17. The host replaced pinned PyArrow 25.0.1
+   with 24.0.0, citing its known-segfault mitigation; acceptance checks used this
+   effective runtime. Preserve this detail when comparing local and hosted behavior.
 2. Choose the actual available app subdomain. Register its exact
    `https://APP.streamlit.app/oauth2callback` on the **identity** client, preserving
    the localhost callback, and save its updated JSON privately.
@@ -168,12 +179,26 @@ findings labelled preliminary; the three-day observation has not started.
   SQL and known credential/email checks passed. Independent review findings were
   reproduced and fixed, including a live rollback reservation regression.
 - Local browser rendered synthetic tables/charts and protected CSV/gzip data links;
-  rendered bytes matched fixtures. Browser download capture timed out, so actual
-  saved-file behavior still needs teammate acceptance. Real owner-account OIDC
-  sign-in opened the catalog after its approved addition; hosted privacy checks
-  remain pending. Detailed evidence is in the
-  [execution ledger](stage-5-plan.md); do not infer hosted acceptance.
+  rendered bytes matched fixtures. Real owner-account Google OIDC sign-in succeeded
+  locally and on the deployed app, using the separate identity client.
+- Hosted Google selection: p01 / google_health / daily_steps / All returned fields /
+  7 October 2026. Chrome saved both files to the authorized owner's Downloads:
+  CSV 5,702 bytes / 9 fields, original gzip 184 bytes. Saved CSV bytes exactly
+  matched the backend selection; decompressed original SHA-256 matched its manifest.
+  Browser event capture timed out despite successful file saves, so filesystem
+  comparisons established acceptance. Private evidence/downloads remain ignored.
+- Hosted WHOOP selection: p02 / whoop / sleep / All returned fields / 7 October
+  2026. Chrome saved a CSV containing 26 fields from one sleep session; saved bytes
+  exactly matched the backend selection. Switching participant cleared the previous
+  prepared Google extracts when the server rerun completed.
+- Hosted sharing remained private. An anonymous session received HTTP 404 from the
+  protected app frame (`/~/+/`), while the owner could load the real data. The outer
+  frontend shell can return HTTP 200 and is not evidence of health-data access.
+  Actual local unlisted-account OIDC denial and synthetic unlisted/unverified/
+  expired denial checks complement this test; no real hosted unlisted account was used.
+- The host received only restricted viewer credentials, the identity client secret
+  and the allowlist. No collector/admin secrets or wearable tokens were uploaded.
+  Detailed evidence is in the [execution ledger](stage-5-plan.md).
 
-Remaining Stage 5 acceptance requires approved publication/private deployment and
-listed teammate/unauthorized visitor checks. Stage 6 will validate broader pipeline
+Stage 5 acceptance is complete. Stage 6 will validate broader pipeline
 failure/reconnect/backup and end-to-end operations after explicit stage approval.
