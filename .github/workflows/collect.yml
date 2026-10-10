@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: Daily approved observation, initial history import, or bounded recovery
+        description: Approved daily collection, initial history import, or bounded recovery
         type: choice
         options: [daily, initial, recovery]
         default: daily
@@ -35,7 +35,7 @@ concurrency:
 
 jobs:
   collect:
-    # Stage 7 approval sets this variable; manual acceptance/recovery remains available.
+    # Enable only after reviewed publication and verified zero-spend/capacity gates.
     if: vars.SENTRA_ZERO_SPEND_CONFIRMED == 'true' && (github.event_name == 'workflow_dispatch' || vars.SENTRA_COLLECTION_ENABLED == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 45

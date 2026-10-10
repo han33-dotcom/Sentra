@@ -10,7 +10,7 @@ from .local_store import CapacityStop,compact_record
 
 @dataclass(frozen=True)
 class Limits:
-    database_bytes: int = 350_000_000
+    database_bytes: int = 400_000_000
     object_bytes: int = 700_000_000
     monthly_egress_bytes: int = 3_500_000_000
     reserve_bytes: int = 20_000_000

@@ -1,4 +1,4 @@
-"""Calendar-day recovery and bounded observation; no provider calls."""
+"""Calendar-day recovery and explicit ongoing/bounded collection; no provider calls."""
 from datetime import date,datetime,timedelta,timezone
 
 from .datasets import BEIRUT,Job,plan_jobs,utc_day
@@ -40,11 +40,27 @@ def request_days(covered,end):
 def window_status(window,day):
     if window.get('enabled') is not True: return 'paused'
     try:
-        start=date.fromisoformat(window['start']); end=date.fromisoformat(window['end'])
+        start=date.fromisoformat(window['start'])
+        mode=window.get('mode','bounded')
+        if mode=='ongoing':
+            if 'end' in window: raise ValueError
+            return 'not_started' if day<start else 'active'
+        if mode!='bounded': raise ValueError
+        end=date.fromisoformat(window['end'])
         if (end-start).days!=3: raise ValueError
     except (KeyError,TypeError,ValueError):
-        raise SentraError('Approved observation must specify exactly three calendar days.') from None
+        raise SentraError('Collection control requires an explicit ongoing start or a bounded three-day window.') from None
     return 'not_started' if day<start else ('ended' if day>=end else 'active')
+
+
+def collection_control(*,start=None,pause=False,approved=False,ongoing=False):
+    if pause:
+        if start is not None or ongoing: raise SentraError('Pause cannot also specify a start or ongoing collection.')
+        return {'enabled':False}
+    if not approved or type(start) is not date:
+        raise SentraError('Explicit human collection approval and start date are required.')
+    if ongoing: return {'enabled':True,'mode':'ongoing','start':start.isoformat()}
+    return {'enabled':True,'start':start.isoformat(),'end':(start+timedelta(days=3)).isoformat()}
 
 
 def merge_coverage(covered,job):

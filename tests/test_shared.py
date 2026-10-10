@@ -16,13 +16,12 @@ class SharedTests(unittest.TestCase):
 
     def test_capacity_reserve_and_unknown_usage_fail_closed(self):
         m = self.module()
-        limits = m.Limits(database_bytes=350_000_000, object_bytes=700_000_000,
-                          monthly_egress_bytes=3_500_000_000, reserve_bytes=20_000_000)
-        limits.check({'database_bytes': 328_000_000, 'object_bytes': 1, 'egress_bytes': 1}, database_add=1_000_000)
-        for usage in ({'database_bytes': 330_000_000, 'object_bytes': 1, 'egress_bytes': 1},
+        limits = m.Limits()
+        limits.check({'database_bytes': 378_000_000, 'object_bytes': 1, 'egress_bytes': 1}, database_add=1_000_000)
+        for usage in ({'database_bytes': 379_000_000, 'object_bytes': 1, 'egress_bytes': 1},
                       {'database_bytes': 1, 'object_bytes': 1, 'egress_bytes': None}):
             with self.assertRaises(m.CapacityStop):
-                limits.check(usage, database_add=1)
+                limits.check(usage, database_add=1_000_000)
 
     def test_thresholds_cannot_exceed_free_allowances(self):
         m = self.module()

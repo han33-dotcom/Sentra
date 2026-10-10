@@ -19,9 +19,11 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pglast>=7,<8"]
+viewer = ["streamlit[auth]==1.65.0", "Authlib==1.8.0"]
 
 [project.scripts]
 sentra = "sentra.cli:main"
+sentra-viewer-setup = "sentra.viewer_setup:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

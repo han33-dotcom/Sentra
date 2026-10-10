@@ -39,7 +39,7 @@ zero-spending controls before cloud execution; do not buy a plan or runner.
 - [x] Run status, actual execution time, recent provisional data, storage statistics, observation pause/window and capacity stops.
 - [x] Workflow/manual triggers, minimal dependencies, secure secret preparation and setup guide; test workflow syntax/configuration without publishing.
 - [x] Run fresh synthetic/live checks and independent review; prepare approved-message handoff for publication.
-- [ ] After approved commit/push and any approved default-branch publication: successful manual GitHub run, duplicate execution and real cloud-state verification. Until then, Stage 4 is **not fully accepted**.
+- [x] After approved commit/push and approved default-branch publication: successful manual GitHub runs, duplicate execution and real cloud-state verification. **Stage 4 acceptance passed on 8 October 2026.**
 
 ## Ledger and rulings
 
@@ -63,3 +63,9 @@ zero-spending controls before cloud execution; do not buy a plan or runner.
 - Known credential literal scan passed for all 25 review files; .private cloud/admin configuration and config/local.toml are ignored. pip check, compileall and git diff --check passed. Viewer access checks passed after deploying private daily-state tables.
 - Remaining acceptance dependency: workflow publication to default main and a manual GitHub run, requiring the user's commit/push and publication review. Stage 4 implementation is ready, but Stage 4 acceptance and Stage 5 start are not claimed.
 - 8 October: user explicitly approved the displayed Stage 4 commit message, pushing ETL-pipeline and merging the reviewed changes into main to perform the manual GitHub acceptance run. Observation and later stages remain unapproved.
+- Publication completed: feature commit 960835360b576acb91fe0863d3f2520b61bb370c; PR #2; approved merge 08d27c1e26a7cf2e59d77371bfc5cd78da2fe720. ETL-pipeline fast-forwarded to the merge and pushed, preserving the selected branch. No other branch/default-branch changes.
+- Actual standard Ubuntu/Python 3.11 runs succeeded: Google daily_steps run 37829288194 (one complete dataset, one unchanged record), WHOOP run 37829374055 (four complete datasets, six unchanged records), each for 7 October. Both retries succeeded and skipped their already-durable jobs (1 / 4); separate attempt-2 audit entries retained attempt-1 history.
+- Daily control run 37829888248 succeeded with both provider statuses paused and zero wearable requests. Private SQL control remains {enabled:false}; GitHub SENTRA_COLLECTION_ENABLED=false and SENTRA_ZERO_SPEND_CONFIRMED=true verified after all tests.
+- Final cloud assertions passed: six expected durable provider/attempt rows, successful/paused statuses, correct counters and timestamps, response manifests for all completed datasets, unchanged full-record counts/content digest and observation disabled. Counts remain Google 61,656 / WHOOP 137. Usage about 268.9 MB DB, 0.657 MB originals, 1.81 GB conservative reserved egress.
+- All five executed jobs had zero artifacts. Known-credential/health-payload-marker scans of first-attempt job logs passed; logs were not printed or committed. This bounded scan is not a universal sensitive-data detector.
+- Acceptance scope is bounded: Google daily steps plus all four WHOOP datasets on GitHub; prior synthetic tests cover partial failures and missing intervals. No scheduled midnight execution or three-day observation is claimed. Stage 4 is complete; Stage 5 awaits explicit approval. Documentation of the acceptance result awaits its proposed follow-up commit approval.

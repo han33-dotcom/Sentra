@@ -1,8 +1,10 @@
 # Stage 4 — once-daily collection
 
-Implementation is ready for review on `ETL-pipeline`. **Stage 4 acceptance is
-pending an actual manual GitHub Actions run.** Nothing from this stage has been
-committed, pushed or merged. Stage 5 and the three-day observation have not begun.
+**Stage 4 acceptance passed on 8 October 2026**, including actual manual GitHub
+Actions runs and retries. Commit `9608353` was pushed from `ETL-pipeline` and
+published to `main` through [PR #2](https://github.com/han33-dotcom/Sentra/pull/2)
+with merge commit `08d27c1`, after explicit user approval. Work continues on the
+same `ETL-pipeline` branch. Stage 5 and the three-day observation have not begun.
 
 ## What changed
 
@@ -62,17 +64,18 @@ If a payment method exists, verify an account-wide Actions **$0 budget** with
 An alert-only budget is insufficient. Do not enable larger runners, paid add-ons
 or upgrades. On 8 October, the signed-in billing pages confirmed **GitHub Free**
 and an account-wide **Actions $0 budget, Stop usage: Yes**. No budget, payment
-method, subscription or billing plan was changed. No workflow was published or
-run as part of the local setup.
+method, subscription or billing plan was changed. Publication and manual
+acceptance followed explicit approval; scheduled observation remains disabled.
 
 All runner jobs also require `SENTRA_ZERO_SPEND_CONFIRMED=true`. That repository
 Actions variable was set true after the account check; this permits manual
-acceptance jobs once the workflow is published. The observation schedule remains
+acceptance/recovery jobs. The observation schedule remains
 disabled. Re-running secret configuration resets both execution gates to false;
 reverify billing controls before setting this flag again.
 
-Supabase remains Free. Existing 350 MB database / 700 MB objects / 3.5 GB egress
-thresholds and 20 MB import reserve are unchanged. Bounded status writes may use
+Supabase remains Free. Current 400 MB database / 700 MB objects / 3.5 GB egress
+thresholds apply, with a 20 MB import reserve. The database ceiling was raised
+from 350 MB on 10 October for the approved bounded backfill. Bounded status writes may use
 the reserved database headroom; health imports stop earlier. The verified
 organization egress baseline expires after seven days and at a new UTC month.
 Reservations are conservative allowances, not billed usage; do not reset them
@@ -148,14 +151,15 @@ the same reauthorize command. Other participants need not reconnect. Existing
 local `authorize`, `refresh`, `sample` and `initial-import` must not refresh a
 cloud-owned copy. Previously created local extracts remain snapshots.
 
-## Publication and manual GitHub acceptance
+## Publication and manual GitHub runs
 
 [Scheduled workflows run on the default branch, and initial workflow dispatch
 requires the workflow there](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#workflow_dispatch).
 This repository's default branch is `main`; development stays on `ETL-pipeline`.
-After review, get approval for the proposed commit/push and separately agree the
-default-branch publication. Do not change the default branch or merge implicitly.
-The only workflow is `.github/workflows/collect.yml`.
+The reviewed changes were committed, pushed and merged after explicit approval.
+The default branch was not changed; the only workflow is
+`.github/workflows/collect.yml`. Future commits/publication still follow the
+user's review and approval agreement.
 
 Once published and billing controls are confirmed, open GitHub Actions → Private
 wearable collection → Run workflow. Start with `recovery`, explicit dates above,
@@ -163,25 +167,31 @@ Google/daily_steps and WHOOP/all in separate manual runs. Repeat and verify stab
 record counts and stored source/projection integrity. Also run `daily` while
 paused and verify zero collection. Inspect actual execution times and storage
 usage in `audit.collection_runs`; Actions logs contain sanitized status/counts.
-No downloads are uploaded as artifacts. Full Ubuntu/GitHub execution remains
-unverified until these runs succeed.
+No downloads are uploaded as artifacts. Ubuntu/GitHub execution is demonstrated
+by the successful acceptance runs below. A GitHub retry keeps the execution ID
+for checkpoint skips and saves a separate audit row for its attempt number.
 
-## Three-day observation gate
+## Ongoing collection gate
 
-Only after Stages 4–6 and explicit Stage 7 approval, an operator sets the approved
-start and enables the GitHub repository variable:
+**Deferred on 10 October:** the latest decision authorizes only the bounded
+October 7–9 manual backfill. Keep both scheduling gates paused afterward. The
+instructions below remain available for a future explicit activation decision.
+
+The human authorized ongoing daily collection on 10 October, replacing the
+three-day audit. After approval/publication of the reviewed ongoing control and
+fresh Free-plan, zero-spend, quota and authorization checks, set the start:
 
 ```powershell
-.venv/Scripts/sentra.exe cloud-window --start YYYY-MM-DD --approved
+.venv/Scripts/sentra.exe cloud-window --start YYYY-MM-DD --ongoing --approved
 ```
 
 Set `SENTRA_COLLECTION_ENABLED=true` in repository Actions variables. The SQL
-control independently requires exactly three Beirut execution dates, end
-exclusive. After that window the collector makes no wearable requests even if
-the GitHub variable is still true. Set the variable false to stop scheduled
-runner jobs, and `cloud-window --pause` to pause the private control. Ending the
-window does not trigger an extra catch-up run: late/final-day measurements may
-remain pending and must be documented. Further collection requires review.
+control independently requires an explicit ongoing start, with no end date.
+Quota/auth stops remain active. Set the variable false to stop scheduled runner
+jobs, and `cloud-window --pause` to pause the private control. Record enabling
+time in UTC/Beirut and verify a successful approved run before calling collection
+operational. Do not increase scope or repeat the full initial import. Omitting
+`--ongoing` preserves the legacy bounded three-day behavior for compatibility.
 
 ## Evidence, 8 October 2026
 
@@ -206,8 +216,39 @@ remain pending and must be documented. Further collection requires review.
   tight; the shorter observation is not a guarantee every dataset will fit.
 - Workflow YAML and additive SQL parsed; timezone/triggers/permissions/concurrency
   checked; pinned Python 3.11 Linux wheels resolved from official PyPI.
-  Billing verification passed; actual Ubuntu install and GitHub execution remain
-  pending default-branch publication and manual acceptance.
+  Billing verification, actual Ubuntu dependency installation and manual GitHub
+  execution passed.
+
+### Actual GitHub acceptance
+
+All runs used standard GitHub Ubuntu runners and merge commit `08d27c1`, with
+zero uploaded artifacts. Times below are **Asia/Beirut on 8 October 2026** and
+describe the job's actual start/end, separately from the measurement date.
+
+| Check | GitHub evidence | Job time | Durable collector result |
+| --- | --- | --- | --- |
+| Google daily steps, 7 October | [Run 37829288194, attempt 1](https://github.com/han33-dotcom/Sentra/actions/runs/37829288194/attempts/1) | 22:05:22–22:05:42 | One dataset complete, one unchanged record, zero changed |
+| WHOOP four datasets, 7 October | [Run 37829374055, attempt 1](https://github.com/han33-dotcom/Sentra/actions/runs/37829374055/attempts/1) | 22:06:01–22:06:38 | Four datasets complete, six unchanged records, zero changed |
+| Google retry | [Run 37829288194, attempt 2](https://github.com/han33-dotcom/Sentra/actions/runs/37829288194/attempts/2) | 22:07:54–22:08:12 | Completed dataset skipped; no duplicate collection |
+| WHOOP retry | [Run 37829374055, attempt 2](https://github.com/han33-dotcom/Sentra/actions/runs/37829374055/attempts/2) | 22:08:16–22:08:37 | Four completed datasets skipped |
+| Daily control while observation paused | [Run 37829888248](https://github.com/han33-dotcom/Sentra/actions/runs/37829888248) | 22:10:08–22:10:23 | Both providers paused, zero wearable requests |
+
+Supabase retained all six provider/attempt audit rows with actual collector
+timestamps and successful/paused statuses. Completed first-attempt requests each
+have their own original-response manifests. Full record counts and aggregated
+content hashes matched the pre-run snapshot: **61,656 Google / 137 WHOOP**, no
+changed records. Known-credential and health-payload-marker scans of the two
+collection job logs passed; no raw log content was published in documentation.
+The logs' scan is a bounded check, not a claim to detect every possible sensitive
+string. Source data remains private in Supabase.
+
+Final measured database size was **268.9 MB**, compressed originals **0.657 MB**,
+and conservative reserved egress about **1.81 GB**. Storage limits, the $0 stopping
+budget and disabled observation remain in force. This acceptance covers Google
+daily steps and WHOOP's four datasets; it does not claim every Google daily/minute
+dataset was re-fetched by GitHub, or that a scheduled midnight run has occurred.
+Recovery/partial-failure paths were tested synthetically; broader record/app,
+timezone and end-to-end validation belongs to Stage 6.
 
 Final suite/review results are recorded in [the Stage 4 ledger](stage-4-plan.md).
 Stage 5 will add the private team viewer/downloads after explicit approval.
