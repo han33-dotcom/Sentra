@@ -1,4 +1,21 @@
-# Wearable audit data dictionary — Notion template
+# Wearable metric dictionary and private Notion inventory
+
+The executable provider/dataset/path dictionary is
+[metric_dictionary.py](../src/sentra/metric_dictionary.py), verified against
+[Google v4 fields](https://developers.google.com/health/reference/rest/v4/users.dataTypes.dataPoints),
+[Google aggregation](https://developers.google.com/health/aggregate-data), and
+[WHOOP v2](https://developer.whoop.com/api/) on 10 October 2026.
+The viewer exposes labels, original/display units, classification, explanations
+and references. Exact path matching prevents similarly named fields from inheriting
+an unrelated definition. Unmapped fields stay discoverable in Audit details.
+
+Documented duration units convert to hours/minutes; HRV milliseconds are not
+durations. Distance may display in kilometres while retaining millimetres/metres.
+Google protobuf exercise durations retain their exact seconds string. WHOOP
+asleep duration is a labelled Sentra sum of light + slow-wave + REM only when
+all inputs exist and are scored. Session elapsed duration uses physical instants,
+including pauses; no civil date is converted into an invented instant.
+WHOOP recovery joins sleep by `sleep_id`, with no date-based substitution.
 
 Copy this structure into a private Notion database. Record definitions from official
 provider documentation and distinguish them from observed API behavior. Keep

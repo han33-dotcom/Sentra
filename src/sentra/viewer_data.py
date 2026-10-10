@@ -109,6 +109,15 @@ def latest_timing(rows):
             'latest_civil_day':max((civil_day(r.get('civil_date')) for r in rows if civil_day(r.get('civil_date'))),default=None)}
 
 
+def fetch_status(state,dataset):
+    last_success=max((s.get('last_success_at') for s in state['connection'] if s.get('last_success_at')),default=None)
+    failures=[r.get('finished_at') or r['started_at'] for r in state['runs'] if r.get('status')!='paused' and
+              any(f.get('dataset') in (None,dataset) for f in (r.get('failures') or []))]
+    failed=max(failures,default=None)
+    if failed is not None and (last_success is None or failed>last_success):return 'Fetch failed / needs review',last_success
+    return ('Successful fetch recorded' if last_success else 'No successful fetch recorded'),last_success
+
+
 def sampling_summary(rows):
     groups = {}
     missing = no_numeric = unscored = provisional = 0

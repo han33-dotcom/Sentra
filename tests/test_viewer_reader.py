@@ -25,6 +25,23 @@ class ViewerReaderTests(unittest.TestCase):
             with self.assertRaisesRegex(SentraError,'denied'): call()
         db.execute.assert_not_called()
 
+    def test_curated_records_recheck_access_and_refuse_oversized_before_transfer(self):
+        m=self.module()
+        self.assertTrue(hasattr(m.ViewerReader,'records'),'Bounded curated read missing')
+        from psycopg.pq import TransactionStatus
+        db=Mock();db.info.transaction_status=TransactionStatus.IDLE
+        db.transaction.return_value.__enter__=Mock()
+        db.transaction.return_value.__exit__=Mock(return_value=False)
+        db.execute.return_value.fetchone.return_value=(1,20_000_001)
+        denied=Mock(side_effect=SentraError('denied'))
+        reader=m.ViewerReader({},Limits(),denied,db=db,budget_db=Mock())
+        f=m.Selection('p99','whoop','sleep',date(2026,10,7),date(2026,10,8))
+        with self.assertRaisesRegex(SentraError,'denied'):reader.records(f)
+        db.execute.assert_not_called()
+        reader.principal=lambda:'allowed'
+        with self.assertRaisesRegex(SentraError,'Narrow'):reader.records(f)
+        db.cursor.assert_not_called()
+
     def test_literal_search_is_parameterized_and_units_and_civil_dates_are_retained(self):
         m = self.module()
         f = m.Selection('p99','google_health','daily_steps',date(2026,10,7),date(2026,10,8),

@@ -139,6 +139,39 @@ class ViewerReader:
                 values,allowance=size*2+65_536)
 
     @safe_database
+    def records(self, selection):
+        """Full existing context once per record, bounded before payload transfer."""
+        self.principal()
+        where,values=selection_where(selection)
+        predicate=f'''exists(select 1 from audit.measurements m where
+          (m.participant_id,m.provider,m.dataset,m.record_key)=
+          (r.participant_id,r.provider,r.dataset,r.record_key) and {where})'''
+        return self._records(predicate,values)
+
+    def _records(self,predicate,values):
+        self.reserve(65_536)
+        new_snapshot=self.db.info.transaction_status==TransactionStatus.IDLE
+        with self.db.transaction():
+            if new_snapshot:self.db.execute('set transaction isolation level repeatable read')
+            count,size=self.db.execute(f'''select count(*),coalesce(sum(octet_length(to_jsonb(r)::text)+512),0)
+                from audit.records r where {predicate}''',values).fetchone()
+            check_result_size(count,int(size))
+            return self._rows(f'''select r.* from audit.records r where {predicate}
+                order by r.dataset,r.record_key''',values,allowance=int(size)*2+65_536)
+
+    @safe_database
+    def recoveries(self,selection,records):
+        """WHOOP recovery association uses returned sleep IDs, never a date guess."""
+        self.principal()
+        if selection.provider!='whoop':return []
+        ids=sorted({r['record_key'] for r in records if r['dataset']=='sleep' and
+                    r['participant_id']==selection.participant and r['provider']=='whoop'})
+        check_result_size(len(ids),0)
+        if not ids:return []
+        return self._records("""r.participant_id=%s and r.provider='whoop' and r.dataset='recovery'
+            and r.record#>>'{vendor_fields,sleep_id}'=any(%s)""",(selection.participant,ids))
+
+    @safe_database
     def sessions(self, selection, rows):
         self.principal()
         keys=sorted({r['record_key'] for r in rows})

@@ -14,4 +14,10 @@ toolbarMode = "minimal"
 
 [theme]
 base = "light"
-primaryColor = "#12634d"
+primaryColor = "#181622"
+backgroundColor = "#faf9fb"
+secondaryBackgroundColor = "#f3f2f5"
+textColor = "#24212d"
+borderColor = "#e7e5eb"
+dataframeHeaderBackgroundColor = "#181622"
+dataframeHeaderTextColor = "#ffffff"
