@@ -76,7 +76,7 @@ paid add-ons or upgrades. Quotas are not unlimited capacity.
 
 | Guard | Ceiling | Additional reserve |
 | --- | ---: | ---: |
-| Database | 350,000,000 bytes | 20,000,000 plus estimated next batch |
+| Database | 400,000,000 bytes | 20,000,000 plus estimated next batch |
 | Objects | 700,000,000 bytes | 20,000,000 plus next object |
 | Monthly uncached egress | 3,500,000,000 bytes | Conservative reservations before reads |
 | Local private workspace/backups | 200,000,000 bytes | Free-disk checks and serialized writes |

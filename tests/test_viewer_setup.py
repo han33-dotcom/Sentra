@@ -30,6 +30,13 @@ class ViewerSetupTests(unittest.TestCase):
         self.assertNotIn('refresh_token',result)
         self.assertNotIn('token_key',result)
         self.assertNotIn('sslrootcert',value['viewer']['db'])
+        from sentra.viewer_config import runtime_settings
+        value['viewer']['limits']['database_bytes']=400_000_000
+        with tempfile.TemporaryDirectory() as folder:
+            _,limits,_=runtime_settings(value,Path(folder))
+            self.assertEqual(limits.database_bytes-limits.reserve_bytes,380_000_000)
+            value['viewer']['limits']['database_bytes']=400_000_001
+            with self.assertRaises(SentraError): runtime_settings(value,Path(folder))
         with self.assertRaises(SentraError):
             m.build_secrets({**c,'db':{**c['db'],'user':'sentra_collector.test'}},Limits(),
                              'CERT',client,['team@example.test'],'http://localhost:8501')

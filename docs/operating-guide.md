@@ -9,9 +9,17 @@ physical sensor signals. No AI model or health-risk score is implemented.
 
 The [private viewer](https://sentra-wearable-audit.streamlit.app) runs from
 `ETL-pipeline`, `viewer/app.py`. Sign in with an approved Google account, choose
-participant/provider/dataset/metric and Beirut dates, then **Load selected data**.
+participant/provider and Beirut dates, then **Load selected data**.
 The displayed end date is included. Use sidebar search for export filtering;
-table search/sort only changes the display.
+table search/sort only changes the display. Daily activity has one row per day;
+Sleep and Workouts have one row per session. Sleep uses its Beirut wake date;
+workouts use their start date. WHOOP recovery attaches only by vendor sleep ID.
+Missing values stay missing, and multiple-source values are not silently merged.
+
+**Prepare readable CSV** exports labelled values with exact source values, units,
+classification and provenance for the overview dates. **Audit details** retains
+dataset/metric/search filters, full record context, unmapped paths and original
+responses. Choose **Load audit details** to prepare the detailed selection.
 
 **Prepare filtered CSV** then its Download link saves all matching rows, with
 vendor values, units, timing and source references. Narrow filters if the selection
@@ -100,7 +108,7 @@ and [WHOOP renewal](https://developer.whoop.com/docs/developing/oauth/).
 .venv/Scripts/sentra.exe shared-budget --egress-baseline-bytes VERIFIED_UPPER_BOUND
 ```
 
-The database ceiling is 350 MB with 20 MB reserved: imports stop before 330 MB
+The database ceiling is 400 MB with 20 MB reserved: imports stop before 380 MB
 plus the estimated next batch. Objects use 700 MB with 20 MB reserved. Monthly
 uncached egress is capped internally at 3.5 GB. These are decimal MB/GB. Egress
 is a verified baseline plus conservative reservations, not a billing meter;
@@ -110,9 +118,9 @@ checks also consume allowance. Do not reset reservations, silently delete histor
 raise quotas, upgrade plans or add paid runners.
 
 Keep Supabase on Free and GitHub's account-wide Actions **$0 budget / Stop usage:
-Yes**. Recheck their dashboards before observation; account-wide allowances are
+Yes**. Recheck their dashboards before enabling collection; account-wide allowances are
 shared with other projects. Initial-import growth averages are approximate and
-include gaps/index overhead. They cannot guarantee three days will fit.
+include gaps/index overhead. They do not promise ongoing capacity.
 
 ## Backup and recovery
 
@@ -145,14 +153,16 @@ also explains that database backups alone exclude Storage objects.
 
 ## Observation approval and documentation
 
-Daily collection and the three-day observation are currently disabled. Do not
-enable them as part of validation. After explicit Stage 7 approval, follow the
-[three-day observation gate](stage-4-collection.md#three-day-observation-gate),
-recheck capacity/billing/baseline and record exactly three Beirut execution dates.
-Midnight runs can be delayed/dropped; compare actual execution and measurement
-times. Last-day late data may remain pending after the window ends; no extra run
+On 10 October the human deferred ongoing collection and approved a bounded
+October 7–9 backfill for both participants, with a 400 MB database ceiling and
+20 MB reserve. Both automatic collection controls remain paused. Continuous
+collection and scaling require a later decision after researching project use
+cases. Compare requested coverage with returned measurements; a completed
+request does not prove uninterrupted data. Last-day late data may remain pending; no extra run
 is automatic. To stop, set `SENTRA_COLLECTION_ENABLED=false` in GitHub and run
-`cloud-window --pause`. The SQL date gate also stops collection at the approved end.
+`cloud-window --pause`. Ongoing SQL control has no automatic end date; quota and
+authorization stops remain mandatory. Record actual enabling time and the first
+successful approved run before calling it operational.
 
 Link the viewer and [data dictionary](data-dictionary.md) from private Notion.
 Document definitions, vendor classification, units, sampling, source IDs and

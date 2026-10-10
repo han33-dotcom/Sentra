@@ -1,5 +1,5 @@
 """Operator setup and reconnect commands; scheduled runtime has no admin key."""
-from datetime import date,timedelta
+from datetime import date
 import hashlib,json,os,subprocess,sys
 from pathlib import Path
 from psycopg.types.json import Jsonb
@@ -10,6 +10,7 @@ from .cloud_setup import prepare,read_setup,handoff,connection_payload
 from .cloud_tokens import TokenRepository
 from .config import load_connection,require_agreement
 from .errors import SentraError
+from .daily_plan import collection_control
 from .shared_backend import connect_db,SharedBackend
 from .shared_config import read_shared
 from .shared_setup import read_admin
@@ -27,10 +28,11 @@ def add_commands(sub):
     p.add_argument('--provider',choices=('all','google_health','whoop'),default='all')
     p.add_argument('--start',type=date.fromisoformat); p.add_argument('--end',type=date.fromisoformat)
     p.add_argument('--dataset')
-    p=sub.add_parser('cloud-window',help='Explicit Stage 7 approval required; three execution dates, end exclusive')
+    p=sub.add_parser('cloud-window',help='Approved ongoing daily collection, bounded legacy window, or pause')
     p.add_argument('--start',type=date.fromisoformat)
+    p.add_argument('--ongoing',action='store_true',help='No automatic end date; quota/auth gates and explicit pause still apply')
     p.add_argument('--pause',action='store_true')
-    p.add_argument('--approved',action='store_true',help='Operator confirms human approval to start Stage 7')
+    p.add_argument('--approved',action='store_true',help='Operator confirms human approval of published collection controls')
 
 
 def install_schema(private):
@@ -73,6 +75,9 @@ def reconnect(repo,c,vault,cipher):
 
 
 def run_command(args):
+    # Reject ambiguous operator input before connecting or consuming quota.
+    if args.command=='cloud-window':
+        settings=collection_control(start=args.start,pause=args.pause,approved=args.approved,ongoing=args.ongoing)
     cipher=local_cipher(); credentials,limits,private=read_shared(args.config,cipher)
     if args.command=='cloud-prepare':
         with FileLock(str(private/'cloud-setup.lock'),timeout=10):
@@ -92,7 +97,9 @@ def run_command(args):
         return subprocess.run(command,env=env).returncode
     backend=SharedBackend(credentials,limits)
     try:
-        backend.lock(); backend.reserve(65536)
+        backend.lock()
+        # Pausing transfers no health data and must remain possible at a quota stop.
+        if args.command!='cloud-window' or not args.pause:backend.reserve(65536)
         if args.command=='cloud-connect':
             c=load_connection(args.config,args.provider); require_agreement(c)
             vault=TokenVault(private,c.provider,c.participant_id,cipher)
@@ -102,10 +109,7 @@ def run_command(args):
             else: handoff(repo,c,vault,cloud_cipher)
             print(f'{c.provider}: credentials managed in encrypted cloud state; stale local copy cannot refresh. No token values displayed.')
         elif args.command=='cloud-window':
-            if args.pause: settings={'enabled':False}
-            else:
-                if not args.approved or args.start is None: raise SentraError('Explicit Stage 7 start approval and start date are required.')
-                settings={'enabled':True,'start':str(args.start),'end':str(args.start+timedelta(days=3))}
+            if not args.pause:backend.guard()
             backend.db.execute('update collector_private.observation_control set settings=%s,updated_at=now() where singleton',(Jsonb(settings),))
             print(json.dumps(settings))
         return 0

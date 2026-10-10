@@ -73,8 +73,9 @@ acceptance/recovery jobs. The observation schedule remains
 disabled. Re-running secret configuration resets both execution gates to false;
 reverify billing controls before setting this flag again.
 
-Supabase remains Free. Existing 350 MB database / 700 MB objects / 3.5 GB egress
-thresholds and 20 MB import reserve are unchanged. Bounded status writes may use
+Supabase remains Free. Current 400 MB database / 700 MB objects / 3.5 GB egress
+thresholds apply, with a 20 MB import reserve. The database ceiling was raised
+from 350 MB on 10 October for the approved bounded backfill. Bounded status writes may use
 the reserved database headroom; health imports stop earlier. The verified
 organization egress baseline expires after seven days and at a new UTC month.
 Reservations are conservative allowances, not billed usage; do not reset them
@@ -170,22 +171,27 @@ No downloads are uploaded as artifacts. Ubuntu/GitHub execution is demonstrated
 by the successful acceptance runs below. A GitHub retry keeps the execution ID
 for checkpoint skips and saves a separate audit row for its attempt number.
 
-## Three-day observation gate
+## Ongoing collection gate
 
-Only after Stages 4–6 and explicit Stage 7 approval, an operator sets the approved
-start and enables the GitHub repository variable:
+**Deferred on 10 October:** the latest decision authorizes only the bounded
+October 7–9 manual backfill. Keep both scheduling gates paused afterward. The
+instructions below remain available for a future explicit activation decision.
+
+The human authorized ongoing daily collection on 10 October, replacing the
+three-day audit. After approval/publication of the reviewed ongoing control and
+fresh Free-plan, zero-spend, quota and authorization checks, set the start:
 
 ```powershell
-.venv/Scripts/sentra.exe cloud-window --start YYYY-MM-DD --approved
+.venv/Scripts/sentra.exe cloud-window --start YYYY-MM-DD --ongoing --approved
 ```
 
 Set `SENTRA_COLLECTION_ENABLED=true` in repository Actions variables. The SQL
-control independently requires exactly three Beirut execution dates, end
-exclusive. After that window the collector makes no wearable requests even if
-the GitHub variable is still true. Set the variable false to stop scheduled
-runner jobs, and `cloud-window --pause` to pause the private control. Ending the
-window does not trigger an extra catch-up run: late/final-day measurements may
-remain pending and must be documented. Further collection requires review.
+control independently requires an explicit ongoing start, with no end date.
+Quota/auth stops remain active. Set the variable false to stop scheduled runner
+jobs, and `cloud-window --pause` to pause the private control. Record enabling
+time in UTC/Beirut and verify a successful approved run before calling collection
+operational. Do not increase scope or repeat the full initial import. Omitting
+`--ongoing` preserves the legacy bounded three-day behavior for compatibility.
 
 ## Evidence, 8 October 2026
 

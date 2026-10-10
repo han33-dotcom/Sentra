@@ -48,7 +48,9 @@ Initial examples for definition review (not longitudinal findings):
   continuous heart-rate readings. Preserve score state before interpreting absence.
 - API originals are unchanged responses, not raw physical sensor signals.
 
-The approved observation is three days. Coverage, arrival delay, correction rates,
-storage growth and candidate-feature findings remain **pending** until that period
-is explicitly started and the evidence is collected. Two participants on different
+The human now researches retained data after a bounded three-day backfill;
+ongoing collection is deferred and no formal elapsed-day audit is required.
+Coverage, arrival delay, correction rates and candidate-feature
+findings must be supported by actual evidence, not an elapsed-day claim.
+Two participants on different
 devices do not establish population accuracy or validate health predictions.

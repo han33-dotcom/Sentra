@@ -45,6 +45,28 @@ class DailyPlanTests(unittest.TestCase):
         self.assertEqual(m.window_status(window,date(2026,10,13)),'ended')
         with self.assertRaises(SentraError): m.window_status({**window,'end':'2026-10-24'},date(2026,10,10))
 
+    def test_explicit_ongoing_has_no_end_but_requires_valid_start(self):
+        m=self.module()
+        window={'enabled':True,'mode':'ongoing','start':'2026-10-10'}
+        self.assertEqual(m.window_status(window,date(2026,10,9)),'not_started')
+        self.assertEqual(m.window_status(window,date(2027,1,1)),'active')
+        self.assertEqual(m.window_status({**window,'enabled':False},date(2027,1,1)),'paused')
+        for invalid in ({'enabled':True,'mode':'ongoing'}, {**window,'start':'bad'},
+                        {**window,'end':'2026-10-13'}, {**window,'mode':'typo'}):
+            with self.subTest(invalid=invalid),self.assertRaises(SentraError):
+                m.window_status(invalid,date(2026,10,10))
+
+    def test_control_builder_requires_approval_and_rejects_ambiguous_pause(self):
+        from sentra import daily_plan as m
+        self.assertTrue(hasattr(m,'collection_control'),'Collection control builder missing')
+        self.assertEqual(m.collection_control(pause=True),{'enabled':False})
+        self.assertEqual(m.collection_control(start=date(2026,10,10),approved=True,ongoing=True),
+                         {'enabled':True,'mode':'ongoing','start':'2026-10-10'})
+        self.assertEqual(m.collection_control(start=date(2026,10,10),approved=True)['end'],'2026-10-13')
+        for args in ({'ongoing':True}, {'start':date(2026,10,10),'ongoing':True},
+                     {'pause':True,'ongoing':True}, {'pause':True,'start':date(2026,10,10)}):
+            with self.subTest(args=args),self.assertRaises(SentraError): m.collection_control(**args)
+
     def test_autumn_repeated_hour_stays_in_same_day_for_collector_and_viewer(self):
         from sentra.viewer_data import Selection
         m=self.module()

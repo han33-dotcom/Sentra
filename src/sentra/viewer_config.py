@@ -46,7 +46,7 @@ def runtime_settings(secrets, folder):
         credentials['db']=db
         validate_credentials(credentials,Path(folder))
         limits=Limits(**dict(section['limits']))
-        if (limits.database_bytes>350_000_000 or limits.object_bytes>700_000_000
+        if (limits.database_bytes>400_000_000 or limits.object_bytes>700_000_000
                 or limits.monthly_egress_bytes>3_500_000_000 or limits.reserve_bytes<20_000_000): raise ValueError
         auth=dict(secrets['auth'])
         if (auth.get('server_metadata_url')!='https://accounts.google.com/.well-known/openid-configuration'
