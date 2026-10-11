@@ -1,0 +1,24 @@
+# Copy to config/local.toml (ignored). Paths resolve from that file's directory.
+private_dir = "../.private"
+
+[google_health]
+participant_id = "p01"
+project_id = "sentra-510913"
+client_file = "../.private/google-client.json"
+redirect_uri = "http://localhost:8765/callback"
+team_data_agreement = false # Set only after this participant agrees to team viewing/downloads.
+publishing_status = "testing"
+
+[whoop]
+participant_id = "p02"
+client_file = "../.private/whoop-client.json"
+redirect_uri = "http://localhost:8765/callback"
+team_data_agreement = false
+
+[shared]
+confirmed_free_plan = false # Verify the organization billing page before setting true.
+database_bytes = 400000000
+object_bytes = 700000000
+monthly_egress_bytes = 3500000000
+reserve_bytes = 20000000
+# Encrypted collector/viewer credentials are created beneath .private/shared.

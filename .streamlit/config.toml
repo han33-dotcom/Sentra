@@ -1,0 +1,23 @@
+[browser]
+gatherUsageStats = false
+
+[server]
+headless = true
+enableXsrfProtection = true
+enableCORS = true
+enableStaticServing = false
+fileWatcherType = "none"
+
+[client]
+showErrorDetails = "none"
+toolbarMode = "minimal"
+
+[theme]
+base = "light"
+primaryColor = "#181622"
+backgroundColor = "#faf9fb"
+secondaryBackgroundColor = "#f3f2f5"
+textColor = "#24212d"
+borderColor = "#e7e5eb"
+dataframeHeaderBackgroundColor = "#181622"
+dataframeHeaderTextColor = "#ffffff"

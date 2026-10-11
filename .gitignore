@@ -13,12 +13,24 @@
 *.sqlite3
 *.parquet
 *.log
+*.csv
+*.json.gz
 .env
 .env.*
 !.env.example
 
 # one-off helpers that held real sign-in codes
 wearables-pipeline/CONNECT_*.bat
+
+# src/sentra (Supabase collector + viewer): local config, keys and encrypted exports
+.private/
+config/local.toml
+.streamlit/secrets.toml
+viewer/.streamlit/secrets.toml
+client_secret*.json
+credentials*.json
+*.enc
+*.key
 
 # Python
 __pycache__/
@@ -39,6 +51,7 @@ website/qa/
 /*.xlsx
 /*.zip
 /*.png
+*.zip
 ~$*
 
 # OS / editors

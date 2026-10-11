@@ -13,7 +13,14 @@ BLOCKED_DIRS = {"data", "secrets", "tokens", "reports", ".venv", "venv"}
 BLOCKED_EXT = {".db", ".sqlite", ".sqlite3", ".db-wal", ".db-shm", ".parquet", ".feather", ".pkl",
                ".csv", ".zip", ".7z", ".txz", ".gz", ".docx", ".xlsx", ".pdf", ".env", ".pem", ".key", ".p12"}
 ALLOWED = [re.compile(p) for p in (r"(^|/)tests/fixtures/", r"(^|/)\.env\.example$", r"^website/vendor/")]
-SECRET_KEYS = re.compile(r'"(refresh_token|access_token|client_secret|private_key)"\s*:\s*"[^"<]{8,}')
+SECRET_KEYS = re.compile(r'"(refresh_token|access_token|client_secret|private_key)"\s*:\s*"([^"<]{8,})')
+# Obvious stand-ins used in tests and docs ("fake-secret", "new-refresh", "LOCAL_VALUE"). Letters, - and _ only:
+# real tokens and client secrets contain digits, dots or slashes, so they still fail.
+PLACEHOLDER = re.compile(r"(?i)(fake|dummy|example|placeholder|test|new|replacement|local|your)[a-z_-]*")
+
+
+def has_secret(text):
+    return any(not PLACEHOLDER.fullmatch(m.group(2)) for m in SECRET_KEYS.finditer(text))
 
 
 def files(staged):
@@ -35,7 +42,7 @@ def problems(path):
         if f.stat().st_size > MAX_BYTES:
             out.append(f"{f.stat().st_size / 1e6:.1f} MB (limit {MAX_BYTES / 1e6:.0f} MB)")
         if f.suffix in {".json", ".txt", ".bat", ".ps1", ".py", ".yml", ".yaml", ".md"}:
-            if SECRET_KEYS.search(f.read_text(errors="ignore")):
+            if has_secret(f.read_text(errors="ignore")):
                 out.append("contains a token or client secret value")
             if f.suffix == ".bat" and "?code=" in f.read_text(errors="ignore"):
                 out.append("contains an OAuth sign-in code")
