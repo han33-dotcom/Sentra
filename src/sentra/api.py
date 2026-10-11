@@ -60,6 +60,8 @@ def _records(df: pd.DataFrame):
 def _since(df, since):
     if since is None:
         return df
+    if not re.fullmatch(r'[0-9]{4}-[0-9]{2}-[0-9]{2}', since):
+        raise HTTPException(422, 'since must be YYYY-MM-DD')
     try:
         day = pd.Timestamp(since)
     except ValueError:

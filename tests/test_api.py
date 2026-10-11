@@ -64,6 +64,14 @@ class ApiTests(unittest.TestCase):
         methods = {m for route in api.app.routes for m in getattr(route, 'methods', set())}
         self.assertLessEqual(methods, {'GET', 'HEAD'})
 
+    def test_since_rejects_timestamps_and_invalid_dates(self):
+        for route in ('daily', 'cohort'):
+            for since in ('2026-10-03T00:00:00Z', '2026-02-30', '10/03/2026'):
+                with self.subTest(route=route, since=since):
+                    response = self.client.get(f'/api/v1/{route}', params={'since': since},
+                                               headers={'X-API-Key': KEY})
+                    self.assertEqual(response.status_code, 422)
+
 
 class ProcessingJobConfigTests(unittest.TestCase):
     def test_collector_or_missing_config_is_refused(self):
