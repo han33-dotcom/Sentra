@@ -1,0 +1,38 @@
+# Sentra read API + processing job only. Collection stays in GitHub Actions (collect.yml);
+# tier building stays an operator step (`sentra tiers-build`).
+#   docker compose up -d --build
+# Settings come from .env (copy .env.example). Processed data lives in the sentra-processed volume.
+name: sentra
+
+services:
+  processing:
+    build: .
+    image: sentra-api:local
+    command: ["python", "-m", "sentra.processing.job"]
+    environment:
+      SENTRA_PROCESSING_CONFIG: ${SENTRA_PROCESSING_CONFIG:?viewer-only processing config JSON}
+      SENTRA_PROCESS_INTERVAL_HOURS: ${SENTRA_PROCESS_INTERVAL_HOURS:-24}
+    volumes:
+      - sentra-processed:/data
+    restart: unless-stopped
+
+  api:
+    image: sentra-api:local
+    depends_on: [processing]
+    environment:
+      SENTRA_API_KEY: ${SENTRA_API_KEY:?at least 32 random characters}
+    volumes:
+      - sentra-processed:/data:ro
+    ports:
+      - "127.0.0.1:${API_PORT:-8000}:8000"   # local only
+    read_only: true
+    tmpfs: [/tmp]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  sentra-processed:

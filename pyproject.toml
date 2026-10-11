@@ -22,6 +22,7 @@ dev = ["pglast>=7,<8"]
 viewer = ["streamlit[auth]==1.65.0", "Authlib==1.8.0"]
 tiers = ["pyarrow>=18"]
 processing = ["pyarrow>=18", "pandas>=2.2", "numpy>=1.26"]
+api = ["fastapi>=0.110", "uvicorn>=0.29", "pandas>=2.2", "pyarrow>=18"]
 
 [project.scripts]
 sentra = "sentra.cli:main"
