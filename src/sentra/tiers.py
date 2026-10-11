@@ -269,8 +269,27 @@ def build(reader, limits, *, now=None, employees=10, period_days=30):
     days['sessions'] = days['measurements']
     usage = reader.usage()
     report = {'built_at': now.isoformat(), 'read_bytes': reader.read_bytes,
+              'objects': {key: len(body) for key, body in sorted(objects.items())},
               **size_report(objects, days, usage, employees=employees, period_days=period_days)}
     return objects, report
+
+
+def fetch(storage, folder, *, maximum=MAX_OBJECT_BYTES):
+    """Download the latest published tiers listed in size_report.json; storage.reserve covers egress."""
+    code, body = storage.request('GET', 'size_report.json', maximum=1_000_000)
+    if code != 200:
+        raise SentraError(f'Tier report unavailable (HTTP {code}); run tiers-build first.')
+    report = json.loads(body)
+    for key, size in report.get('objects', {}).items():
+        if not isinstance(size, int) or not 0 <= size <= maximum or '..' in key or key.startswith('/'):
+            raise SentraError('Tier report lists an invalid object; nothing processed.')
+        code, data = storage.request('GET', key, maximum=size + 65_536)
+        if code != 200 or len(data) != size:
+            raise SentraError(f'Tier object {key} missing or changed since its report; rebuild tiers.')
+        path = Path(folder) / key
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+    return report
 
 
 def publish(objects, report, storage, reader, limits, *, local_dir=None):
