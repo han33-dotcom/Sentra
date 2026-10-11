@@ -24,7 +24,7 @@ class DailyPlanTests(unittest.TestCase):
     def test_daily_contracts_keep_selected_fields_and_exclude_original_hr_repeat(self):
         m=self.module()
         jobs=m.day_jobs('google_health',date(2026,10,7))
-        self.assertEqual(len(jobs),19)
+        self.assertEqual(len(jobs),22)
         self.assertNotIn('original_heart-rate',{j.dataset for j in jobs})
         self.assertEqual({j.dataset for j in m.day_jobs('whoop',date(2026,10,7))},{'cycle','recovery','sleep','workout'})
 
