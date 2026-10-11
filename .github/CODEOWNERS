@@ -1,6 +1,7 @@
 # Reviewers requested automatically. Either owner's approval satisfies the review rule.
+# Every path lists both owners: a PR authored by one owner can always be approved by the other.
 *                         @han33-dotcom @MohamadNasrallah
 /src/sentra/              @han33-dotcom @MohamadNasrallah
-/sql/                     @han33-dotcom
+/sql/                     @han33-dotcom @MohamadNasrallah
 /.github/                 @han33-dotcom @MohamadNasrallah
 /scripts/check_no_data.py @han33-dotcom @MohamadNasrallah
