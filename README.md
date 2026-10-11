@@ -1,42 +1,67 @@
-# Sentra — Sprint 5: wearable ETL MVP
+# Sentra: wearable data pipeline and wellness layer
 
-Sentra is a working wearable-data pipeline for our final-year project. Sprint 5
-established extraction, validation and normalization, private storage, resumable
-cloud collection, a private research viewer and operational verification for two
-consenting participants: one Fitbit Air account through Google Health v4 and one
-WHOOP account through WHOOP v2.
+Sentra is the wearable-data pipeline for our final-year project. It collects data
+for consenting participants: currently one Fitbit Air account through Google Health
+v4 and one WHOOP account through WHOOP v2. Each response is stored privately and
+unchanged, then normalized conservatively into Supabase PostgreSQL. A private
+research viewer sits on top.
+
+On top of that collection, the repository also includes:
+- compact parquet storage tiers;
+- a v0 wellness processing layer;
+- a read-only API and Docker deployment;
+- the project website.
 
 **Stages 1–7 and the viewer redesign are complete within the agreed MVP scope.**
-Stage 7 concluded with a bounded research dataset, replacing the earlier proposal
-for continuous observation. Automatic collection is paused. The next step is to
-inspect the retained data and choose project use cases; continuous collection,
-storage scaling and production hardening remain future work.
+Automatic collection is **paused**. Merging or deploying code never restarts it.
 
-The [private Sentra viewer](https://sentra-wearable-audit.streamlit.app) is available
-to approved team accounts. Start with the [operating guide](docs/operating-guide.md)
-and [data dictionary](docs/data-dictionary.md).
+Start with the [operating guide](docs/operating-guide.md) and the
+[data dictionary](docs/data-dictionary.md). The
+[private Sentra viewer](https://sentra-wearable-audit.streamlit.app) is available to
+approved team accounts.
+
+## Architecture
+
+```
+Google Health v4 / WHOOP v2
+  -> GitHub Actions collector (collect.yml, paused)    extract, follow all pages, resume
+  -> Supabase Storage  sentra-originals                unchanged responses, gzip, hash-keyed, immutable
+  -> Supabase Postgres audit.*                         records, measurements, sessions, coverage, runs
+       |-> Streamlit viewer (sentra_viewer role)       inspect, audit, export
+       '-> sentra tiers-build (sentra_viewer role)     -> Storage sentra-tiers: zstd parquet tiers
+             '-> processing job                        -> v0 daily wellness features + k-anonymous cohort
+                   '-> read-only FastAPI (X-API-Key)   pseudonymous participant IDs only
+```
 
 ## What the pipeline does
 
 1. **Extract:** authenticate with each provider and request bounded date ranges,
-   following all returned pages. Provider failures are handled independently.
+   following every returned page. Provider failures are handled independently. Every
+   hosted job records one outcome: `records`, `no_records`, `denied` (HTTP 401 after
+   a refresh, or 403) or `failed`.
 2. **Preserve:** save unchanged API response bodies as compressed private objects,
    with integrity hashes, request metadata and source references in PostgreSQL.
-3. **Validate and normalize:** check record structure and stable identities,
-   organize returned fields into records, measurements and sessions, attach known
-   units and classifications, and retain original values and timing information.
+3. **Validate and normalize:** check record structure and stable identities, then
+   organize returned fields into records, measurements and sessions. Known units and
+   classifications are attached; original values and timing information are kept.
 4. **Load:** write the structured records into Supabase PostgreSQL. Unchanged
-   rechecks avoid duplicate records; corrections replace the current structured
-   record while original responses remain retained.
-5. **Inspect and export:** use the private viewer or CLI to examine returned data,
-   availability, provenance and collection status, then create private extracts.
+   rechecks avoid duplicate records. Corrections replace the current structured
+   record, while the original responses are kept.
+5. **Inspect and export:** use the private viewer or the CLI to examine returned
+   data, availability, provenance and collection status, then create private extracts.
+6. **Tier, process and serve (operator steps):**
+   - Build parquet tiers from the audit tables.
+   - Derive v0 wellness features from the tiers.
+   - Serve the features through the read-only API.
 
-This is conservative normalization. Missing values stay missing, unknown fields
-remain available, and selected identifying fields are removed from normalized
-records. Original responses remain private and can contain identifying fields.
-The pipeline does not fill gaps, remove statistical outliers, smooth signals or
-create health predictions. An original API response may already contain a
-provider summary or score; it is not necessarily a raw physical sensor signal.
+Normalization is conservative:
+- Missing values stay missing and unknown fields remain available.
+- Selected identifying fields are removed from normalized records. Original
+  responses stay private and can contain identifying fields.
+- The pipeline does not fill gaps, remove statistical outliers, smooth signals or
+  make health predictions.
+- An API response may already contain a provider summary or score; it is not
+  necessarily a raw sensor signal.
 
 ## Data collected
 
@@ -47,16 +72,25 @@ provider summary or score; it is not necessarily a raw physical sensor signal.
 | Fitbit / Google Health | Sleep and exercise session records |
 | Fitbit / Google Health | Requested 60-second rollups for steps, distance, total calories, active-zone minutes and heart rate |
 | Fitbit / Google Health | One representative original-resolution heart-rate day from the initial import |
+| Fitbit / Google Health | **Planned, not yet collected:** sedentary periods, sleep respiratory-rate summaries and activity-level intervals ([details and probe](docs/data-dictionary.md#extra-fitbit-datasets-october-2026-not-yet-collected)) |
 | WHOOP | Cycles, recovery, sleep and workouts, including returned summaries, score states and vendor scores |
 
-The initial import requested September 8–October 7, 2026, with minute rollups
-limited to October 1–7 and original heart rate limited to one representative day.
-Later bounded recovery extended the applicable datasets through October 9.
-WHOOP's integration provides session/cycle summaries rather than continuous
-heart-rate samples. Requested minute resolution does not guarantee a reading
-for every minute. See the [collection contracts and evidence](docs/stage-2-collection.md).
+**Initial import** (September 8–October 7, 2026):
+- Minute rollups were limited to October 1–7.
+- Original heart rate was limited to one representative day.
+- Later bounded recovery extended the applicable datasets through October 9.
 
-## Sprint 5 delivery
+**Notes:**
+- WHOOP's integration provides session and cycle summaries, not continuous
+  heart-rate samples.
+- Requesting minute resolution does not guarantee a reading for every minute.
+- The three planned Fitbit datasets are covered by the existing authorization
+  (`activity_and_fitness`, `health_metrics_and_measurements`), so no reconnect is
+  needed. They are collected only through an explicitly approved bounded probe.
+
+See the [collection contracts and evidence](docs/stage-2-collection.md).
+
+## Delivery
 
 | Stage | Delivered | Evidence and instructions |
 | --- | --- | --- |
@@ -67,52 +101,74 @@ for every minute. See the [collection contracts and evidence](docs/stage-2-colle
 | 5 — Private viewer | Deployed Streamlit application, Google identity sign-in, approved-account access, bounded filters, audit evidence and verified downloads | [Stage 5](docs/stage-5-viewer.md) |
 | 6 — Verification and operations | Synthetic and selected live checks for pagination, corrections, renewal, provider isolation, timezone boundaries, permissions, exports, capacity and backup restoration; two participant-app comparisons confirmed by the user | [Stage 6](docs/stage-6-validation.md), [operating guide](docs/operating-guide.md) |
 | 7 — Research dataset | Approved October 7–9 backfill for both participants, verified retained week coverage and collection left paused for use-case research | [Stage 7](docs/stage-7-audit-plan.md) |
-| Viewer redesign | Pinterest-inspired pale sidebar, white panels and charcoal summaries; readable metric definitions, charts and tables, mobile layout, keyboard navigation and retained detailed audit access | [Redesign validation](docs/viewer-redesign-validation.md) |
+| Viewer redesign | Pale sidebar, white panels and charcoal summaries; readable metric definitions, charts and tables, mobile layout, keyboard navigation and retained detailed audit access | [Redesign validation](docs/viewer-redesign-validation.md) |
+| Extra Fitbit datasets | `sedentary-period`, `respiratory-rate-sleep-summary` and `activity-level` in the job plan; per-job outcomes; viewer labels and per-day period totals | [Data dictionary](docs/data-dictionary.md) |
+| Parquet tiers | `sentra tiers-build`: hot raw heart rate (30 days), warm minute heart rate, measurements and sessions as zstd parquet in a private bucket, with a size report | [Parquet tiers](docs/parquet-tiers.md) |
+| Processing layer | Canonical metric mapping, minute grid, daily features, 28-day personal baselines, v0 wellness flags and a k-anonymous cohort | [Processing](docs/processing.md) |
+| Read API and Docker | Read-only FastAPI over processed outputs; Compose runs only the API and the processing job | [Read API](docs/read-api.md) |
+| Repository rules | CI (`guard`, `test`), data guard, pre-commit hooks, PR template, code owners and branch model | [Contributing](CONTRIBUTING.md) |
+| Website | Static project site published to GitHub Pages | [website/README.md](website/README.md) |
 
-The redesigned viewer has **Daily activity**, **Sleep**, **Workouts** and
-**Data availability** views. Sleep uses its Beirut wake date, workouts use their
-start date, and WHOOP recovery links to sleep through the provider's sleep ID.
-Display conversions provide readable units without changing stored source
-values. Ambiguous sources stay distinguishable, and missing days are not
-interpolated or replaced with zeros. Readable CSV, detailed audit CSV and original
-response downloads retain the appropriate values, units, timing and provenance.
-Participant/filter changes and sign-out clear prepared results and downloads.
+**Viewer.** The redesigned viewer has four views: **Daily activity**, **Sleep**,
+**Workouts** and **Data availability**.
+- Sleep uses its Beirut wake date and workouts use their start date.
+- WHOOP recovery links to sleep through the provider's sleep ID.
+- Display conversions give readable units without changing stored source values.
+- Ambiguous sources stay distinguishable. Missing days are not interpolated or
+  replaced with zeros.
+- Readable CSV, detailed audit CSV and original-response downloads keep the
+  appropriate values, units, timing and provenance.
+- Participant or filter changes and sign-out clear prepared results and downloads.
 
-Stage documents also contain historical evidence and earlier decisions. The
-current collection decision is the bounded, paused state described here and in
-the operating guide.
+**Wellness layer.** The processing outputs are **wellness indicators relative to
+each person's own recent pattern**.
+- They are not medical assessments and must never be presented as a diagnosis.
+- All thresholds in `src/sentra/processing/thresholds.json` are
+  **v0 — pending medical expert sign-off**.
+- Cohort days with fewer than 5 people are suppressed. With the current two
+  participants, every cohort day is suppressed.
+
+The stage documents also contain historical evidence and earlier decisions. The
+current collection decision is the bounded, paused state described here and in the
+operating guide.
 
 ## Current operational state
 
 Snapshot verified on **October 10, 2026 at 15:58 Beirut time**:
 
-- October **7–9** backfill succeeded for both providers: **57 Google jobs and 12
-  WHOOP jobs**, with no collection failures. The final date is October 9 because
+- **October 7–9 backfill:** succeeded for both providers (**57 Google jobs and 12
+  WHOOP jobs**) with no collection failures. The final date is October 9 because
   October 10 was still incomplete.
-- Retained requested coverage includes **October 3–9** across the recurring
-  datasets. Google minute request coverage spans **October 1–9**. Original heart
-  rate remains the single initial representative day.
-- Some requests returned no records, including Google sleep on October 9.
-  Completed request coverage does not prove uninterrupted measurements or
-  availability of every metric.
-- Both automatic execution controls are disabled: the GitHub scheduling variable
-  and the database daily-collection control. Merging or deploying code does not
-  authorize restarting collection.
-- Database ceiling: **400 MB**, with a **20 MB reserve**, giving an effective
-  **380 MB import limit** before estimated next-batch checks.
-- Database use: **287.56 MB**; approximately **92.44 MB** remains before the import
-  limit. Private original objects use approximately **0.73 MB**. These are decimal
-  MB and a dated snapshot, not a live quota reading.
-- Object and monthly egress ceilings remain **700 MB** and **3.5 GB** respectively.
-  Egress tracking uses a verified baseline plus conservative reservations rather
-  than a billing meter. Its baseline must be checked at least weekly and at each
-  new UTC month.
+- **Coverage:** retained requested coverage includes **October 3–9** across the
+  recurring datasets. Google minute request coverage spans **October 1–9**. Original
+  heart rate is still the single initial representative day.
+- **Empty results:** some requests returned no records, including Google sleep on
+  October 9. Completed request coverage does not prove uninterrupted measurements or
+  that every metric is available.
+- **Collection controls:** both automatic controls are disabled (the GitHub
+  scheduling variable and the database daily-collection control).
+- **Database:**
+  - Ceiling **400 MB** with a **20 MB reserve**, giving an effective **380 MB import
+    limit** before estimated next-batch checks.
+  - Use **287.56 MB**, so about **92.44 MB** remains before the import limit.
+  - Private original objects use about **0.73 MB**.
+  - These are decimal MB and a dated snapshot, not a live quota reading.
+- **Objects and egress:** the object ceiling is **700 MB** and the monthly egress
+  ceiling **3.5 GB**. Egress tracking uses a verified baseline plus conservative
+  reservations, not a billing meter. The baseline must be checked at least weekly
+  and at the start of each UTC month. Parquet tiers and the processing job reserve
+  egress through the same budget and count toward the object ceiling.
+- **Pending deployment:** the extra Fitbit datasets, parquet tiers, processing and
+  the read API are merged code, but they have not been run against the shared
+  project yet. Their storage figures in the docs are estimates until the first
+  probe and `tiers-build`.
 
-The collector settings already use the new database ceiling. The hosted viewer's
-capacity indicator requires its managed settings to be updated separately if it
-still shows the older ceiling. A midnight workflow is configured, but successful
-unattended midnight collection has not been demonstrated during this paused
-research phase.
+**Ceiling settings:** the collector settings already use the new database ceiling.
+The hosted viewer's capacity indicator needs its managed settings updated separately
+if it still shows the older ceiling.
+
+**Midnight schedule:** a midnight workflow is configured, but successful unattended
+midnight collection has not been demonstrated during this paused research phase.
 
 ## Local development
 
@@ -121,55 +177,105 @@ Use Python **3.11**. From the repository root in Windows PowerShell:
 ```powershell
 python -m venv .venv
 .venv/Scripts/python.exe -m pip install -r requirements-windows.txt
-.venv/Scripts/python.exe -m pip install --no-deps -e .
+.venv/Scripts/python.exe -m pip install --no-deps -e ".[dev,viewer]"
+.venv/Scripts/python.exe -m pip install "streamlit[auth]==1.65.0" "Authlib==1.8.0" -r requirements-api.txt httpx pytest pre-commit
 .venv/Scripts/python.exe -m pip check
-.venv/Scripts/python.exe -m unittest discover -s tests
+.venv/Scripts/pre-commit.exe install
+.venv/Scripts/python.exe -m pytest
 .venv/Scripts/sentra.exe --help
 ```
 
-For a new operator, follow the stage instructions to create ignored local
-configuration, initialize the OS-backed encryption key and authorize agreed
-participants. An existing operator must preserve their configuration and keys.
-Cloning this repository does not provide access to participant data or tokens.
-Hosted collection uses `requirements-cloud.txt`; the Streamlit application uses
-`viewer/requirements.txt` and `viewer/app.py`.
+**Requirements files:**
+- Hosted collection uses `requirements-cloud.txt`.
+- The Streamlit application uses `viewer/requirements.txt` and `viewer/app.py`.
+- The processing job and API image use `requirements-cloud.txt` +
+  `requirements-api.txt`.
 
-With an already configured operator checkout, these checks make no wearable
+**Operators:** a new operator follows the stage instructions to create ignored local
+configuration, initialize the OS-backed encryption key and authorize the agreed
+participants. An existing operator must preserve their configuration and keys.
+Cloning this repository gives no access to participant data or tokens.
+
+With an already configured operator checkout, these commands make no wearable
 requests:
 
 ```powershell
 .venv/Scripts/sentra.exe shared-status
+.venv/Scripts/sentra.exe shared-growth                       # storage per dataset
 .venv/Scripts/sentra.exe cloud-window --pause
+.venv/Scripts/sentra.exe tiers-migrate                       # once: private sentra-tiers bucket
+.venv/Scripts/sentra.exe tiers-build --local .private/tiers  # dry run + size report
+.venv/Scripts/sentra.exe tiers-build                         # publish tiers
+.venv/Scripts/sentra.exe process-run --from-bucket           # v0 wellness features into .private/processed
 ```
 
-Manual recovery requires an explicitly approved provider/date scope. CLI end
-dates are **exclusive**, while the viewer's displayed end date is **included**.
-Do not repeat an entire initial import to resolve one missing dataset. See the
-operating guide for bounded recovery, reconnects, backups and failure handling.
+**Manual recovery** requires an explicitly approved provider and date scope. CLI end
+dates are **exclusive**, while the viewer's displayed end date is **included**. Do
+not repeat an entire initial import to fix one missing dataset. See the operating
+guide for bounded recovery, reconnects, backups and failure handling, and the
+[data dictionary](docs/data-dictionary.md#bounded-probe-manual-october-39-2026)
+for the new-dataset probe.
+
+**Read API.** To run the read API and the processing job in Docker:
+
+```powershell
+Copy-Item .env.example .env    # SENTRA_API_KEY and viewer-only SENTRA_PROCESSING_CONFIG; .env is git-ignored
+docker compose up -d --build   # API on http://127.0.0.1:8000
+```
+
+## Contributing
+
+Work happens on `feat/*`, `fix/*`, `chore/*`, `ci/*` or `docs/*` branches. Open a PR
+into `develop`; releases go by PR from `develop` to `main`. Both protected branches
+need a PR, a green `guard` and `test` CI and one code-owner approval. Feature
+branches are squash-merged. Commits use conventional messages (`feat:`, `fix:`,
+`ci:`, `chore:`, `docs:`). The data guard (`scripts/check_no_data.py`, also a
+pre-commit hook) and gitleaks block health data, exports and secrets. See
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Verification, privacy and remaining work
 
-The current automated suite contains **117 tests**; the most recent complete run
-passed with **five opt-in live integration tests skipped**. Selected live checks
-were run separately during the stages, including permission denials, source
-integrity, token renewal, private restore rehearsal and hosted viewer downloads.
-Desktop/mobile and keyboard checks covered the redesign. Detailed evidence states
-which checks were synthetic, live, user-reported or still unverified.
+**Tests.** The automated suite has **127 tests**. The most recent complete run passed
+with **five opt-in live integration tests skipped**. CI runs the suite on Ubuntu and
+Windows with Python 3.11 for every PR, and the live tests stay skipped there.
 
-Keep health records, original responses, exports, backups, tokens, client secrets,
-encryption keys and consent documents outside Git. Ignored configuration/private
-files and separate least-privilege credentials are required. The viewer uses an
-identity-only Google client and receives no provider-token bundle or admin
-credentials. Access is restricted to approved accounts and the agreed team.
+**Live checks.** Selected live checks were run separately during the stages,
+including permission denials, source integrity, token renewal, a private restore
+rehearsal and hosted viewer downloads. Desktop, mobile and keyboard checks covered
+the redesign. The detailed evidence states which checks were synthetic, live,
+user-reported or still unverified. The tier, processing and API layers are verified
+with synthetic data and a container smoke test only.
 
-This MVP provides a usable basis for project research. It does not establish
-device accuracy, cross-provider equivalence, clinical validity or a production
-service guarantee. Google authorization in Testing mode has a short refresh-token
-lifetime and remains an operational reconnect dependency. Storage growth prevents
-indefinite collection at the current representation. Lossless context compaction
-was investigated, but no storage migration has been applied. Full replacement-
-project disaster recovery and off-machine key recovery remain unverified.
+**Privacy.**
+- Keep health records, original responses, exports, backups, parquet tiers,
+  processed outputs, tokens, client secrets, encryption keys and consent documents
+  out of Git.
+- Ignored configuration and private files, and separate least-privilege credentials,
+  are required.
+- The viewer, the tier reader and the processing job use the read-only
+  `sentra_viewer` role. The viewer uses an identity-only Google client and receives
+  no provider-token bundle or admin credentials.
+- The API holds no database or provider credentials and returns pseudonymous
+  participant IDs only.
+- Access is restricted to approved accounts and the agreed team.
 
-Choose the research question using observed coverage, definitions, gaps and
-delivery behavior. Add use-case-specific quality rules only after that decision,
-and revisit storage scaling and continuous collection when they are needed.
+**Limits.**
+- This MVP is a usable basis for project research. It does not establish device
+  accuracy, cross-provider equivalence, clinical validity or a production service
+  guarantee.
+- Google authorization in Testing mode has a short refresh-token lifetime, so
+  reconnects remain an operational dependency.
+- Database growth prevents indefinite collection at the current representation.
+  Parquet tiers are the planned way to scale, but no database retention or deletion
+  has been applied.
+- Full replacement-project disaster recovery and off-machine key recovery remain
+  unverified.
+- Processing has no sleep-stage timeline or MET values yet. Wellness thresholds need
+  medical expert sign-off before any output reaches employees or managers.
+
+**Next steps.**
+- Choose the research question using observed coverage, definitions, gaps and
+  delivery behavior. Add use-case-specific quality rules only after that decision.
+- Run the approved probe for the new Fitbit datasets and the first `tiers-build` to
+  replace the estimates with measured sizes.
+- Revisit continuous collection once storage and sign-off are in place.
