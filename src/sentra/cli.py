@@ -9,7 +9,7 @@ from filelock import Timeout
 
 from .auth import access_token, authorize
 from .config import load_connection, require_agreement
-from .datasets import plan_jobs
+from .datasets import ON_REQUEST, plan_jobs
 from .local_store import LocalStore
 from .collect import run_jobs
 from .transport import ReadClient
@@ -88,7 +88,8 @@ def main(argv=None):
                 try:
                     connection = load_connection(args.config, provider)
                     require_agreement(connection)
-                    jobs = plan_jobs(provider, args.start, args.end)
+                    extra = tuple(d for d in (args.dataset or []) if d in ON_REQUEST) if provider == 'google_health' else ()
+                    jobs = plan_jobs(provider, args.start, args.end, on_request=extra)
                     if args.dataset:
                         selected = set(args.dataset)
                         if not selected.issubset({j.dataset for j in jobs}):

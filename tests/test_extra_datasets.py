@@ -5,7 +5,7 @@ import unittest
 from sentra.cloud_collect import collect_job
 from sentra.curated import curate
 from sentra.daily_plan import day_jobs
-from sentra.datasets import EXTRA_LIST, plan_jobs
+from sentra.datasets import EXTRA_LIST, ON_REQUEST, plan_jobs
 from sentra.errors import SentraError
 from sentra.normalize import normalize_record
 from sentra.providers import PROVIDERS
@@ -37,7 +37,8 @@ def breathing(name, when):
 
 
 def job(dataset, day=date(2026, 10, 7)):
-    return next(j for j in day_jobs('google_health', day) if j.dataset == dataset)
+    extra = (dataset,) if dataset in ON_REQUEST else ()
+    return next(j for j in day_jobs('google_health', day, extra) if j.dataset == dataset)
 
 
 def row(job_, raw):
@@ -70,10 +71,11 @@ class Store:
 
 class ExtraDatasetTests(unittest.TestCase):
     def test_plan_adds_priority_ordered_weekly_list_jobs_with_documented_filters(self):
-        jobs = plan_jobs('google_health', date(2026, 10, 3), date(2026, 10, 10))
+        jobs = plan_jobs('google_health', date(2026, 10, 3), date(2026, 10, 10), on_request=ON_REQUEST)
         names = [j.dataset for j in jobs]
-        self.assertEqual([n for n in names if n in EXTRA_LIST], list(EXTRA_LIST))
-        self.assertEqual(EXTRA_LIST, ('sedentary-period', 'respiratory-rate-sleep-summary', 'activity-level'))
+        self.assertEqual([n for n in names if n in EXTRA_LIST + ON_REQUEST], list(EXTRA_LIST + ON_REQUEST))
+        self.assertEqual(EXTRA_LIST, ('sedentary-period', 'respiratory-rate-sleep-summary'))
+        self.assertEqual(ON_REQUEST, ('activity-level',))
         expected = {'sedentary-period': 'sedentary_period.interval.start_time',
                     'respiratory-rate-sleep-summary': 'respiratory_rate_sleep_summary.sample_time.physical_time',
                     'activity-level': 'activity_level.interval.start_time'}
@@ -87,6 +89,23 @@ class ExtraDatasetTests(unittest.TestCase):
                 self.assertEqual(params['dataSourceFamily'], 'users/me/dataSourceFamilies/google-wearables')
                 self.assertTrue(j.request()['url'].endswith('/dataTypes/' + j.dataset + '/dataPoints'))
         self.assertEqual({j.dataset for j in day_jobs('google_health', date(2026, 10, 7))} & set(EXTRA_LIST), set(EXTRA_LIST))
+
+    def test_activity_level_runs_only_when_a_manual_run_names_it(self):
+        from sentra.cloud_run import jobs_for
+        day = date(2026, 10, 7)
+        self.assertNotIn('activity-level', {j.dataset for j in plan_jobs('google_health', day, date(2026, 10, 10))})
+        self.assertNotIn('activity-level', {j.dataset for j in day_jobs('google_health', day)})
+        # Daily mode never plans it, even with existing coverage (the Oct 9 probe created some).
+        covered = [{'requested_civil_start': '2026-10-01', 'requested_civil_end': '2026-10-10'}]
+        states = {j.dataset: covered for j in day_jobs('google_health', day, ON_REQUEST)}
+        daily, _ = jobs_for('google_health', 'daily', date(2026, 10, 11), states)
+        self.assertNotIn('activity-level', {j.dataset for j in daily})
+        recovery, _ = jobs_for('google_health', 'recovery', date(2026, 10, 11), {}, date(2026, 10, 3), date(2026, 10, 10))
+        self.assertNotIn('activity-level', {j.dataset for j in recovery})
+        named, _ = jobs_for('google_health', 'recovery', date(2026, 10, 11), {}, date(2026, 10, 9), date(2026, 10, 10), 'activity-level')
+        self.assertEqual([(j.dataset, j.start_date) for j in named], [('activity-level', '2026-10-09')])
+        with self.assertRaises(SentraError):
+            plan_jobs('whoop', day, date(2026, 10, 8), on_request=ON_REQUEST)
 
     def test_existing_oauth_scopes_cover_the_new_types(self):
         scopes = PROVIDERS['google_health'].scopes
