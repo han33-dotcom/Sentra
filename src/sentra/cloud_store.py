@@ -60,10 +60,10 @@ class CloudStore:
         p={**p,'execution_id':execution,'status':'running','failure':None}
         self.save_progress(job,p); return p
 
-    def failed(self,job,message):
+    def failed(self,job,message,outcome='failed'):
         p=self.progress(job)
         if p:
-            self.save_progress(job,{**p,'status':'failed','failure':message,'failed_at':clock()})
+            self.save_progress(job,{**p,'status':'failed','outcome':outcome,'failure':message,'failed_at':clock()})
 
     def states(self):
         self.backend.reserve(262144)
@@ -108,6 +108,7 @@ class CloudStore:
         nextp={**p,'cursor':next_cursor,'pages':p['pages']+1,'received':p['received']+len(records),
           'seen':p['seen']+([cursor] if cursor else []),'status':'running' if next_cursor else 'complete',
           'completed_at':None if next_cursor else collected,'failure':None}
+        if not next_cursor: nextp['outcome']='records' if nextp['received'] else 'no_records'
         if len(canonical(nextp).encode())>262144: raise SentraError('Pagination state too large; page not checkpointed.')
         self.backend.put_manifest(manifest,gzip.compress(body,mtime=0))
         changed_count=unchanged_count=0
