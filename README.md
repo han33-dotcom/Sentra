@@ -70,6 +70,7 @@ Normalization is conservative:
 | Fitbit / Google Health | Daily steps, distance, total calories, active-zone minutes, active minutes and heart rate |
 | Fitbit / Google Health | Daily resting heart rate, HRV, oxygen saturation, respiratory rate, sleep temperature derivations and VO2 max, where returned |
 | Fitbit / Google Health | Sleep and exercise session records |
+| Fitbit / Google Health | Planned, not yet collected: sedentary periods, sleep respiratory-rate summaries and activity-level intervals (see the [data dictionary](docs/data-dictionary.md#extra-fitbit-datasets-october-2026-not-yet-collected)) |
 | Fitbit / Google Health | Requested 60-second rollups for steps, distance, total calories, active-zone minutes and heart rate |
 | Fitbit / Google Health | One representative original-resolution heart-rate day from the initial import |
 | Fitbit / Google Health | **Planned, not yet collected:** sedentary periods, sleep respiratory-rate summaries and activity-level intervals ([details and probe](docs/data-dictionary.md#extra-fitbit-datasets-october-2026-not-yet-collected)) |
