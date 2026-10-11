@@ -6,7 +6,7 @@ from uuid import uuid4
 from cryptography.fernet import Fernet
 import psycopg,requests
 from .auth import access_token
-from .cloud_collect import collect_job,independent_providers
+from .cloud_collect import OUTCOMES,collect_job,failure_outcome,independent_providers
 from .cloud_store import CloudStore,clock
 from .cloud_tokens import CloudTokenVault,TokenRepository
 from .daily_plan import collection_day,day_jobs,request_days,window_status
@@ -69,7 +69,7 @@ def run_provider(credentials,limits,pid,provider,cipher,args,execution):
     backend=SharedBackend(credentials,limits); locked=False
     run_id=attempt_run_id(execution)
     details={'run_id':run_id,'execution_id':execution,'started_at':clock(),'status':'running','mode':args.mode,
-             'completed':0,'skipped':0,'changed':0,'unchanged':0,'failures':[],
+             'completed':0,'skipped':0,'changed':0,'unchanged':0,'failures':[],'outcomes':dict.fromkeys(OUTCOMES,0),
              'github_run_id':os.environ.get('GITHUB_RUN_ID'),'github_run_attempt':os.environ.get('GITHUB_RUN_ATTEMPT'),
              'coverage_meaning':'requested pages stored; not proof of complete measurements'}
     store=CloudStore(backend,pid,provider)
@@ -85,7 +85,8 @@ def run_provider(credentials,limits,pid,provider,cipher,args,execution):
             if state!='active':
                 details.update(status='paused',pause_reason=state); return details
         jobs,failures=jobs_for(provider,args.mode,today,store.states(),args.start,args.end,args.dataset)
-        details['failures'].extend(failures)
+        details['failures'].extend({**f,'outcome':'failed'} for f in failures)
+        details['outcomes']['failed']+=len(failures)
         vault=CloudTokenVault(TokenRepository(backend.db),pid,provider,cipher)
         c=vault.connection()
         client=ReadClient(lambda refresh=False:access_token(c,vault,force_refresh=refresh))
@@ -96,10 +97,14 @@ def run_provider(credentials,limits,pid,provider,cipher,args,execution):
                 result=collect_job(store,job,client.fetch,execution,deadline=deadline)
                 details['skipped' if result['status']=='skipped' else 'completed']+=1
                 details['changed']+=result['changed']; details['unchanged']+=result['unchanged']
-                print(f'{provider} {job.dataset} {job.start_date}: {result["status"]}',flush=True)
+                details['outcomes'][result['outcome']]+=1
+                print(f'{provider} {job.dataset} {job.start_date}: {result["status"]} ({result["outcome"]})',flush=True)
             except (SentraError,psycopg.Error,requests.RequestException) as e:
                 message=str(e) if isinstance(e,SentraError) else 'Shared operation failed; sensitive details omitted. Repeat to resume.'
-                details['failures'].append({'dataset':job.dataset,'start':job.start_date,'message':message})
+                outcome=failure_outcome(e)
+                details['failures'].append({'dataset':job.dataset,'start':job.start_date,'message':message,'outcome':outcome})
+                details['outcomes'][outcome]+=1
+                print(f'{provider} {job.dataset} {job.start_date}: {outcome}',flush=True)
                 if isinstance(e,CapacityStop) or time.monotonic()>=deadline:
                     details['status']='capacity_stop' if isinstance(e,CapacityStop) else 'partial'; break
         if details['status']=='running': details['status']='partial' if details['failures'] else 'succeeded'
