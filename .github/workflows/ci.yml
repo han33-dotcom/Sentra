@@ -1,0 +1,66 @@
+# Checks for every PR and for pushes to main/develop.
+# Branches: feat/* fix/* chore/* ci/* docs/* -> PR into develop -> release PR develop -> main. See CONTRIBUTING.md.
+# Never uses collection secrets; live tests stay skipped because their opt-in variables are unset.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  GITLEAKS_VERSION: 8.21.2
+
+jobs:
+  guard:
+    name: guard
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Tracked files contain no health data or credentials
+        run: python3 scripts/check_no_data.py
+      - name: Secret scan (gitleaks, full history, redacted)
+        run: |
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSLO "$base/$tarball"
+          curl -fsSLO "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          sha256sum --ignore-missing -c "gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          tar xzf "$tarball" gitleaks
+          ./gitleaks detect --source . --redact --verbose --no-banner
+
+  test:
+    name: test (${{ matrix.os }}, py3.11)
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+      - name: Install pinned dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -r requirements-cloud.txt
+          python -m pip install --disable-pip-version-check --no-deps ".[dev,viewer]"
+          python -m pip install --disable-pip-version-check "pglast>=7,<8" "streamlit[auth]==1.65.0" "Authlib==1.8.0" pytest
+      - name: Tests
+        env:
+          PYTHONUNBUFFERED: '1'
+        run: python -m pytest -ra
