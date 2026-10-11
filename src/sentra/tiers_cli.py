@@ -60,9 +60,8 @@ def run_command(args):
         raise SentraError('Local tiers contain health data; keep them beneath .private.')
     viewer, limits, _ = read_shared(args.config, cipher, role='viewer')
     collector, _, _ = read_shared(args.config, cipher, role='collector')
-    db = connect_db(viewer)
-    try:
-        reader = AuditReader(db, limits, max_read_bytes=args.max_read_mb * 1_000_000)
+    with connect_db(viewer) as db, connect_db(viewer) as budget_db:
+        reader = AuditReader(db, limits, budget_db=budget_db, max_read_bytes=args.max_read_mb * 1_000_000)
         objects, report = build(reader, limits, employees=args.employees, period_days=args.days)
         # Writes use the collector storage account; the database side stays read-only.
         storage = PrivateStorage(collector, reader.reserve, bucket=TIER_BUCKET)
@@ -72,5 +71,3 @@ def run_command(args):
             storage.session.close()
         print(json.dumps({**result, **report}, indent=2))
         return 0
-    finally:
-        db.close()

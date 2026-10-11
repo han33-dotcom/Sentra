@@ -58,8 +58,9 @@ def _pa():
 class AuditReader:
     """Read-only access: refuses any role but sentra_viewer and reserves egress before reading."""
 
-    def __init__(self, db, limits, *, max_read_bytes=DEFAULT_MAX_READ_BYTES):
+    def __init__(self, db, limits, *, budget_db=None, max_read_bytes=DEFAULT_MAX_READ_BYTES):
         self.db, self.limits, self.max_read_bytes, self.read_bytes = db, limits, max_read_bytes, 0
+        self.budget_db = budget_db if budget_db is not None else db
         try:
             role = db.execute('select session_user').fetchone()[0]
         except psycopg.Error:
@@ -71,7 +72,8 @@ class AuditReader:
         try:
             while amount > 0:
                 chunk = min(amount, RESERVE_CHUNK)
-                self.db.execute('select public.sentra_reserve_viewer_egress(%s,%s)', (chunk, self.limits.monthly_egress_bytes))
+                # Reservations must persist outside the read-only snapshot, even if the read fails.
+                self.budget_db.execute('select public.sentra_reserve_viewer_egress(%s,%s)', (chunk, self.limits.monthly_egress_bytes))
                 amount -= chunk
         except psycopg.Error:
             raise CapacityStop('Egress allowance unavailable, stale or exhausted; no tier data read.') from None

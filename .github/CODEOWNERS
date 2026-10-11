@@ -1,0 +1,6 @@
+# Reviewers requested automatically. Either owner's approval satisfies the review rule.
+*                         @han33-dotcom @MohamadNasrallah
+/src/sentra/              @han33-dotcom @MohamadNasrallah
+/sql/                     @han33-dotcom
+/.github/                 @han33-dotcom @MohamadNasrallah
+/scripts/check_no_data.py @han33-dotcom @MohamadNasrallah

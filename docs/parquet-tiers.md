@@ -23,7 +23,8 @@ Participants appear only as pseudonymous IDs.
 - **Read-only role:** reads run as `sentra_viewer` (the reader refuses any other session
   user) inside `READ ONLY` repeatable-read transactions.
 - **Egress:** before any rows leave PostgreSQL, the estimated size × 1.2 is reserved through
-  `public.sentra_reserve_viewer_egress`, in chunks of 90 MB or less. A stale, missing or
+  `public.sentra_reserve_viewer_egress` on a separate viewer connection, in chunks of 90 MB or less.
+  Reservations persist even if the read-only snapshot fails. A stale, missing or
   exhausted budget stops the run. Each run is also capped at `--max-read-mb` (default
   500 MB).
 - **Objects:** before uploading, `Limits.check` must accept current object usage plus the

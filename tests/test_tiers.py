@@ -108,6 +108,24 @@ class TierTests(unittest.TestCase):
         with self.assertRaises(SentraError):
             AuditReader(FakeDB(role='sentra_collector'), Limits())
 
+    def test_read_only_snapshot_uses_an_independent_egress_connection(self):
+        class ReadOnlyDB(FakeDB):
+            read_only = False
+
+            def execute(self, query, values=()):
+                if 'read only' in query:
+                    self.read_only = True
+                if self.read_only and 'sentra_reserve_viewer_egress' in query:
+                    import psycopg
+                    raise psycopg.errors.ReadOnlySqlTransaction('cannot update the budget in a read-only snapshot')
+                return super().execute(query, values)
+
+        db = ReadOnlyDB()
+        budget_db = FakeDB()
+        reader = Reader(db, Limits(), budget_db=budget_db)
+        self.assertEqual(reader.read('hr_raw'), ROWS['hr_raw'])
+        self.assertGreater(sum(budget_db.reserved), reader.read_bytes)
+
     def test_build_reserves_egress_and_produces_expected_tiers(self):
         db = FakeDB(); reader = Reader(db, Limits())
         objects, report = build(reader, Limits(), now=NOW)
