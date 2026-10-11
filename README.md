@@ -70,10 +70,10 @@ Normalization is conservative:
 | Fitbit / Google Health | Daily steps, distance, total calories, active-zone minutes, active minutes and heart rate |
 | Fitbit / Google Health | Daily resting heart rate, HRV, oxygen saturation, respiratory rate, sleep temperature derivations and VO2 max, where returned |
 | Fitbit / Google Health | Sleep and exercise session records |
-| Fitbit / Google Health | Planned, not yet collected: sedentary periods, sleep respiratory-rate summaries and activity-level intervals (see the [data dictionary](docs/data-dictionary.md#extra-fitbit-datasets-october-2026-not-yet-collected)) |
+| Fitbit / Google Health | Sedentary periods and sleep respiratory-rate summaries (probe: October 3–9, 2026) |
 | Fitbit / Google Health | Requested 60-second rollups for steps, distance, total calories, active-zone minutes and heart rate |
 | Fitbit / Google Health | One representative original-resolution heart-rate day from the initial import |
-| Fitbit / Google Health | **Planned, not yet collected:** sedentary periods, sleep respiratory-rate summaries and activity-level intervals ([details and probe](docs/data-dictionary.md#extra-fitbit-datasets-october-2026-not-yet-collected)) |
+| Fitbit / Google Health | Activity-level intervals: **on request only**; October 9, 2026 collected, October 3–8 deferred for storage ([details](docs/data-dictionary.md#extra-fitbit-datasets-october-2026)) |
 | WHOOP | Cycles, recovery, sleep and workouts, including returned summaries, score states and vendor scores |
 
 **Initial import** (September 8–October 7, 2026):
@@ -85,9 +85,12 @@ Normalization is conservative:
 - WHOOP's integration provides session and cycle summaries, not continuous
   heart-rate samples.
 - Requesting minute resolution does not guarantee a reading for every minute.
-- The three planned Fitbit datasets are covered by the existing authorization
+- The three newer Fitbit datasets are covered by the existing authorization
   (`activity_and_fitness`, `health_metrics_and_measurements`), so no reconnect is
-  needed. They are collected only through an explicitly approved bounded probe.
+  needed.
+- Activity level costs about 22.9 MB of database per participant-day. It is
+  excluded from the daily, initial and recovery plans, and runs only when a manual
+  run names it.
 
 See the [collection contracts and evidence](docs/stage-2-collection.md).
 
@@ -103,7 +106,7 @@ See the [collection contracts and evidence](docs/stage-2-collection.md).
 | 6 — Verification and operations | Synthetic and selected live checks for pagination, corrections, renewal, provider isolation, timezone boundaries, permissions, exports, capacity and backup restoration; two participant-app comparisons confirmed by the user | [Stage 6](docs/stage-6-validation.md), [operating guide](docs/operating-guide.md) |
 | 7 — Research dataset | Approved October 7–9 backfill for both participants, verified retained week coverage and collection left paused for use-case research | [Stage 7](docs/stage-7-audit-plan.md) |
 | Viewer redesign | Pale sidebar, white panels and charcoal summaries; readable metric definitions, charts and tables, mobile layout, keyboard navigation and retained detailed audit access | [Redesign validation](docs/viewer-redesign-validation.md) |
-| Extra Fitbit datasets | `sedentary-period`, `respiratory-rate-sleep-summary` and `activity-level` in the job plan; per-job outcomes; viewer labels and per-day period totals | [Data dictionary](docs/data-dictionary.md) |
+| Extra Fitbit datasets | `sedentary-period` and `respiratory-rate-sleep-summary` in the job plan, `activity-level` on request; per-job outcomes; viewer labels and per-day period totals; October 3–9 probe | [Data dictionary](docs/data-dictionary.md#extra-fitbit-datasets-october-2026) |
 | Parquet tiers | `sentra tiers-build`: hot raw heart rate (30 days), warm minute heart rate, measurements and sessions as zstd parquet in a private bucket, with a size report | [Parquet tiers](docs/parquet-tiers.md) |
 | Processing layer | Canonical metric mapping, minute grid, daily features, 28-day personal baselines, v0 wellness flags and a k-anonymous cohort | [Processing](docs/processing.md) |
 | Read API and Docker | Read-only FastAPI over processed outputs; Compose runs only the API and the processing job | [Read API](docs/read-api.md) |
@@ -159,10 +162,19 @@ Snapshot verified on **October 10, 2026 at 15:58 Beirut time**:
   reservations, not a billing meter. The baseline must be checked at least weekly
   and at the start of each UTC month. Parquet tiers and the processing job reserve
   egress through the same budget and count toward the object ceiling.
-- **Pending deployment:** the extra Fitbit datasets, parquet tiers, processing and
-  the read API are merged code, but they have not been run against the shared
-  project yet. Their storage figures in the docs are estimates until the first
-  probe and `tiers-build`.
+
+**Update, October 11, 2026** (after the Sprint 6 merges):
+- **Probe:** the new-dataset probe ran (see the [results](docs/data-dictionary.md#bounded-probe-results-october-39-2026)).
+  Activity October 3–8 is deferred.
+- **Tiers and processing:** the tier migration, the first `tiers-build`, private
+  publication and processing from the bucket succeeded. The tiers hold 3.27 MB of
+  parquet; the read cost 39.7 MB of database egress.
+- **Guarded usage:**
+  - database **310.2 MB**, so about **70 MB** remains before the 380 MB import limit;
+  - objects **4.0 MB**;
+  - month-to-date egress **2.52 GB** of 3.5 GB.
+- **Read API:** local checks passed. All 32 cohort days are suppressed.
+- **Collection:** still disabled.
 
 **Ceiling settings:** the collector settings already use the new database ceiling.
 The hosted viewer's capacity indicator needs its managed settings updated separately
@@ -214,7 +226,7 @@ requests:
 dates are **exclusive**, while the viewer's displayed end date is **included**. Do
 not repeat an entire initial import to fix one missing dataset. See the operating
 guide for bounded recovery, reconnects, backups and failure handling, and the
-[data dictionary](docs/data-dictionary.md#bounded-probe-manual-october-39-2026)
+[data dictionary](docs/data-dictionary.md#bounded-probe-results-october-39-2026)
 for the new-dataset probe.
 
 **Read API.** To run the read API and the processing job in Docker:
@@ -236,8 +248,8 @@ pre-commit hook) and gitleaks block health data, exports and secrets. See
 
 ## Verification, privacy and remaining work
 
-**Tests.** The automated suite has **145 tests**. The most recent complete run had
-**140 passed and five opt-in live integration tests skipped**. CI runs the suite on Ubuntu and
+**Tests.** The automated suite has **146 tests**. The most recent complete run had
+**141 passed and five opt-in live integration tests skipped**. CI runs the suite on Ubuntu and
 Windows with Python 3.11 for every PR, and the live tests stay skipped there.
 
 **Live checks.** Selected live checks were run separately during the stages,
@@ -245,7 +257,8 @@ including permission denials, source integrity, token renewal, a private restore
 rehearsal and hosted viewer downloads. Desktop, mobile and keyboard checks covered
 the redesign. The detailed evidence states which checks were synthetic, live,
 user-reported or still unverified. The tier, processing and API layers are verified
-with synthetic data and a container smoke test only.
+with synthetic data and a container smoke test. Their first operator run on the
+shared project (October 11) also succeeded.
 
 **Privacy.**
 - Keep health records, original responses, exports, backups, parquet tiers,
