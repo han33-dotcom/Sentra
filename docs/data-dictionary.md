@@ -55,18 +55,22 @@ findings must be supported by actual evidence, not an elapsed-day claim.
 Two participants on different
 devices do not establish population accuracy or validate health predictions.
 
-## Extra Fitbit datasets (October 2026, not yet collected)
+## Extra Fitbit datasets (October 2026)
 
-Three Google Health v4 LIST datasets were added to the job plan in priority order.
-They are requested in the same weekly batches as the other Google LIST datasets
-(one-day jobs for daily recovery), with `pageSize=1000`, the `google-wearables`
-source family, and every `nextPageToken` followed.
+Three Google Health v4 LIST datasets were added in priority order. They follow every
+`nextPageToken`, with `pageSize=1000` and the `google-wearables` source family.
 
-| Priority | Dataset | Record type | Filter field ([filters](https://developers.google.com/health/filters)) | Scope ([data types](https://developers.google.com/health/data-types)) |
-| --- | --- | --- | --- | --- |
-| 1 | `sedentary-period` | Interval | `sedentary_period.interval.start_time` | `activity_and_fitness.readonly` |
-| 2 | `respiratory-rate-sleep-summary` | Sample | `respiratory_rate_sleep_summary.sample_time.physical_time` | `health_metrics_and_measurements.readonly` |
-| 3 | `activity-level` | Interval | `activity_level.interval.start_time` | `activity_and_fitness.readonly` |
+| Priority | Dataset | Record type | Filter field ([filters](https://developers.google.com/health/filters)) | Scope ([data types](https://developers.google.com/health/data-types)) | Planning |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `sedentary-period` | Interval | `sedentary_period.interval.start_time` | `activity_and_fitness.readonly` | Weekly batches; daily and recovery plans |
+| 2 | `respiratory-rate-sleep-summary` | Sample | `respiratory_rate_sleep_summary.sample_time.physical_time` | `health_metrics_and_measurements.readonly` | Weekly batches; daily and recovery plans |
+| 3 | `activity-level` | Interval | `activity_level.interval.start_time` | `activity_and_fitness.readonly` | **On request only** |
+
+`activity-level` is never part of the daily, initial or recovery plans (`ON_REQUEST`
+in `src/sentra/datasets.py`). A manual run includes it only when it names the dataset,
+for example `-f dataset=activity-level` with `mode=recovery`. Its measured cost is about
+22.9 MB of database per participant-day, which the current headroom cannot sustain.
+Any further collection waits for a reviewed storage reduction plan.
 
 The current authorization already requests `activity_and_fitness`, `sleep` and
 `health_metrics_and_measurements`, so no reconnect is needed for these datasets.
@@ -92,7 +96,7 @@ datasets it shows Sentra calculations:
 
 ### Job outcomes
 
-Hosted runs now record a separate outcome for every job, both in
+Hosted runs record a separate outcome for every job, both in
 `collector_private.daily_jobs.progress.outcome` and in the
 `audit.collection_runs.details.outcomes` counts:
 
@@ -103,47 +107,45 @@ Hosted runs now record a separate outcome for every job, both in
 | `denied` | HTTP 401 after one forced token refresh, or HTTP 403 (scope/consent/permission) |
 | `failed` | Any other fetch, validation, storage or planning failure; progress retained for resume |
 
-### Bounded probe (manual, October 3–9 2026)
+### Bounded probe results (October 3–9 2026)
 
-Scheduled collection stays paused. This probe is a manual `recovery` dispatch of
-the existing collector workflow on the feature branch, one dataset at a time in
-priority order. The end date is exclusive. Run `activity-level` for one day first,
-because its record density is unknown.
+Manual `recovery` runs on `develop`, provider `google_health`, one dataset per run,
+in October 2026. End dates are exclusive. Scheduled collection stayed paused.
 
-```powershell
-gh workflow run collect.yml --repo han33-dotcom/Sentra --ref feat/fitbit-extra-datasets -f mode=recovery -f provider=google_health -f start=2026-10-03 -f end=2026-10-10 -f dataset=sedentary-period
-gh workflow run collect.yml --repo han33-dotcom/Sentra --ref feat/fitbit-extra-datasets -f mode=recovery -f provider=google_health -f start=2026-10-03 -f end=2026-10-10 -f dataset=respiratory-rate-sleep-summary
-gh workflow run collect.yml --repo han33-dotcom/Sentra --ref feat/fitbit-extra-datasets -f mode=recovery -f provider=google_health -f start=2026-10-09 -f end=2026-10-10 -f dataset=activity-level
-# only after checking the one-day activity-level size:
-gh workflow run collect.yml --repo han33-dotcom/Sentra --ref feat/fitbit-extra-datasets -f mode=recovery -f provider=google_health -f start=2026-10-03 -f end=2026-10-09 -f dataset=activity-level
-```
+| Dataset | Dates | records | no_records | denied | failed | Workflow run |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| `sedentary-period` | Oct 3–9 | 7 | 0 | 0 | 0 | [38148633616](https://github.com/han33-dotcom/Sentra/actions/runs/38148633616) |
+| `respiratory-rate-sleep-summary` | Oct 3–9 | 6 | 1 | 0 | 0 | [38148789760](https://github.com/han33-dotcom/Sentra/actions/runs/38148789760) |
+| `activity-level` | Oct 9 only | 1 | 0 | 0 | 0 | [38148966963](https://github.com/han33-dotcom/Sentra/actions/runs/38148966963) |
 
-Each run prints one line per job, `<dataset> <date>: complete (records|no_records)`
-or `denied`/`failed`. Existing capacity and egress guards apply before every
-fetch. Measure the actual storage cost per dataset afterwards from an operator
-checkout:
+- Respiratory October 9 returned `no_records`. The respiratory responses deduplicated
+  to one stored record: job outcomes and unique record counts measure different
+  things.
+- Outcomes count requested jobs and pages, not proof of complete measurements.
+- **Activity October 3–8 is deferred.** Six days like October 9 would add about
+  137 MB. Only about 70 MB remained before the 380 MB import limit (database
+  310.2 MB).
 
-```powershell
-.venv/Scripts/sentra.exe shared-growth
-```
+### Measured storage per dataset
 
-### Storage estimate per type (before the probe)
+From `sentra shared-growth` after the probe. Decimal bytes; the database estimate
+applies the project-wide allocation ratio and is not a forecast.
 
-The estimate uses synthetic records normalized by the current code: compact
-record JSON plus measurement rows. It is in decimal MB and **excludes** index and
-table overhead; `shared-growth` reports the observed overhead factor.
+| Dataset | Requested days | Unique records | Measurements | Payload bytes | ≈ database bytes per requested day |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `sedentary-period` | 7 | 133 | 1,840 | 2,066,471 | 450,688 |
+| `respiratory-rate-sleep-summary` | 7 | 1 | 12 | 10,871 | 2,371 |
+| `activity-level` | 1 | 907 | 13,461 | 14,995,759 | 22,893,574 |
 
-| Dataset | Rows per record | ≈ bytes per record | Assumed records/participant-day | ≈ MB per participant-day | ≈ MB for Oct 3–9 |
-| --- | --- | --- | --- | --- | --- |
-| `sedentary-period` | 1 record + 4 measurements | 6,300 | 15–40 | 0.09–0.25 | 0.7–1.8 |
-| `respiratory-rate-sleep-summary` | 1 + 4 | 6,450 | 1–3 | 0.01–0.02 | 0.05–0.14 |
-| `activity-level` | 1 + 5 | 7,600 | 50–300 (unknown) | 0.4–2.3 | 2.7–16 |
+The pre-probe estimate for `activity-level` (0.4–2.3 MB per participant-day)
+was about 10× too low. Each interval becomes about 15 measurement rows, mostly
+timing fields. A storage reduction plan should consider these options before any
+further collection:
+- keep the dataset out of `audit.measurements` and store it only in originals and
+  parquet tiers;
+- store a compact daily representation;
+- or drop the dataset, since processing does not use it.
 
-Original compressed responses add roughly 0.1–0.3 KB per record. At the last
-recorded snapshot, about 92 MB remained before the import limit. If
-`activity-level` returns per-minute intervals (≈1,440/day), it would cost about
-11 MB per participant-day. That is why it is probed for one day first.
-
-If daily collection is re-enabled before a probe has created coverage, each new
-dataset is reported as a planning `failed` outcome ("No initial coverage"). It is
-never silently backfilled.
+If daily collection is re-enabled for a dataset without any coverage yet, the
+planner reports a `failed` outcome ("No initial coverage") instead of backfilling
+silently.
