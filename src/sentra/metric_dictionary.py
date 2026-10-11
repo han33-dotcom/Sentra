@@ -59,6 +59,13 @@ for dataset,path,label,unit,explanation in (
 ):
     add('google_health',dataset,path,label,unit,'vendor_calculation',explanation)
 
+for stats,label in (('fullSleepStats','full sleep'),('deepSleepStats','deep sleep'),
+                    ('lightSleepStats','light sleep'),('remSleepStats','REM sleep')):
+    # standardDeviation/signalToNoise have no documented unit; they stay unmapped but retained.
+    add('google_health','respiratory-rate-sleep-summary','/respiratoryRateSleepSummary/'+stats+'/breathsPerMinute',
+        'Fitbit breathing rate ('+label+')','breaths/min','vendor_calculation',
+        'Vendor average breaths per minute during '+label+' for one sleep; several per day are possible.')
+
 for field,label,explanation in (
     ('minutesAsleep','Asleep','Vendor minutes classified as sleep, excluding awake stages.'),
     ('minutesAwake','Awake','Vendor minutes classified as awake.'),
@@ -114,6 +121,22 @@ for field,label in (
 
 ASLEEP=Metric('Asleep','ms','sentra_calculation','Sum of WHOOP light, slow-wave and REM durations; only when all three are returned and scored.',WHOOP,duration=True)
 ELAPSED=Metric('Session duration','s','sentra_calculation','Elapsed physical end minus start; includes pauses and differs from active duration.',GOOGLE,duration=True)
+# Interval datasets: per-day totals of returned periods from one source, only when no
+# interval is invalid or overlapping. Periods count toward their Beirut start day.
+SEDENTARY=Metric('Sedentary time','s','sentra_calculation',
+    'Sum of returned Fitbit sedentary periods starting on this day; unreturned time is not assumed active.',GOOGLE,duration=True)
+ACTIVITY_LEVELS={level:Metric('Time '+text,'s','sentra_calculation',
+    'Sum of returned Fitbit activity-level intervals classified '+level+' starting on this day; unreturned time is not assumed.',GOOGLE,duration=True)
+    for level,text in (('SEDENTARY','sedentary (activity level)'),('LIGHTLY_ACTIVE','lightly active'),
+                       ('MODERATELY_ACTIVE','moderately active'),('VERY_ACTIVE','very active'))}
+
+
+def period_metric(dataset,fields):
+    if dataset=='sedentary-period': return SEDENTARY
+    if dataset=='activity-level':
+        level=fields.get('activityLevel',{}).get('activityLevelType') if isinstance(fields.get('activityLevel'),dict) else None
+        return ACTIVITY_LEVELS.get(level)
+    return None
 
 
 def definition(provider,dataset,path):

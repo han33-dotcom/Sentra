@@ -7,7 +7,8 @@ import re
 
 from .errors import SentraError
 from .exports import csv_value
-from .metric_dictionary import METRICS, ASLEEP, ELAPSED, definition
+from .datasets import canonical
+from .metric_dictionary import METRICS, ASLEEP, ELAPSED, definition, period_metric
 from .normalize import leaves
 from .viewer_data import BEIRUT, MAX_BYTES, MAX_ROWS, civil_day
 
@@ -57,7 +58,7 @@ def view_for(dataset):
 
 def curate(records,start,end):
     result={name:[] for name in ('Daily activity','Sleep','Workouts','export','points','unmapped')}
-    daily={}; sessions={}; candidates={}; labels=set()
+    daily={}; sessions={}; candidates={}; labels=set(); periods={}
     recoveries={}
     for r in records:
         if r['provider']=='whoop' and r['dataset']=='recovery':
@@ -119,6 +120,30 @@ def curate(records,start,end):
                 # Subtract UTC instants, not wall time across a DST transition.
                 seconds=Decimal(str(b.timestamp()))-Decimal(str(a.timestamp()))
                 emit(row,'interval_end - interval_start',seconds,ELAPSED,table,view,day)
+        metric=period_metric(dataset,fields) if row['provider']=='google_health' else None
+        if metric:
+            periods.setdefault((day,metric,canonical(fields.get('dataSource',{}))),[]).append(row)
+
+    for (day,metric,_source),rows in periods.items():
+        # One total per day and source; overlapping/invalid intervals are reported, never summed.
+        table=daily.setdefault(day,{'Date':day}); spans=[]
+        for row in rows:
+            a=stamp(row['record'].get('interval_start'));b=stamp(row['record'].get('interval_end'))
+            spans.append((a.timestamp(),b.timestamp()) if a and b and b.timestamp()>=a.timestamp() else None)
+        ordered=sorted(s for s in spans if s)
+        if None in spans or any(later[0]<earlier[1] for earlier,later in zip(ordered,ordered[1:])):
+            table.setdefault(metric.label,[]).append('Not summed: invalid or overlapping intervals');labels.add(metric.label)
+            continue
+        seconds=sum(Decimal(str(b))-Decimal(str(a)) for a,b in ordered)
+        first=rows[0]
+        aggregate={'participant_id':first['participant_id'],'provider':first['provider'],
+            'record_key':f'{len(rows)} returned periods','collected_at':max(r['collected_at'] for r in rows),
+            'source_response_id':'; '.join(sorted({r['source_response_id'] for r in rows})),
+            'record':{'provisional':any(r['record'].get('provisional',True) for r in rows),'timestamp_basis':'vendor_physical_time',
+                      'interval_start':min(r['record']['interval_start'] for r in rows),
+                      'interval_end':max(r['record']['interval_end'] for r in rows),
+                      'resolution_description':first['record'].get('resolution_description')}}
+        emit(aggregate,'sum(interval_end - interval_start)',seconds,metric,table,'Daily activity',day)
 
     def finish(table):
         for k,v in list(table.items()):
