@@ -1,0 +1,23 @@
+# One-time:  .venv/Scripts/python.exe -m pip install pre-commit  &&  .venv/Scripts/pre-commit.exe install
+repos:
+  - repo: local
+    hooks:
+      - id: data-guard
+        name: no health data / secrets in git
+        entry: python scripts/check_no_data.py --staged
+        language: system
+        pass_filenames: false
+        always_run: true
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=2000"]
+      - id: detect-private-key
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
