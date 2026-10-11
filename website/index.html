@@ -1,0 +1,398 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sentra · Workforce Readiness</title>
+<meta name="description" content="Sentra turns the consumer wearables a workforce already wears into fitness-for-shift and safety signals for the institution's HSE team. Wellness and safety, never diagnosis.">
+<meta name="theme-color" content="#f3f1ec" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0c1013" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/styles.css">
+<script>
+  /* theme + capability flags before first paint */
+  (function () {
+    var d = document.documentElement;
+    try { var t = localStorage.getItem("sentra-theme"); if (t === "light" || t === "dark") d.setAttribute("data-theme", t); } catch (e) {}
+    var q = location.search;
+    var lowEnd = false;
+    try {
+      var c = document.createElement("canvas");
+      var gl = c.getContext("webgl") || c.getContext("experimental-webgl");
+      if (!gl) lowEnd = true;
+    } catch (e) { lowEnd = true; }
+    var cores = navigator.hardwareConcurrency || 8;
+    var mem = navigator.deviceMemory || 8;
+    var save = navigator.connection && navigator.connection.saveData;
+    if (cores <= 3 || mem <= 2 || save) lowEnd = true;
+    if (/[?&]static=1/.test(q)) lowEnd = true;
+    if (/[?&]static=0/.test(q)) lowEnd = false;
+    d.classList.add(lowEnd ? "static" : "motion");
+    d.classList.remove("no-js");
+  })();
+</script>
+</head>
+<body>
+
+<a class="skip" href="#request">Skip to pilot request</a>
+
+<header class="nav" id="nav">
+  <a class="brand" href="#hero" aria-label="Sentra, back to top">
+    <svg class="brand__mark" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2.5" width="10" height="19" rx="4.6" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.6 12h1.6l1-2.4 1.6 4.8 1-2.4h1.6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    <span>Sentra</span>
+  </a>
+  <div class="nav__clock" aria-hidden="true">
+    <span class="nav__clock-label">Shift</span>
+    <span class="nav__clock-time" id="navClock">05:30</span>
+  </div>
+  <div class="nav__actions">
+    <button class="theme-btn" id="themeBtn" type="button" aria-label="Switch colour theme">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <span class="theme-btn__txt" id="themeTxt">Auto</span>
+    </button>
+    <a class="btn btn--small nav__cta" href="#request"><span class="long">Request a&nbsp;</span>pilot</a>
+  </div>
+</header>
+
+<!-- zoom-level rail -->
+<nav class="rail" aria-label="Zoom level">
+  <ol>
+    <li data-scale="device"><span>Device</span></li>
+    <li data-scale="person"><span>Person</span></li>
+    <li data-scale="data"><span>Data</span></li>
+    <li data-scale="team"><span>Team</span></li>
+    <li data-scale="institution"><span>Institution</span></li>
+  </ol>
+</nav>
+
+<!-- 3D stage -->
+<div class="stage" id="stage" aria-hidden="true">
+  <canvas id="gl"></canvas>
+  <div class="labels" id="labels"></div>
+  <div class="stage__scrim"></div>
+</div>
+
+<main class="story" id="story">
+
+  <!-- 1 HERO -->
+  <section class="panel panel--hero" id="hero" data-pose="hero" data-screen="clock" data-scale="device" data-time="05:30">
+    <div class="panel__inner">
+      <p class="eyebrow">Workforce readiness &amp; safety platform</p>
+      <h1>Every shift starts with someone who's fit for&nbsp;it, or&nbsp;isn't.</h1>
+      <div class="hero__cta">
+        <a class="btn" href="#request">Request a pilot</a>
+        <a class="btn btn--ghost" href="#worker">See the system</a>
+      </div>
+      <figure class="poster" aria-hidden="true">
+        <svg viewBox="0 0 200 260">
+          <defs>
+            <linearGradient id="pg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" style="stop-color:var(--strap-hi)"/><stop offset="1" style="stop-color:var(--strap)"/></linearGradient>
+          </defs>
+          <path d="M70 0 h60 v70 h-60z M70 190 h60 v70 h-60z" fill="url(#pg)"/>
+          <rect x="58" y="52" width="84" height="156" rx="34" style="fill:var(--housing)"/>
+          <rect x="66" y="62" width="68" height="136" rx="27" fill="#05080a"/>
+          <text x="100" y="120" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="22" fill="#e9f3f1">05:58</text>
+          <circle cx="100" cy="150" r="13" fill="none" style="stroke:var(--ok)" stroke-width="4"/>
+          <text x="100" y="182" text-anchor="middle" font-family="IBM Plex Sans, sans-serif" font-size="9" fill="#9fb3af">READY</text>
+        </svg>
+      </figure>
+      <p class="scroll-cue" aria-hidden="true"><span></span>Scroll: device, person, data, team, institution</p>
+    </div>
+  </section>
+
+  <!-- 2 WORKER -->
+  <section class="panel" id="worker" data-pose="worker" data-screen="shift" data-scale="person" data-time="05:40">
+    <div class="panel__inner">
+      <p class="eyebrow"><span class="mono">05:40</span> · Gate 2 · Clocking in</p>
+      <h2>It starts on one wrist.</h2>
+      <p>A consumer wearable, worn on the job like a watch. Nothing new for the worker to learn and nothing to set up. When they clock in, the shift clock on their wrist starts with them.</p>
+      <dl class="facts">
+        <div><dt>Worker effort</dt><dd>Wear it, charge it</dd></div>
+        <div><dt>Hardware</dt><dd>Off-the-shelf consumer bands</dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <!-- 3 DATA IN -->
+  <section class="panel" id="data" data-pose="data" data-screen="sync" data-scale="data" data-time="05:45">
+    <div class="panel__inner">
+      <p class="eyebrow"><span class="mono">05:45</span> · Passive, all day</p>
+      <h2>Six quiet signals.</h2>
+      <p>The band already measures these. Sentra syncs them in the background, so nobody has to open an app or press a button.</p>
+      <ul class="signals">
+        <li><i style="--c:var(--s-hr)"></i><b>Heart rate</b><span>at work and at rest</span></li>
+        <li><i style="--c:var(--s-sleep)"></i><b>Sleep</b><span>duration and timing</span></li>
+        <li><i style="--c:var(--s-hrv)"></i><b>HRV</b><span>overnight recovery</span></li>
+        <li><i style="--c:var(--s-br)"></i><b>Breathing rate</b><span>nightly average</span></li>
+        <li><i style="--c:var(--s-temp)"></i><b>Skin temperature</b><span>nightly, as a trend</span></li>
+        <li><i style="--c:var(--s-move)"></i><b>Movement</b><span>steps and active minutes</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 4 BASELINE -->
+  <section class="panel" id="baseline" data-pose="baseline" data-screen="base" data-scale="data" data-time="05:50">
+    <div class="panel__inner">
+      <p class="eyebrow">Day 28 · Personal baseline</p>
+      <h2>Compared to themselves, not&nbsp;to a chart.</h2>
+      <p>Each worker gets a personal normal built from their own last 28 days. The same reading can be routine for one person and a change for another, so Sentra looks for movement away from <em>each person's</em> pattern, not distance from a population average.</p>
+      <figure class="mini">
+        <canvas data-chart="baseline" height="190"></canvas>
+        <figcaption>Resting heart rate, illustrative. One reading of 70&nbsp;bpm, two different answers.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 5a READINESS -->
+  <section class="panel" id="ready" data-pose="ready" data-screen="ready" data-scale="device" data-time="05:55">
+    <div class="panel__inner">
+      <p class="eyebrow"><span class="step">1 / 5</span> <span class="mono">05:55</span> · Before the shift</p>
+      <h2>Fit&#8209;for&#8209;shift readiness.</h2>
+      <p>Sleep debt, resting heart rate and HRV are checked against the worker's own baseline before the first task. Green goes to work. Amber suggests a quick supervisor check-in. Red means a conversation before high-risk work. People make the call; Sentra gives them the signal.</p>
+      <figure class="mini">
+        <canvas data-chart="ready" height="172"></canvas>
+        <figcaption>Three example mornings for one worker, illustrative.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 5b EXERTION -->
+  <section class="panel" id="exertion" data-pose="exertion" data-screen="exert" data-scale="device" data-time="10:40">
+    <div class="panel__inner">
+      <p class="eyebrow"><span class="step">2 / 5</span> <span class="mono">10:40</span> · On shift</p>
+      <h2>Exertion watch.</h2>
+      <p>Heart rate that stays high for a sustained stretch of work, judged against the person's own range, raises a gentle flag on their wrist and on the supervisor's list. After a break, Sentra tracks recovery: how quickly heart rate settles back toward normal.</p>
+      <figure class="mini">
+        <canvas data-chart="exert" height="200"></canvas>
+        <figcaption>Heart rate across a morning, illustrative.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 5c LONE WORKER -->
+  <section class="panel" id="lone" data-pose="lone" data-screen="lone" data-scale="device" data-time="13:15">
+    <div class="panel__inner">
+      <p class="eyebrow"><span class="step">3 / 5</span> <span class="mono">13:15</span> · Working alone</p>
+      <h2>Lone-worker check.</h2>
+      <p>If a band reports no movement for a long stretch during a shift, the worker gets a check-in prompt on their wrist. One tap says "I'm OK". No answer, and their supervisor is asked to check in person. Time limits are set per site and role.</p>
+      <figure class="mini">
+        <canvas data-chart="lone" height="190"></canvas>
+        <figcaption>Movement per two minutes, illustrative. An inactivity check, not fall detection.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 5d TRENDS -->
+  <section class="panel" id="trends" data-pose="trends" data-screen="trend" data-scale="device" data-time="15:00">
+    <div class="panel__inner">
+      <p class="eyebrow"><span class="step">4 / 5</span> Over 14 nights</p>
+      <h2>Early-warning trends.</h2>
+      <p>Breathing rate and skin temperature are followed night by night against the person's normal. A drift that lasts several nights becomes a flag for a check-in. It is a trend, never a diagnosis, and a single night never triggers anything.</p>
+      <figure class="mini">
+        <canvas data-chart="trend" height="200"></canvas>
+        <figcaption>Nightly values against the personal range, illustrative.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 5e WEAR -->
+  <section class="panel" id="wear" data-pose="wear" data-screen="wear" data-scale="device" data-time="17:30">
+    <div class="panel__inner">
+      <p class="eyebrow"><span class="step">5 / 5</span> <span class="mono">17:30</span> · End of shift</p>
+      <h2>Wear compliance.</h2>
+      <p>Signals only count when the band is on. Sentra shows the hours each band was actually worn during the shift, so a gap shows up as a gap instead of being read as "all clear".</p>
+      <figure class="mini">
+        <canvas data-chart="wear" height="180"></canvas>
+        <figcaption>Hours worn per 10-hour shift, one worker's week, illustrative.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 6 TEAM -->
+  <section class="panel" id="team" data-pose="team" data-screen="clock" data-scale="team" data-time="17:45">
+    <div class="panel__inner">
+      <p class="eyebrow"><span class="mono">17:45</span> · Site 2 · Shift summary</p>
+      <h2>Zoom out: the crew.</h2>
+      <p>Each dot is one person on shift. Most are calm. A few are amber. The supervisor sees who has an open check-in, not anyone's heart rate.</p>
+      <figure class="mini static-only">
+        <canvas data-chart="crew" height="200"></canvas>
+      </figure>
+      <div class="summary" role="group" aria-label="Shift summary, illustrative">
+        <div class="summary__head"><span>Crew B · Day shift</span><span class="tag">Illustrative</span></div>
+        <div class="summary__grid">
+          <div><b>31</b><span>on shift</span></div>
+          <div class="is-ok"><b>26</b><span>ready</span></div>
+          <div class="is-amber"><b>4</b><span>amber</span></div>
+          <div class="is-red"><b>0</b><span>red</span></div>
+          <div class="is-muted"><b>1</b><span>band not worn</span></div>
+          <div><b>3</b><span>open check-ins</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7 INSTITUTION -->
+  <section class="panel panel--wide" id="institution" data-pose="institution" data-screen="clock" data-scale="institution" data-time="18:00" data-dim="1">
+    <div class="panel__inner">
+      <div class="wide-head">
+        <p class="eyebrow">Week 39 · 4 sites · Safety department</p>
+        <h2>Zoom out again: the institution.</h2>
+        <p>The HSE team sees crew readiness, open flags and trends across weeks and sites. Individuals are anonymized by default.</p>
+      </div>
+      <div class="dash" role="img" aria-label="Dashboard mockup with illustrative data: crew readiness 88 percent, 7 open flags, 93 percent of check-ins closed within 30 minutes, wear compliance 91 percent, readiness trend for four sites over eight weeks, and a table of anonymized flags.">
+        <div class="dash__bar">
+          <span class="dash__brand"><i></i>Sentra · Safety Ops</span>
+          <span class="dash__chips"><b>All sites</b><span>Tower</span><span>Plant</span><span>Yard</span><span>Depot</span></span>
+          <span class="dash__week">Week 39 <span class="tag">Illustrative data</span></span>
+        </div>
+        <div class="dash__kpis">
+          <div class="kpi"><span>Crew ready at shift start</span><b>88%</b><em class="up">+2 pts vs wk 38</em></div>
+          <div class="kpi"><span>Open flags</span><b>7</b><em>3 exertion · 2 inactivity · 2 trend</em></div>
+          <div class="kpi"><span>Check-ins closed &lt; 30 min</span><b>93%</b><em class="up">+5 pts</em></div>
+          <div class="kpi"><span>Wear compliance</span><b>91%</b><em class="down">Depot 82%</em></div>
+        </div>
+        <div class="dash__body">
+          <div class="dash__card">
+            <div class="dash__card-head"><span>Readiness by site, last 8 weeks</span><span class="legend" id="dashLegend"></span></div>
+            <canvas data-chart="dash" height="210"></canvas>
+          </div>
+          <div class="dash__card">
+            <div class="dash__card-head"><span>Open and recent flags</span><span class="muted">anonymized</span></div>
+            <table class="flags">
+              <thead><tr><th>Worker</th><th>Flag</th><th>Site</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td class="mono">W-0114</td><td><i class="dot amber"></i>Exertion</td><td>Plant</td><td>Check-in done</td></tr>
+                <tr><td class="mono">W-0387</td><td><i class="dot amber"></i>Inactivity</td><td>Yard</td><td>Worker tapped OK</td></tr>
+                <tr><td class="mono">W-0221</td><td><i class="dot amber"></i>Trend, 2 signals</td><td>Tower</td><td>Check-in today</td></tr>
+                <tr><td class="mono">W-0059</td><td><i class="dot amber"></i>Readiness</td><td>Depot</td><td>Light duties chosen</td></tr>
+                <tr><td class="mono">W-0412</td><td><i class="dot muted"></i>Not worn 4 h</td><td>Depot</td><td>Reminder sent</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8 TRUST -->
+  <section class="panel" id="trust" data-pose="trust" data-screen="mine" data-scale="institution" data-time="18:00">
+    <div class="panel__inner">
+      <p class="eyebrow">Trust &amp; privacy</p>
+      <h2>The worker's data stays the worker's.</h2>
+      <div class="split">
+        <div>
+          <h3>The worker sees</h3>
+          <p>All of their own data, their personal baseline, and every flag raised about them.</p>
+        </div>
+        <div>
+          <h3>The employer sees</h3>
+          <p>Flags, check-in status and aggregates. Not raw heart rate, sleep or temperature.</p>
+        </div>
+      </div>
+      <ul class="checks">
+        <li><b>In-region hosting.</b> Data is stored locally or in-region, built for GCC data-residency rules.</li>
+        <li><b>On-prem AI model.</b> Flags are computed by a model that runs on your infrastructure, not an outside AI service.</li>
+        <li><b>Anonymized by default.</b> Dashboards show pseudonymous IDs and aggregates.</li>
+        <li><b>Clinically informed.</b> Thresholds and wording are built with input from occupational medicine physicians.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 9 PILOT -->
+  <section class="panel" id="pilot" data-pose="pilot" data-screen="paired" data-scale="person" data-time="18:00">
+    <div class="panel__inner">
+      <p class="eyebrow">4 to 8 weeks · One site, one crew</p>
+      <h2>What a pilot looks like.</h2>
+      <ol class="timeline">
+        <li><span class="mono">Week 0</span><div><b>Kickoff and devices.</b> We agree sites, roles and check-in rules with your HSE team, and supply bands for the pilot crew.</div></li>
+        <li><span class="mono">Week 0</span><div><b>Onboarding.</b> Workers put the band on. No app, no account, no setup on their side.</div></li>
+        <li><span class="mono">Weeks 1–4</span><div><b>Baselines form.</b> Personal normals build up and flags switch on as each person's history allows.</div></li>
+        <li><span class="mono">Weekly</span><div><b>Report.</b> Readiness, flags, check-in times and wear compliance, every week.</div></li>
+        <li><span class="mono">Week 4–8</span><div><b>Review.</b> Keep, extend or stop, based on what the reports show.</div></li>
+      </ol>
+      <div class="targets">
+        <p class="targets__label">Pilot targets <span>(goals we set together, not results)</span></p>
+        <div class="targets__grid">
+          <div><b>20–40</b><span>crew members</span></div>
+          <div><b>≥ 85%</b><span>shift hours worn</span></div>
+          <div><b>&lt; 30 min</b><span>flag to check-in</span></div>
+          <div><b>1</b><span>report every week</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10 CTA -->
+  <section class="panel panel--cta" id="request" data-pose="cta" data-screen="final" data-scale="device" data-time="18:00">
+    <div class="panel__inner">
+      <p class="eyebrow">Request a pilot</p>
+      <h2>Start with one crew.</h2>
+      <p>Tell us about your site. We'll reply with a pilot outline sized to your crew.</p>
+      <form class="form" id="pilotForm" novalidate>
+        <div class="field">
+          <label for="f-org">Organization</label>
+          <input id="f-org" name="organization" type="text" autocomplete="organization" required placeholder="e.g. Gulf Build Contracting">
+          <span class="err" aria-live="polite"></span>
+        </div>
+        <div class="field-row">
+          <div class="field">
+            <label for="f-sector">Sector</label>
+            <select id="f-sector" name="sector" required>
+              <option value="">Choose…</option>
+              <option>Construction</option>
+              <option>Oil &amp; gas</option>
+              <option>Manufacturing</option>
+              <option>Utilities &amp; energy</option>
+              <option>Logistics &amp; ports</option>
+              <option>Facilities &amp; public sector</option>
+              <option>Other industrial</option>
+            </select>
+            <span class="err" aria-live="polite"></span>
+          </div>
+          <div class="field">
+            <label for="f-head">Field headcount</label>
+            <select id="f-head" name="headcount" required>
+              <option value="">Choose…</option>
+              <option>Under 100</option>
+              <option>100–500</option>
+              <option>500–2,000</option>
+              <option>2,000–10,000</option>
+              <option>10,000+</option>
+            </select>
+            <span class="err" aria-live="polite"></span>
+          </div>
+        </div>
+        <div class="field">
+          <label for="f-email">Work email</label>
+          <input id="f-email" name="email" type="email" autocomplete="email" required placeholder="name@company.com">
+          <span class="err" aria-live="polite"></span>
+        </div>
+        <button class="btn btn--block" type="submit">Request a pilot</button>
+        <p class="form__note">We only use this to reply about a pilot.</p>
+      </form>
+      <div class="form-done" id="formDone" hidden>
+        <h3>Request received.</h3>
+        <p>Thanks. We'll be in touch about a pilot for <b id="doneOrg"></b>.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="foot__inner">
+    <p class="foot__disc"><b>Not a medical device.</b> Sentra provides wellness and safety signals to prompt a human check-in. It does not diagnose, treat, monitor or prevent any disease or medical condition, and its readings are not medical-grade. Decisions about fitness for work stay with people.</p>
+    <p class="foot__meta">"Sentra" is a placeholder name for an AUB final-year project prototype. Works with consumer wearables; no device maker is affiliated. Figures marked illustrative or targets are not results.</p>
+  </div>
+</footer>
+
+<script src="vendor/three.min.js"></script>
+<script src="vendor/gsap.min.js"></script>
+<script src="vendor/ScrollTrigger.min.js"></script>
+<script src="vendor/lenis.min.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

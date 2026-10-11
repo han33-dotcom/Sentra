@@ -94,7 +94,7 @@ def daily(g: pd.DataFrame, obs: pd.DataFrame, ages: dict | None = None) -> pd.Da
     g = g.copy()
     g['date'] = _day(g.minute)
     g['sleep_day'] = pd.to_datetime(g.wake_day).fillna((g.minute + pd.Timedelta(hours=6)).dt.normalize())
-    still = g.steps.fillna(0).eq(0)
+    still = g.steps.eq(0)
     # "resting" minute = awake, worn, no steps this minute and the previous 5
     g['rest_min'] = g.worn & ~g.asleep & still & (
         still.groupby(g.subject_id).transform(lambda x: x.rolling(6, min_periods=6).sum()) == 6)
@@ -116,7 +116,7 @@ def daily(g: pd.DataFrame, obs: pd.DataFrame, ages: dict | None = None) -> pd.Da
             'rhr_est': d.loc[d.rest_min, 'hr_mean'].quantile(0.10) if d.rest_min.sum() >= 30 else np.nan,
             'sustained_hr_max_run': longest_run(worn.minute, worn.hr_mean > hr_limit),
             'hr_limit_bpm': hr_limit,
-            'longest_still_in_shift': longest_run(d.minute, (d.worn & d.in_shift & d.steps.fillna(0).eq(0) & ~d.asleep)),
+            'longest_still_in_shift': longest_run(d.minute, (d.worn & d.in_shift & d.steps.eq(0) & ~d.asleep)),
         })
     day_df = pd.DataFrame(rows, columns=DAY_COLUMNS)
     day_df['date'] = day_df['date'].astype('datetime64[ns]')
@@ -167,7 +167,7 @@ MIN_SCALE = {'rhr': 1.5, 'sleep_hr': 1.5, 'hr_mean': 2.0, 'sleep_min': 20, 'step
 
 
 def baselines(day_df: pd.DataFrame) -> pd.DataFrame:
-    """Robust personal baseline: median and MAD of the previous `baseline_days` rows
+    """Robust personal baseline: median and MAD of the previous `baseline_days` calendar days
     (today is never part of its own baseline). z = (today - median) / scale."""
     df = day_df.copy()
     n, m = TH['baseline_days'], TH['baseline_min_days']
@@ -187,10 +187,10 @@ def baselines(day_df: pd.DataFrame) -> pd.DataFrame:
             x = df[f].where(df.valid_day | df.resting_heart_rate.notna())
         else:
             x = df[f].where(df.valid_day)
-        prev = x.astype('float64').groupby(df.subject_id).shift(1)
-        grp = prev.groupby(df.subject_id)
-        med = grp.transform(lambda s: s.rolling(n, min_periods=1).apply(_med, raw=True))
-        mad = grp.transform(lambda s: s.rolling(n, min_periods=1).apply(_mad, raw=True))
+        history = pd.Series(x.to_numpy(dtype='float64'), index=pd.DatetimeIndex(df.date))
+        grp = history.groupby(df.subject_id.to_numpy())
+        med = grp.transform(lambda s: s.rolling(f'{n}D', closed='left', min_periods=1).apply(_med, raw=True)).to_numpy()
+        mad = grp.transform(lambda s: s.rolling(f'{n}D', closed='left', min_periods=1).apply(_mad, raw=True)).to_numpy()
         scale = np.maximum(1.4826 * mad, MIN_SCALE.get(f, 0) or 1e-9)
         df[f'{f}_base'] = med
         df[f'{f}_z'] = (df[f] - med) / scale
@@ -220,11 +220,15 @@ def flags(df: pd.DataFrame) -> pd.DataFrame:
 # ----------------------------------------------------------------- 6. cohort -
 def cohort(df: pd.DataFrame) -> pd.DataFrame:
     k = TH['cohort_k_anonymity']
-    d = df[df.usable_day]
+    d = df[df.usable_day].copy()
+    known_wellness = d.filter(items=['sleep_min', 'rhr_z', 'sleep_hr_z', 'daily_hrv_rmssd_z']).notna().any(axis=1)
+    d['flag_short_sleep'] = d.flag_short_sleep.where(d.sleep_min.notna())
+    d['flag_sustained_high_hr'] = d.flag_sustained_high_hr.where(d.hr_mean.notna())
+    d['wellness_signals'] = d.wellness_signals.where(known_wellness)
     c = d.groupby('date').agg(
         workers=('subject_id', 'nunique'),
         pct_short_sleep=('flag_short_sleep', 'mean'),
-        pct_wellness_amber_or_red=('wellness_signals', lambda x: (x >= 1).mean()),
+        pct_wellness_amber_or_red=('wellness_signals', lambda x: (x >= 1).where(x.notna()).mean()),
         pct_sustained_high_hr=('flag_sustained_high_hr', 'mean'),
         median_sleep_h=('sleep_min', lambda x: x.median() / 60),
         median_steps=('steps', 'median'),
@@ -232,6 +236,12 @@ def cohort(df: pd.DataFrame) -> pd.DataFrame:
     hidden = c.workers < k  # never show a group smaller than k people
     c[c.columns[2:]] = c[c.columns[2:]].astype('float64')
     c.loc[hidden, c.columns[2:]] = np.nan
+    # Each published statistic needs k contributors who actually supplied its inputs.
+    for output, source in {'pct_short_sleep': 'flag_short_sleep',
+            'pct_wellness_amber_or_red': 'wellness_signals', 'pct_sustained_high_hr': 'flag_sustained_high_hr',
+            'median_sleep_h': 'sleep_min', 'median_steps': 'steps'}.items():
+        contributors = d[d[source].notna()].groupby('date').subject_id.nunique()
+        c.loc[c.date.map(contributors).fillna(0) < k, output] = np.nan
     c['suppressed'] = hidden
     return c
 

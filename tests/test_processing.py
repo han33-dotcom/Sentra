@@ -83,6 +83,42 @@ class ObservationTests(unittest.TestCase):
 
 
 class PipelineTests(unittest.TestCase):
+    def test_baseline_excludes_history_older_than_28_calendar_days(self):
+        d = pd.DataFrame({'subject_id': 'p01', 'valid_day': True,
+            'date': [*pd.date_range('2026-09-01', periods=7), pd.Timestamp('2026-10-09')],
+            'rhr': [60.0] * 7 + [75.0], 'sustained_hr_max_run': 0, 'longest_still_in_shift': 0})
+        d = pipeline.flags(pipeline.baselines(d))
+        self.assertTrue(pd.isna(d.rhr_base.iloc[-1]))
+        self.assertFalse(d.flag_rhr_above_baseline.iloc[-1])
+
+    def test_missing_steps_do_not_imply_rest_or_inactivity(self):
+        obs = pd.DataFrame({'subject_id': 'p01', 'metric': 'heart_rate',
+            't': pd.date_range('2026-10-03 08:00', periods=120, freq='min'), 't_end': pd.NaT,
+            'value': 60.0, 'resolution': 'minute', 'raw_ref': None})
+        d = pipeline.flags(pipeline.baselines(pipeline.daily(pipeline.minute_grid(obs), obs)))
+        self.assertTrue(d.rhr_est.isna().all())
+        self.assertFalse(d.flag_long_inactivity_in_shift.any())
+
+    def test_each_cohort_metric_needs_five_known_contributors(self):
+        d = pd.DataFrame({'subject_id': ['p01', 'p02', 'p03', 'p04', 'p05'],
+            'date': pd.Timestamp('2026-10-03'), 'usable_day': True,
+            'sleep_min': [300.0, None, None, None, None], 'steps': [100.0, None, None, None, None],
+            'hr_mean': [160.0, None, None, None, None], 'wellness_signals': [1, 0, 0, 0, 0],
+            'flag_short_sleep': [True, False, False, False, False],
+            'flag_sustained_high_hr': [True, False, False, False, False]})
+        c = pipeline.cohort(d)
+        metrics = ['pct_short_sleep', 'pct_wellness_amber_or_red', 'pct_sustained_high_hr',
+                   'median_sleep_h', 'median_steps']
+        self.assertTrue(c[metrics].isna().all().all())
+        self.assertEqual(c.workers.iloc[0], 5)
+        d['sleep_min'] = 300.0; d['steps'] = 100.0; d['hr_mean'] = 160.0
+        c = pipeline.cohort(d)
+        self.assertEqual(c.median_sleep_h.iloc[0], 5.0)
+        self.assertEqual(c.median_steps.iloc[0], 100.0)
+        self.assertAlmostEqual(c.pct_short_sleep.iloc[0], 0.2)
+        self.assertAlmostEqual(c.pct_wellness_amber_or_red.iloc[0], 0.2)
+        self.assertAlmostEqual(c.pct_sustained_high_hr.iloc[0], 0.2)
+
     def test_personal_baseline_flags_only_with_enough_history_and_cohort_is_k_anonymous(self):
         rows = []
         for i in range(36):
