@@ -29,11 +29,12 @@ def connect_db(credentials):
 
 
 class PrivateStorage:
-    def __init__(self, credentials, reserve, *, session=None):
+    def __init__(self, credentials, reserve, *, session=None, bucket=BUCKET):
         self.credentials = credentials
         self.reserve = reserve
         self.session = session or requests.Session()
         self.headers = None
+        self.bucket = bucket
 
     def login(self):
         self.reserve(32_768)
@@ -49,17 +50,19 @@ class PrivateStorage:
         except (requests.RequestException, ValueError, KeyError):
             raise SentraError('Private Storage authorization failed; check the restricted service account.') from None
 
-    def request(self, method, key, *, data=None, maximum=16_777_216):
+    def request(self, method, key, *, data=None, maximum=16_777_216, content_type='application/gzip', upsert=False):
         if self.headers is None:
             self.login()
+        # Only derived tier objects are ever replaced; originals use plain immutable inserts.
+        extra = {'x-upsert': 'true'} if upsert and self.bucket != BUCKET else {}
         for attempt in range(3):
             self.reserve(maximum + 32_768 if method == 'GET' else 32_768)
             url = self.credentials['url'] + '/storage/v1/object/'
             if method == 'GET':
                 url += 'authenticated/'
-            url += BUCKET + '/' + quote(key, safe='/')
+            url += self.bucket + '/' + quote(key, safe='/')
             try:
-                with self.session.request(method, url, headers={**self.headers, 'Content-Type': 'application/gzip'},
+                with self.session.request(method, url, headers={**self.headers, 'Content-Type': content_type, **extra},
                         data=data, timeout=(10,45), allow_redirects=False, stream=True) as r:
                     if r.status_code == 401 and attempt == 0:
                         self.login()
