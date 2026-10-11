@@ -281,12 +281,13 @@ def fetch(storage, folder, *, maximum=MAX_OBJECT_BYTES):
         raise SentraError(f'Tier report unavailable (HTTP {code}); run tiers-build first.')
     report = json.loads(body)
     for key, size in report.get('objects', {}).items():
-        if not isinstance(size, int) or not 0 <= size <= maximum or '..' in key or key.startswith('/'):
+        path = (Path(folder) / key).resolve()
+        if (not isinstance(size, int) or not 0 <= size <= maximum or '..' in key
+                or '\\' in key or ':' in key or not path.is_relative_to(Path(folder).resolve())):
             raise SentraError('Tier report lists an invalid object; nothing processed.')
         code, data = storage.request('GET', key, maximum=size + 65_536)
         if code != 200 or len(data) != size:
             raise SentraError(f'Tier object {key} missing or changed since its report; rebuild tiers.')
-        path = Path(folder) / key
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
     return report
