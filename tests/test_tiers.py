@@ -3,6 +3,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import io
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -12,7 +13,7 @@ from pglast import parse_sql
 
 from sentra.errors import SentraError
 from sentra.shared import CapacityStop, Limits
-from sentra.tiers import AuditReader, HOT_DAYS, TIER_BUCKET, build, publish
+from sentra.tiers import AuditReader, HOT_DAYS, TIER_BUCKET, build, fetch, publish
 
 NOW = datetime(2026, 10, 11, 12, tzinfo=timezone.utc)
 T = lambda days, seconds=0: NOW - timedelta(days=days) + timedelta(seconds=seconds)
@@ -83,6 +84,19 @@ class Storage:
 
 
 class TierTests(unittest.TestCase):
+    def test_fetch_refuses_windows_paths_before_downloading_objects(self):
+        class MaliciousStorage:
+            def __init__(self, key): self.key = key
+            def request(self, method, key, **kwargs):
+                if key == 'size_report.json':
+                    return 200, json.dumps({'objects': {self.key: 1}}).encode()
+                raise AssertionError('Unsafe object reached the download boundary')
+
+        with tempfile.TemporaryDirectory() as folder:
+            for key in ('C:\\outside.parquet', '\\outside.parquet', 'C:outside.parquet'):
+                with self.subTest(key=key), self.assertRaises(SentraError):
+                    fetch(MaliciousStorage(key), folder)
+
     def test_migration_parses_and_keeps_originals_immutable(self):
         text = Path('sql/006_parquet_tiers.sql').read_text(encoding='utf-8')
         self.assertGreaterEqual(len(parse_sql(text)), 5)
