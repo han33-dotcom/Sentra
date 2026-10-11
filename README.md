@@ -236,8 +236,8 @@ pre-commit hook) and gitleaks block health data, exports and secrets. See
 
 ## Verification, privacy and remaining work
 
-**Tests.** The automated suite has **127 tests**. The most recent complete run passed
-with **five opt-in live integration tests skipped**. CI runs the suite on Ubuntu and
+**Tests.** The automated suite has **145 tests**. The most recent complete run had
+**140 passed and five opt-in live integration tests skipped**. CI runs the suite on Ubuntu and
 Windows with Python 3.11 for every PR, and the live tests stay skipped there.
 
 **Live checks.** Selected live checks were run separately during the stages,
