@@ -11,8 +11,8 @@ def collection_day(now=None):
     return now.astimezone(BEIRUT).date()
 
 
-def day_jobs(provider,day):
-    return [j for j in plan_jobs(provider,day,day+timedelta(days=1)) if j.dataset!='original_heart-rate']
+def day_jobs(provider,day,on_request=()):
+    return [j for j in plan_jobs(provider,day,day+timedelta(days=1),on_request=on_request) if j.dataset!='original_heart-rate']
 
 
 def request_days(covered,end):

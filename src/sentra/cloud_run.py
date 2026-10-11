@@ -10,7 +10,7 @@ from .cloud_collect import OUTCOMES,collect_job,failure_outcome,independent_prov
 from .cloud_store import CloudStore,clock
 from .cloud_tokens import CloudTokenVault,TokenRepository
 from .daily_plan import collection_day,day_jobs,request_days,window_status
-from .datasets import plan_jobs
+from .datasets import ON_REQUEST,plan_jobs
 from .errors import SentraError
 from .shared import CapacityStop,Limits
 from .shared_backend import SharedBackend
@@ -32,10 +32,12 @@ def jobs_for(provider,mode,today,states,start=None,end=None,dataset=None):
     else:
         if start is None or end is None or not 0<(end-start).days<=30 or end>today:
             raise SentraError('Manual import/recovery requires 1–30 past calendar days; end is exclusive, at most today in Beirut.')
-        if mode=='initial': jobs=plan_jobs(provider,start,end)
+        # Large on-request datasets only when a manual run names them; daily mode never includes them.
+        extra=(dataset,) if dataset in ON_REQUEST and provider=='google_health' else ()
+        if mode=='initial': jobs=plan_jobs(provider,start,end,on_request=extra)
         elif mode=='recovery':
             jobs=[]; day=start
-            while day<end: jobs.extend(day_jobs(provider,day)); day+=timedelta(days=1)
+            while day<end: jobs.extend(day_jobs(provider,day,extra)); day+=timedelta(days=1)
             jobs.sort(key=lambda j:(j.dataset=='recovery',j.start_date))
         else: raise SentraError('Unknown cloud collection mode.')
     if dataset:
