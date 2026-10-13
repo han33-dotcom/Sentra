@@ -9,7 +9,7 @@ from filelock import Timeout
 
 from .auth import access_token, authorize
 from .config import load_connection, require_agreement
-from .datasets import plan_jobs
+from .datasets import ON_REQUEST, plan_jobs
 from .local_store import LocalStore
 from .collect import run_jobs
 from .transport import ReadClient
@@ -21,6 +21,8 @@ from .vault import local_cipher, TokenVault
 from .shared_cli import add_commands,run_command
 from .recovery import key_recovery
 from .cloud_cli import add_commands as add_cloud_commands,run_command as run_cloud_command
+from .tiers_cli import add_commands as add_tier_commands,run_command as run_tier_command
+from .processing.cli import add_commands as add_process_commands,run_command as run_process_command
 import psycopg
 import requests
 
@@ -34,6 +36,8 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="command", required=True)
     add_commands(sub)
     add_cloud_commands(sub)
+    add_tier_commands(sub)
+    add_process_commands(sub)
     sub.add_parser("init-vault", help="Create encryption key in the OS credential store")
     for command in ('save-recovery-key','recover-key'):
         item=sub.add_parser(command)
@@ -67,6 +71,10 @@ def main(argv=None):
             return run_command(args)
         if args.command.startswith('cloud-'):
             return run_cloud_command(args)
+        if args.command.startswith('tiers-'):
+            return run_tier_command(args)
+        if args.command.startswith('process-'):
+            return run_process_command(args)
         if args.command == "init-vault":
             local_cipher(create=True)
             print("Local encryption key ready in the OS credential store; its value is never displayed.")
@@ -80,7 +88,8 @@ def main(argv=None):
                 try:
                     connection = load_connection(args.config, provider)
                     require_agreement(connection)
-                    jobs = plan_jobs(provider, args.start, args.end)
+                    extra = tuple(d for d in (args.dataset or []) if d in ON_REQUEST) if provider == 'google_health' else ()
+                    jobs = plan_jobs(provider, args.start, args.end, on_request=extra)
                     if args.dataset:
                         selected = set(args.dataset)
                         if not selected.issubset({j.dataset for j in jobs}):

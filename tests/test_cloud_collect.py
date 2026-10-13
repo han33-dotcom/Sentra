@@ -26,7 +26,7 @@ class CloudCollectTests(unittest.TestCase):
                 self.current={**progress,'cursor':next_cursor,'pages':progress['pages']+1,
                               'status':'running' if next_cursor else 'complete'}
                 return {'changed':1,'unchanged':0}
-            def failed(self,j,message): self.current['status']='failed'
+            def failed(self,j,message,outcome='failed'): self.current['status']='failed'
         store=Store(); fetched=[]
         def fetch(j,c):
             fetched.append(c)

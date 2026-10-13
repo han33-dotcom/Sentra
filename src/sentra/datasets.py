@@ -9,6 +9,19 @@ from .errors import SentraError
 
 BEIRUT = ZoneInfo('Asia/Beirut')
 WEARABLES = 'users/me/dataSourceFamilies/google-wearables'
+# Extra Google LIST datasets in collection priority order; filter fields follow
+# https://developers.google.com/health/filters (Interval: interval.start_time,
+# Sample: sample_time.physical_time). Scopes: sedentary-period/activity-level use
+# activity_and_fitness, respiratory-rate-sleep-summary health_metrics_and_measurements.
+EXTRA_LIST = ('sedentary-period', 'respiratory-rate-sleep-summary')
+# Collected only when a manual run names the dataset; never in daily/initial/recovery plans.
+# activity-level measured ~22.9 MB database/participant-day (Oct 9 2026 probe) against ~70 MB headroom.
+ON_REQUEST = ('activity-level',)
+PHYSICAL_FILTERS = {'heart-rate': 'heart_rate.sample_time.physical_time',
+                    'respiratory-rate-sleep-summary': 'respiratory_rate_sleep_summary.sample_time.physical_time',
+                    'sedentary-period': 'sedentary_period.interval.start_time',
+                    'activity-level': 'activity_level.interval.start_time',
+                    'sleep': 'sleep.interval.end_time'}
 
 
 def canonical(value):
@@ -72,10 +85,8 @@ class Job:
             return {'method': 'POST', 'url': base + suffix, 'json': body}
         if self.datatype.startswith('daily-'):
             path, start, end = self.datatype.replace('-', '_') + '.date', self.start_date, self.end_date
-        elif self.datatype == 'heart-rate':
-            path, start, end = 'heart_rate.sample_time.physical_time', self.start, self.end
-        elif self.datatype == 'sleep':
-            path, start, end = 'sleep.interval.end_time', self.start, self.end
+        elif self.datatype in PHYSICAL_FILTERS:
+            path, start, end = PHYSICAL_FILTERS[self.datatype], self.start, self.end
         else: # Exercise supports civil start time, not the generic physical filter.
             path, start, end = 'exercise.interval.civil_start_time', self.start_date, self.end_date
         params = {'pageSize': 25 if self.datatype in ('sleep', 'exercise') else 1000,
@@ -89,13 +100,15 @@ class Job:
         return {'method': 'GET', 'url': base, 'params': params}
 
 
-def plan_jobs(provider, start=None, end=None, *, now=None):
+def plan_jobs(provider, start=None, end=None, *, now=None, on_request=()):
     end = end or (now or datetime.now(timezone.utc)).astimezone(BEIRUT).date()
     start = start or end - timedelta(days=30)
     if not isinstance(start, date) or not isinstance(end, date) or not 0 < (end - start).days <= 30:
         raise SentraError('Initial import must cover 1–30 calendar days; end is exclusive.')
     if provider not in ('whoop', 'google_health'):
         raise SentraError('Unknown provider.')
+    if any(name not in ON_REQUEST for name in on_request) or (on_request and provider != 'google_health'):
+        raise SentraError('Unknown on-request dataset.')
     def job(dataset, datatype, mode, first, last):
         return Job(provider, dataset, datatype, mode, first.isoformat(), last.isoformat(), utc_day(first), utc_day(last))
     if provider == 'whoop':
@@ -112,6 +125,7 @@ def plan_jobs(provider, start=None, end=None, *, now=None):
             jobs.extend(job('daily_' + metric, metric, 'daily', day, batch_end) for metric in daily)
             jobs.extend(job(metric, metric, 'list', day, batch_end) for metric in health)
             jobs.extend(job(metric, metric, 'list', day, batch_end) for metric in ('sleep', 'exercise'))
+            jobs.extend(job(metric, metric, 'list', day, batch_end) for metric in (*EXTRA_LIST, *on_request))
         if day >= end - timedelta(days=7):
             jobs.extend(job('minute_' + metric, metric, 'minute', day, after)
                         for metric in ('steps', 'distance', 'total-calories', 'active-zone-minutes', 'heart-rate'))
