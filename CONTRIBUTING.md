@@ -1,5 +1,8 @@
 # Working on Sentra
 
+Use [docs/collaborator-setup.md](docs/collaborator-setup.md) for Windows/macOS setup,
+assistant instruction-loading checks and individual onboarding evidence.
+
 ## Setup (once)
 
 Use Python **3.11**. From the repository root in Windows PowerShell:

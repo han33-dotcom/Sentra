@@ -93,5 +93,5 @@ Policy changes are ordinary reviewed repository changes. After they merge:
   connecting a service alone does not prove the assistant has loaded these files.
 
 Each teammate configures their own tool/account. This repository does not alter
-private machine settings or grant credentials. Local onboarding verification follows
-in the collaborator-setup task.
+private machine settings or grant credentials. Follow
+[collaborator-setup.md](collaborator-setup.md) for individual setup and evidence checks.
