@@ -4,11 +4,14 @@ Columns: subject_id, metric, t (naive Asia/Beirut local), t_end, value, resoluti
 Heart rate per minute uses the best available source and never mixes them in one minute:
 raw readings (30-day hot tier) > Sentra minutes from raw > vendor 60 s rollups.
 """
+import json
 from pathlib import Path
+import re
 
 import pandas as pd
 
-from .metric_map import MAPPING, WHOOP_ASLEEP_PARTS
+from .canonical import SLEEP_STAGE
+from .metric_map import GOOGLE_STAGE_CODES, GOOGLE_STAGE_MINUTES, MAPPING, WHOOP_ASLEEP_PARTS
 
 LOCAL = 'Asia/Beirut'
 COLUMNS = ['subject_id', 'metric', 't', 't_end', 'value', 'resolution', 'raw_ref']
@@ -37,6 +40,61 @@ def _heart_rate(tiers):
     return pd.DataFrame({'subject_id': hr.subject_id, 'metric': 'heart_rate', 't': local(hr.ts), 't_end': pd.NaT,
                          'value': hr.value, 'resolution': hr.kind.map(lambda k: 'sample' if k == 'raw' else 'minute'),
                          'raw_ref': None})
+
+
+STAGE_FIELD = re.compile(r'^/sleep/stages/(\d+)/(type|startTime|endTime)$')
+SUMMARY_FIELD = re.compile(r'^/sleep/summary/stagesSummary/(\d+)/(type|minutes)$')
+
+
+def _vendor(text):
+    """Tier vendor_value is JSON text; stage types and minutes arrive as strings."""
+    if text is None or (isinstance(text, float) and pd.isna(text)):
+        return None
+    try:
+        return json.loads(text)
+    except (TypeError, ValueError):
+        return None
+
+
+def _instant(text):
+    stamp = pd.to_datetime(text, utc=True, errors='coerce')
+    return None if pd.isna(stamp) else stamp.tz_convert(LOCAL).tz_localize(None)
+
+
+def google_sleep(m):
+    """Fitbit sleep stage timeline and per-stage minutes from Google sleep records.
+
+    Stages with an unknown type or unparseable times are skipped, never guessed.
+    """
+    rows = m[(m.provider.astype(str) == 'google_health') & (m.dataset.astype(str) == 'sleep')]
+    if rows.empty:
+        return pd.DataFrame(columns=COLUMNS)
+    stages, summary = {}, {}
+    for pid, key, metric, vendor, end_ts in zip(rows.participant.astype(str), rows.record_key.astype(str),
+                                                rows.metric.astype(str), rows.vendor_value, rows.end_ts):
+        if found := STAGE_FIELD.match(metric):
+            stages.setdefault((pid, key, int(found[1])), {})[found[2]] = _vendor(vendor)
+        elif found := SUMMARY_FIELD.match(metric):
+            item = summary.setdefault((pid, key, int(found[1])), {})
+            item[found[2]] = _vendor(vendor)
+            item['end_ts'] = end_ts
+    out = []
+    for (pid, key, _), stage in stages.items():
+        code = GOOGLE_STAGE_CODES.get(stage.get('type'))
+        start, end = _instant(stage.get('startTime')), _instant(stage.get('endTime'))
+        if code and start is not None and end is not None and end > start:
+            out.append({'subject_id': pid, 'metric': 'sleep_stage', 't': start, 't_end': end,
+                        'value': float(SLEEP_STAGE[code]), 'resolution': 'interval', 'raw_ref': key})
+    for (pid, key, _), item in summary.items():
+        metric = GOOGLE_STAGE_MINUTES.get(item.get('type'))
+        try:
+            minutes = float(item.get('minutes'))
+        except (TypeError, ValueError):
+            continue
+        if metric and pd.notna(item.get('end_ts')) and minutes >= 0:
+            out.append({'subject_id': pid, 'metric': metric, 't': local(pd.Series([float(item['end_ts'])])).iloc[0],
+                        't_end': pd.NaT, 'value': minutes, 'resolution': 'daily', 'raw_ref': key})
+    return pd.DataFrame(out, columns=COLUMNS)
 
 
 def from_measurements(m):
@@ -79,7 +137,8 @@ def load(tiers):
     tiers = Path(tiers)
     path = tiers / 'measurements.parquet'
     measurements = pd.read_parquet(path) if path.is_file() else pd.DataFrame()
-    parts = [df for df in (_heart_rate(tiers), from_measurements(measurements)) if len(df)]
+    sleep = google_sleep(measurements) if len(measurements) else pd.DataFrame(columns=COLUMNS)
+    parts = [df for df in (_heart_rate(tiers), from_measurements(measurements), sleep) if len(df)]
     obs = pd.concat(parts, ignore_index=True) if parts else pd.DataFrame(columns=COLUMNS)
     for column in ('t', 't_end'):
         obs[column] = pd.to_datetime(obs[column]).astype('datetime64[ns]')

@@ -61,6 +61,13 @@ WHOOP_ASLEEP_PARTS = ('/score/stage_summary/total_light_sleep_time_milli',
                       '/score/stage_summary/total_slow_wave_sleep_time_milli',
                       '/score/stage_summary/total_rem_sleep_time_milli')
 
+# Google sleep stage timeline and per-stage minutes are structured lists, mapped in observations.py:
+#   /sleep/stages/N/{type,startTime,endTime}      -> sleep_stage (SLEEP_STAGE codes), one row per stage
+#   /sleep/summary/stagesSummary/N/{type,minutes} -> daily_deep_sleep_min / daily_rem_sleep_min (wake day)
+GOOGLE_STAGE_CODES = {'AWAKE': 'awake', 'LIGHT': 'light', 'DEEP': 'deep', 'REM': 'rem',
+                      'ASLEEP': 'asleep_unspecified', 'RESTLESS': 'restless'}
+GOOGLE_STAGE_MINUTES = {'DEEP': 'daily_deep_sleep_min', 'REM': 'daily_rem_sleep_min'}
+
 UNMAPPED = {
     (G, 'daily_steps'): 'steps come from minute rollups; a vendor daily total would conflict with the minute sum',
     (G, 'minute_active-zone-minutes'): 'three weighted zones; no agreed canonical aggregation',
