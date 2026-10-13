@@ -112,6 +112,7 @@ See the [collection contracts and evidence](docs/stage-2-collection.md).
 | Read API and Docker | Read-only FastAPI over processed outputs; Compose runs only the API and the processing job | [Read API](docs/read-api.md) |
 | Repository rules | CI (`guard`, `test`), data guard, pre-commit hooks, PR template, code owners and branch model | [Contributing](CONTRIBUTING.md) |
 | Website | Static project site published to GitHub Pages | [website/README.md](website/README.md) |
+| Wellness board | Daily-refreshed pseudonymous board (latest day, wellness timeline, trends) inside the private viewer | [Wellness board](docs/wellness-board.md) |
 
 **Viewer.** The redesigned viewer has four views: **Daily activity**, **Sleep**,
 **Workouts** and **Data availability**.
