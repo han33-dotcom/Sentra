@@ -46,8 +46,11 @@ def collector_storage():
 
 def latest_run(reader):
     reader.reserve(16_384)
-    value = reader.db.execute('''select max(finished_at) from audit.collection_runs
-        where coalesce(cast(details->>'changed' as bigint),0)>0''').fetchone()[0]
+    # Run counters omit committed pages when a later page fails; use durable record writes.
+    value = reader.db.execute('''select max(run.finished_at) from audit.collection_runs run
+        where exists (select 1 from audit.records record
+          where record.participant_id=run.participant_id and record.provider=run.provider
+            and record.collected_at between run.started_at and run.finished_at)''').fetchone()[0]
     return value.isoformat() if value else None
 
 
@@ -64,9 +67,11 @@ def previous_board(storage):
 def refresh(reader, limits, storage, *, force=False, now=None, log=print):
     now = now or datetime.now(timezone.utc)
     source = latest_run(reader)
-    if not force and (source is None or previous_board(storage).get('source_run') == source):
-        log('No changed collection data since the last board; tiers not read or published.')
-        return {'status': 'skipped', 'source_run': source}
+    if not force:
+        previous = previous_board(storage).get('source_run') if source is not None else None
+        if source is None or (previous and datetime.fromisoformat(source) <= datetime.fromisoformat(previous)):
+            log('No changed collection data since the last board; tiers not read or published.')
+            return {'status': 'skipped', 'source_run': source}
     objects, report = build(reader, limits, now=now)
     publish(objects, report, storage, reader, limits)
     with tempfile.TemporaryDirectory(prefix='sentra-wellness-') as folder:

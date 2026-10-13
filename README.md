@@ -249,8 +249,8 @@ pre-commit hook) and gitleaks block health data, exports and secrets. See
 
 ## Verification, privacy and remaining work
 
-**Tests.** The Python suite has **158 tests**. The most recent complete run had
-**153 passed and five opt-in live integration tests skipped**. Three JavaScript regressions
+**Tests.** The Python suite has **159 tests**. The most recent complete run had
+**154 passed and five opt-in live integration tests skipped**. Three JavaScript regressions
 exercise the board's baseline comparisons. CI runs both suites on Ubuntu and
 Windows with Python 3.11 for every PR, and the live tests stay skipped there.
 

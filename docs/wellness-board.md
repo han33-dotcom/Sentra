@@ -19,7 +19,8 @@ Streamlit viewer "Wellness board" page      ->  reads board/board.json, renders 
     A missing baseline leaves the comparison empty; current and future days never substitute for it.
 - **Refresh job:** `python -m sentra.wellness_refresh`, run daily by
   `.github/workflows/wellness.yml`.
-  1. Checks finished `audit.collection_runs` that changed data, including partial runs.
+  1. Checks finished `audit.collection_runs` against durable record-write timestamps,
+     including partial runs whose counters omit already committed pages.
      Paused and unchanged attempts do not advance the watermark. Without new changes,
      only metadata and the previous board are checked; tier reads and publication are skipped.
   2. Otherwise it rebuilds the tiers, runs processing and uploads

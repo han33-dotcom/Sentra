@@ -135,16 +135,24 @@ class BoardTests(unittest.TestCase):
 
 
 class RefreshTests(unittest.TestCase):
-    def test_watermark_ignores_paused_and_unchanged_runs_but_keeps_changed_partial(self):
+    def test_watermark_uses_durable_records_even_when_partial_run_counter_is_zero(self):
         from sentra import wellness_refresh as w
         with sqlite3.connect(':memory:') as db:
             db.execute("attach database ':memory:' as audit")
-            db.execute('create table audit.collection_runs (finished_at text, status text, details text)')
-            db.executemany('insert into audit.collection_runs values (?,?,?)', [
-                ('2026-10-10T00:00:00+00:00', 'partial', '{"changed":3}'),
-                ('2026-10-11T00:00:00+00:00', 'paused', '{"changed":0}'),
-                ('2026-10-12T00:00:00+00:00', 'succeeded', '{"changed":0}'),
-                ('2026-10-13T00:00:00+00:00', 'failed', '{}'),
+            db.execute('''create table audit.collection_runs
+                (participant_id text, provider text, started_at text, finished_at text, status text, details text)''')
+            db.execute('create table audit.records (participant_id text, provider text, collected_at text)')
+            db.executemany('insert into audit.collection_runs values (?,?,?,?,?,?)', [
+                ('p01', 'google_health', '2026-10-10T00:00:00+00:00', '2026-10-10T00:30:00+00:00', 'partial', '{"changed":0}'),
+                ('p01', 'google_health', '2026-10-11T00:00:00+00:00', '2026-10-11T00:30:00+00:00', 'paused', '{"changed":0}'),
+                ('p01', 'google_health', '2026-10-12T00:00:00+00:00', '2026-10-12T00:30:00+00:00', 'succeeded', '{"changed":0}'),
+                ('p01', 'google_health', '2026-10-13T00:00:00+00:00', None, 'running', '{}'),
+            ])
+            db.executemany('insert into audit.records values (?,?,?)', [
+                ('p01', 'google_health', '2026-10-10T00:05:00+00:00'),
+                ('p02', 'google_health', '2026-10-11T00:05:00+00:00'),
+                ('p01', 'whoop', '2026-10-12T00:05:00+00:00'),
+                ('p01', 'google_health', '2026-10-13T00:05:00+00:00'),
             ])
             class DB:
                 def execute(self, query):
@@ -152,7 +160,14 @@ class RefreshTests(unittest.TestCase):
                     return type('Result', (), {'fetchone': lambda _: (datetime.fromisoformat(value) if value else None,)})()
             reader = self.Reader(None)
             reader.db = DB()
-            self.assertEqual(w.latest_run(reader), '2026-10-10T00:00:00+00:00')
+            self.assertEqual(w.latest_run(reader), '2026-10-10T00:30:00+00:00')
+
+    def test_older_watermark_does_not_rebuild_an_already_newer_board(self):
+        from sentra import wellness_refresh as w
+        storage = self.Storage({'source_run': '2026-10-11T00:00:00+00:00'})
+        with mock.patch.object(w, 'build', side_effect=AssertionError('Older data must not rebuild tiers')):
+            result = w.refresh(self.Reader(datetime(2026, 10, 10, tzinfo=UTC)), Limits(), storage, log=lambda *_: None)
+        self.assertEqual(result['status'], 'skipped')
 
     def test_no_changed_run_skips_without_reading_or_publishing_tiers(self):
         from sentra import wellness_refresh as w
