@@ -15,10 +15,13 @@ Streamlit viewer "Wellness board" page      ->  reads board/board.json, renders 
   - Pseudonymous IDs only (`p01` …) plus the device family.
   - Days without usable data are omitted, so they show as "no data".
   - Missing values are left out, never zero.
+  - Comparisons use each day's processing baseline from the preceding 28 calendar days.
+    A missing baseline leaves the comparison empty; current and future days never substitute for it.
 - **Refresh job:** `python -m sentra.wellness_refresh`, run daily by
   `.github/workflows/wellness.yml`.
-  1. Checks `audit.collection_runs`. If no collection run finished since the last board,
-     it reads and publishes nothing.
+  1. Checks finished `audit.collection_runs` that changed data, including partial runs.
+     Paused and unchanged attempts do not advance the watermark. Without new changes,
+     only metadata and the previous board are checked; tier reads and publication are skipped.
   2. Otherwise it rebuilds the tiers, runs processing and uploads
      `sentra-tiers/board/board.json`.
 - **Viewer:** the **Wellness board** page. It is available only after the existing Google
@@ -33,7 +36,7 @@ then.
 
 | Board field | Source |
 | --- | --- |
-| Sleep, deep/REM minutes | Fitbit stage timeline and stage summary; WHOOP stage totals |
+| Sleep, deep/REM minutes | Complete Fitbit vendor totals take precedence over stage-derived duration; stage summaries and WHOOP stage totals |
 | Sleeping HR (Fitbit) | Minute heart-rate rollups during asleep stages |
 | Resting HR, HRV, breathing rate, skin temperature | Daily vendor values (Fitbit) and recovery/sleep scores (WHOOP) |
 | Steps, wear time | Fitbit minute rollups |

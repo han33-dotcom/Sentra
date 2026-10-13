@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 import json
 import os
+import sqlite3
 from pathlib import Path
 import tempfile
 import unittest
@@ -57,6 +58,16 @@ def write(folder, rows, vendor_hr=()):
 
 
 class SleepStageTests(unittest.TestCase):
+    def test_partial_stage_timeline_preserves_vendor_sleep_total(self):
+        rows = [r[:13] + ('SLEEP_STAGE_TYPE_UNSPECIFIED',) if r[4] == '/sleep/stages/1/type' else r
+                for r in sleep_rows()]
+        with tempfile.TemporaryDirectory() as folder:
+            write(folder, rows)
+            _, daily, _, _ = run(load(folder), Path(folder) / 'out', log=lambda *_: None)
+        wake = daily[daily.date == pd.Timestamp('2026-10-10')].iloc[0]
+        self.assertEqual(wake.sleep_min, 400)
+        self.assertFalse(wake.flag_short_sleep)
+
     def test_stage_timeline_and_stage_minutes_are_mapped_unknown_types_skipped(self):
         with tempfile.TemporaryDirectory() as folder:
             write(folder, sleep_rows())
@@ -86,6 +97,16 @@ class SleepStageTests(unittest.TestCase):
 
 
 class BoardTests(unittest.TestCase):
+    def test_payload_carries_existing_baselines_for_every_trend(self):
+        daily = self.daily()
+        columns = {'sleep_hr_b': 'sleep_hr_base', 'steps_b': 'steps_base',
+                   'br_b': 'daily_respiratory_rate_base', 'temp_b': 'nightly_skin_temp_c_base'}
+        for column in columns.values():
+            daily[column] = 50.0
+        result = board_mod.payload(daily, {}, built_at='synthetic')['people'][0]['days'][0]
+        for key in columns:
+            self.assertEqual(result[key], 50)
+
     def daily(self):
         return pd.DataFrame({'subject_id': ['p01', 'p01', 'p02'], 'date': pd.to_datetime(['2026-10-09', '2026-10-10', '2026-10-10']),
                              'usable_day': [True, True, False], 'wellness_level': ['green', 'amber', 'nan'],
@@ -114,6 +135,33 @@ class BoardTests(unittest.TestCase):
 
 
 class RefreshTests(unittest.TestCase):
+    def test_watermark_ignores_paused_and_unchanged_runs_but_keeps_changed_partial(self):
+        from sentra import wellness_refresh as w
+        with sqlite3.connect(':memory:') as db:
+            db.execute("attach database ':memory:' as audit")
+            db.execute('create table audit.collection_runs (finished_at text, status text, details text)')
+            db.executemany('insert into audit.collection_runs values (?,?,?)', [
+                ('2026-10-10T00:00:00+00:00', 'partial', '{"changed":3}'),
+                ('2026-10-11T00:00:00+00:00', 'paused', '{"changed":0}'),
+                ('2026-10-12T00:00:00+00:00', 'succeeded', '{"changed":0}'),
+                ('2026-10-13T00:00:00+00:00', 'failed', '{}'),
+            ])
+            class DB:
+                def execute(self, query):
+                    value = db.execute(query).fetchone()[0]
+                    return type('Result', (), {'fetchone': lambda _: (datetime.fromisoformat(value) if value else None,)})()
+            reader = self.Reader(None)
+            reader.db = DB()
+            self.assertEqual(w.latest_run(reader), '2026-10-10T00:00:00+00:00')
+
+    def test_no_changed_run_skips_without_reading_or_publishing_tiers(self):
+        from sentra import wellness_refresh as w
+        storage = self.Storage()
+        with mock.patch.object(w, 'build', side_effect=AssertionError('No changes should not rebuild tiers')):
+            result = w.refresh(self.Reader(None), Limits(), storage, log=lambda *_: None)
+        self.assertEqual(result['status'], 'skipped')
+        self.assertEqual(storage.posts, {})
+
     class Reader:
         def __init__(self, finished):
             self.finished, self.reserved = finished, 0

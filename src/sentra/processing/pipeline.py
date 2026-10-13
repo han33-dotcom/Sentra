@@ -148,7 +148,8 @@ def daily(g: pd.DataFrame, obs: pd.DataFrame, ages: dict | None = None) -> pd.Da
     if 'sleep_min' not in day_df:
         day_df['sleep_min'] = np.nan  # no sleep returned: stays missing, never zero
     if 'daily_sleep_min' in day_df:
-        day_df['sleep_min'] = day_df['sleep_min'].fillna(day_df.daily_sleep_min)
+        # A partial stage timeline must not replace the complete vendor duration.
+        day_df['sleep_min'] = day_df.daily_sleep_min.fillna(day_df['sleep_min'])
     day_df['rhr'] = day_df['resting_heart_rate'].fillna(day_df.rhr_est) if 'resting_heart_rate' in day_df else day_df.rhr_est
     day_df['valid_day'] = day_df.wear_min.fillna(0) >= TH['valid_day_min_wear_minutes']
     # the device's own nightly metrics exist only if it was worn overnight -> the day is usable

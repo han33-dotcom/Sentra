@@ -2,7 +2,7 @@
 
 Runs in GitHub Actions after collection (.github/workflows/wellness.yml). Database reads use the
 read-only sentra_viewer role with reserved egress; object writes use the collector storage account
-and go only to `sentra-tiers`. When no collection run finished since the last board, nothing is read.
+and go only to `sentra-tiers`. Without changed collection data, tier reads and publication are skipped.
 
     python -m sentra.wellness_refresh            # skip if no new collection run
     python -m sentra.wellness_refresh --force    # rebuild anyway
@@ -46,7 +46,8 @@ def collector_storage():
 
 def latest_run(reader):
     reader.reserve(16_384)
-    value = reader.db.execute('select max(finished_at) from audit.collection_runs').fetchone()[0]
+    value = reader.db.execute('''select max(finished_at) from audit.collection_runs
+        where coalesce(cast(details->>'changed' as bigint),0)>0''').fetchone()[0]
     return value.isoformat() if value else None
 
 
@@ -63,8 +64,8 @@ def previous_board(storage):
 def refresh(reader, limits, storage, *, force=False, now=None, log=print):
     now = now or datetime.now(timezone.utc)
     source = latest_run(reader)
-    if not force and source is not None and previous_board(storage).get('source_run') == source:
-        log('No collection run since the last board; nothing read or published.')
+    if not force and (source is None or previous_board(storage).get('source_run') == source):
+        log('No changed collection data since the last board; tiers not read or published.')
         return {'status': 'skipped', 'source_run': source}
     objects, report = build(reader, limits, now=now)
     publish(objects, report, storage, reader, limits)

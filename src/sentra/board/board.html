@@ -166,13 +166,12 @@ const METRICS = [
   {k:'sleep', b:'sleep_b', lab:'Sleep', unit:'h', scale:1/60, dec:1, worse:'down', alert:0.75},
   {k:'rhr', b:'rhr_b', lab:'Resting HR', unit:'bpm', scale:1, dec:0, worse:'up', alert:3},
   {k:'hrv', b:'hrv_b', lab:'HRV', unit:'ms', scale:1, dec:0, worse:'down', alert:10},
-  {k:'sleep_hr', b:null, lab:'Sleeping HR', unit:'bpm', scale:1, dec:0, worse:'up', alert:Infinity},
-  {k:'br', b:null, lab:'Breathing rate', unit:'/min', scale:1, dec:1, worse:'up', alert:Infinity},
-  {k:'temp', b:null, lab:'Skin temp', unit:'°C', scale:1, dec:1, worse:'up', alert:Infinity},
-  {k:'steps', b:null, lab:'Steps', unit:'', scale:1, dec:0, worse:'down', alert:Infinity},
+  {k:'sleep_hr', b:'sleep_hr_b', lab:'Sleeping HR', unit:'bpm', scale:1, dec:0, worse:'up', alert:Infinity},
+  {k:'br', b:'br_b', lab:'Breathing rate', unit:'/min', scale:1, dec:1, worse:'up', alert:Infinity},
+  {k:'temp', b:'temp_b', lab:'Skin temp', unit:'°C', scale:1, dec:1, worse:'up', alert:Infinity},
+  {k:'steps', b:'steps_b', lab:'Steps', unit:'', scale:1, dec:0, worse:'down', alert:Infinity},
 ];
 const fmtDay = s => new Date(s+'T00:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'short',timeZone:'UTC'});
-const median = a => {const v=a.filter(x=>x!=null).sort((x,y)=>x-y); return v.length? v[Math.floor(v.length/2)] : null};
 const FLAG = {short_sleep:'short sleep', rhr_up:'resting HR above normal', hrv_down:'HRV below normal', sleep_hr_up:'sleeping HR above normal'};
 const LVL = {green:'Green', amber:'Amber', red:'Red'};
 const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -190,7 +189,7 @@ DATA.forEach((p,i) => {
   const counts = {green:0,amber:0,red:0}; p.days.forEach(d=>{ if (d.lvl) counts[d.lvl]++ });
   const row = m => {
     const v = last[m.k]; if (v==null) return '';
-    const base = m.b ? last[m.b] : median(p.days.map(d=>d[m.k]));
+    const base = last[m.b];
     const diff = base==null ? null : (v-base)*m.scale;
     const bad = diff!=null && ((m.worse==='up' && diff>0) || (m.worse==='down' && diff<0)) && Math.abs(diff) >= m.alert;
     const arrow = diff==null ? '' : diff>0 ? '▲' : diff<0 ? '▼' : '•';
@@ -253,9 +252,9 @@ window.draw = function draw(){
   const grid = css('--line'), muted = css('--muted');
   const sets = DATA.map((p,i)=>{
     const by = Object.fromEntries(p.days.map(d=>[d.d,d]));
-    const med = median(p.days.map(d=>d[metric.k]));
     const pts = days.map(dd=>{const r=by[dd]; if(!r||r[metric.k]==null) return null;
-      const base = metric.b && r[metric.b]!=null ? r[metric.b] : med;
+      const base = r[metric.b];
+      if (rel && base==null) return null;
       return +(((rel? r[metric.k]-base : r[metric.k]))*metric.scale).toFixed(2)});
     const col = css(SERIES[i % SERIES.length]);
     return {label:p.name, data:pts, borderColor:col, backgroundColor:col, borderWidth:2, pointRadius:2.5, pointHoverRadius:5, tension:.25, spanGaps:false, hidden:!on[i]};

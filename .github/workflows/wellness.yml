@@ -1,8 +1,8 @@
 name: Wellness board refresh
 
 # Daily after collection (00:00 Beirut): rebuild parquet tiers, run v0 processing and publish the
-# pseudonymous board JSON to the private sentra-tiers bucket. Skips when no collection run finished
-# since the last board, so a paused collector costs only a few kilobytes of egress.
+# pseudonymous board JSON to the private sentra-tiers bucket. Skips tier reads when collection data
+# is unchanged; only the run metadata and previous board are checked.
 on:
   schedule:
     - cron: '30 1 * * *'

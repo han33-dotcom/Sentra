@@ -20,6 +20,8 @@ FIELDS = {  # board key -> daily_features column, decimals
     'rem': ('daily_rem_sleep_min', 0), 'rec': ('whoop_recovery_score', 0), 'strain': ('whoop_strain', 1),
     'spo2': ('daily_spo2', 1),
     'rhr_b': ('rhr_base', 1), 'hrv_b': ('daily_hrv_rmssd_base', 1), 'sleep_b': ('sleep_min_base', 0),
+    'sleep_hr_b': ('sleep_hr_base', 1), 'steps_b': ('steps_base', 0),
+    'br_b': ('daily_respiratory_rate_base', 1), 'temp_b': ('nightly_skin_temp_c_base', 1),
     'rhr_z': ('rhr_z', 1), 'hrv_z': ('daily_hrv_rmssd_z', 1), 'sleep_z': ('sleep_min_z', 1),
 }
 FLAGS = {'flag_short_sleep': 'short_sleep', 'flag_rhr_above_baseline': 'rhr_up',
