@@ -1,5 +1,6 @@
 """Bounded read-only audit/Storage access; every entry rechecks team authorization."""
 from functools import wraps
+import json
 import re
 
 import psycopg
@@ -10,6 +11,9 @@ from .errors import SentraError
 from .shared import CapacityStop, object_key
 from .shared_backend import BUCKET, PrivateStorage, connect_db
 from .viewer_data import MAX_BYTES, MAX_ROWS, Selection
+
+BOARD_KEY = 'board/board.json'
+TIER_BUCKET = 'sentra-tiers'
 
 
 def safe_database(method):
@@ -204,6 +208,21 @@ class ViewerReader:
           from audit.collection_runs where participant_id=%s and provider=%s
           order by started_at desc limit 20''',(selection.participant,selection.provider),allowance=1_000_000)
         return {'connection':states,'runs':runs}
+
+    @safe_database
+    def board(self):
+        """Latest pseudonymous wellness board published by the daily refresh (read-only)."""
+        self.principal()
+        storage=PrivateStorage(self.credentials,self.reserve,bucket=TIER_BUCKET)
+        try: code,body=storage.request('GET',BOARD_KEY,maximum=5_000_000)
+        finally: storage.session.close()
+        if code in (400,404): return {'people':[],'data_through':None,'notice':None}
+        if code!=200: raise SentraError('Wellness board unavailable; ask the operator to check the daily refresh.')
+        try: board=json.loads(body)
+        except ValueError: raise SentraError('Wellness board is malformed; ask the operator to rerun the refresh.') from None
+        if not isinstance(board,dict) or not isinstance(board.get('people'),list):
+            raise SentraError('Wellness board is malformed; ask the operator to rerun the refresh.')
+        return board
 
     @safe_database
     def original(self, response_id, selection):

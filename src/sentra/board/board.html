@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Wellness Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Sentra wellness board. Data is embedded server-side from processing/board.py; no network data calls. */
+:root{
+  --bg:#f3f5f4; --surface:#ffffff; --ink:#131816; --muted:#59625e; --line:#dde2df; --soft:#eaeeec;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#8a4fd6; --s5:#c2457a; --s6:#4d8f3a;
+  --good:#0ca30c; --warn:#fab219; --crit:#d03b3b; --none:#e3e7e5;
+  --display:"Archivo",system-ui,sans-serif; --body:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#141716; --surface:#1c201e; --ink:#eef1ef; --muted:#a3aca8; --line:#2f3532; --soft:#252a28;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#a07ae8; --s5:#d9608f; --s6:#6aab55; --none:#2a302d; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141716; --surface:#1c201e; --ink:#eef1ef; --muted:#a3aca8; --line:#2f3532; --soft:#252a28;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#a07ae8; --s5:#d9608f; --s6:#6aab55; --none:#2a302d; color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--body);padding-inline:clamp(16px,4vw,40px);padding-block:28px 48px}
+.wrap{max-width:1180px;margin:0 auto;display:grid;gap:28px}
+h1{font:700 clamp(26px,3.4vw,34px)/1.1 var(--display);margin:0;letter-spacing:-.01em;text-wrap:balance}
+h2{font:600 18px/1.2 var(--display);margin:0}
+.sub{color:var(--muted);margin:6px 0 0}
+.lbl{font:500 11px/1 var(--body);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+header{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:end;gap:12px}
+.asof{font:500 13px var(--mono);color:var(--muted);border:1px solid var(--line);padding:6px 10px;border-radius:6px;background:var(--surface)}
+section{display:grid;gap:14px}
+.sechead{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;align-items:end}
+.sechead p{margin:2px 0 0;color:var(--muted);font-size:14px;max-width:70ch}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px;display:grid;gap:14px;border-top:3px solid var(--c)}
+.chead{display:flex;justify-content:space-between;align-items:start;gap:10px}
+.name{font:600 20px/1.1 var(--display)}
+.dev{font-size:13px;color:var(--muted);margin-top:4px}
+.pill{display:inline-flex;align-items:center;gap:6px;font:600 12px var(--body);padding:4px 10px;border-radius:99px;white-space:nowrap}
+.pill i{width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block}
+.p-green{color:var(--good);background:color-mix(in srgb,var(--good) 14%,transparent)}
+.p-amber{color:color-mix(in srgb,var(--warn) 70%,var(--ink));background:color-mix(in srgb,var(--warn) 20%,transparent)}
+.p-red{color:var(--crit);background:color-mix(in srgb,var(--crit) 14%,transparent)}
+.p-none{color:var(--muted);background:var(--soft)}
+.stats{display:grid;gap:8px}
+.stat{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:baseline;padding-block:6px;border-bottom:1px solid var(--soft)}
+.stat:last-child{border-bottom:0}
+.stat .v{font:500 17px var(--mono)}
+.stat .d{font:400 12px var(--mono);color:var(--muted);min-width:9ch;text-align:right}
+.d.bad{color:var(--crit)}
+.mix{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px;background:var(--soft)}
+.mix span{display:block}
+.mixlbl{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+.why{font-size:13px;color:var(--muted);margin:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:18px}
+.tl{overflow-x:auto}
+.tlgrid{display:grid;grid-template-columns:90px 1fr;gap:6px 10px;min-width:720px;align-items:center}
+.tlrow{display:grid;gap:2px}
+.cell{height:22px;border-radius:3px;background:var(--none)}
+.cell.green{background:var(--good)} .cell.amber{background:var(--warn)} .cell.red{background:var(--crit)}
+.cell.nolevel{background:repeating-linear-gradient(45deg,var(--none),var(--none) 3px,var(--soft) 3px,var(--soft) 6px)}
+.cell:hover,.cell:focus-visible{outline:2px solid var(--ink);outline-offset:1px}
+.tlname{font:500 14px var(--mono)}
+.axis{font:400 11px var(--mono);color:var(--muted);display:grid;gap:2px}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--muted)}
+.legend b{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-2px}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--surface)}
+.seg button{font:500 13px var(--body);border:0;background:none;color:var(--muted);padding:7px 12px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.seg button:focus-visible,.chip:focus-visible{outline:2px solid var(--s1);outline-offset:2px}
+.chip{font:500 13px var(--body);border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:99px;padding:6px 12px;cursor:pointer;display:inline-flex;gap:8px;align-items:center}
+.chip i{width:10px;height:10px;border-radius:50%;background:var(--c)}
+.chip[aria-pressed="false"]{opacity:.45}
+.chartbox{position:relative;height:340px}
+.note{font-size:13px;color:var(--muted);margin:0}
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:28px;color:var(--muted)}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:620px;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:600 12px var(--body);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+td.y{color:var(--good);font-weight:600} td.n{color:var(--muted)}
+#tip{position:fixed;pointer-events:none;background:var(--ink);color:var(--bg);font:12px/1.4 var(--body);padding:8px 10px;border-radius:6px;max-width:240px;z-index:9;opacity:0;transition:opacity .12s}
+footer{color:var(--muted);font-size:13px;display:grid;gap:4px}
+@media (prefers-reduced-motion:reduce){#tip{transition:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <div class="lbl">Sentra · wearables wellness pilot · internal</div>
+    <h1>Wellness Board</h1>
+    <p class="sub">Pseudonymous participants. Each person is compared with their own normal (previous 28 days).</p>
+  </div>
+  <div class="asof">Data through __SENTRA_ASOF__</div>
+</header>
+
+<div id="empty" class="empty" hidden>No processed days are available yet. The board fills in after the next daily refresh.</div>
+
+<section aria-labelledby="h-today" data-needs-data>
+  <div class="sechead"><div><h2 id="h-today">Latest day</h2><p>Status from the most recent day with data. Arrows compare with that person's own normal.</p></div></div>
+  <div class="cards" id="cards"></div>
+</section>
+
+<section aria-labelledby="h-tl" data-needs-data>
+  <div class="sechead">
+    <div><h2 id="h-tl">Wellness level by day</h2><p>Green: no signals. Amber: one signal. Red: two or more (short sleep, resting HR above own normal, HRV below own normal, sleeping HR above own normal). Hover a day for details.</p></div>
+    <div class="legend"><span><b style="background:var(--good)"></b>Green</span><span><b style="background:var(--warn)"></b>Amber</span><span><b style="background:var(--crit)"></b>Red</span><span><b class="cell nolevel" style="display:inline-block"></b>Data, no level yet</span><span><b style="background:var(--none)"></b>No data</span></div>
+  </div>
+  <div class="panel tl"><div class="tlgrid" id="tl"></div></div>
+</section>
+
+<section aria-labelledby="h-trend" data-needs-data>
+  <div class="sechead">
+    <div><h2 id="h-trend">Trends</h2><p id="trendnote">Daily values per person.</p></div>
+  </div>
+  <div class="panel" style="display:grid;gap:14px">
+    <div class="controls">
+      <div class="seg" id="metric" role="group" aria-label="Metric"></div>
+      <div class="seg" id="mode" role="group" aria-label="Scale">
+        <button id="m-abs" aria-pressed="true">Actual values</button>
+        <button id="m-rel" aria-pressed="false">Change from own normal</button>
+      </div>
+    </div>
+    <div class="controls" id="who"></div>
+    <div class="chartbox"><canvas id="chart" aria-label="Trend chart"></canvas></div>
+  </div>
+</section>
+
+<section aria-labelledby="h-dev">
+  <div class="sechead"><div><h2 id="h-dev">What each device gives us</h2><p>Standard metrics from both providers, so the same signals work on either brand.</p></div></div>
+  <div class="panel tbl"><table>
+    <thead><tr><th>Data</th><th>Fitbit (Google Health v4)</th><th>WHOOP (v2)</th></tr></thead>
+    <tbody>
+      <tr><td>Heart rate</td><td class="y">Per minute (vendor 60 s rollups)</td><td class="n">Cycle and sleep summaries only</td></tr>
+      <tr><td>Resting HR, nightly HRV</td><td class="y">Yes</td><td class="y">Yes</td></tr>
+      <tr><td>Sleep</td><td class="y">Stage timeline + stage minutes</td><td class="y">Nightly stage totals</td></tr>
+      <tr><td>Sleeping heart rate</td><td class="y">From minute HR during sleep stages</td><td class="n">No</td></tr>
+      <tr><td>Breathing rate, skin temperature</td><td class="y">Yes</td><td class="y">Yes</td></tr>
+      <tr><td>SpO2</td><td class="n">No records returned so far</td><td class="y">Yes</td></tr>
+      <tr><td>Steps, wear time per minute</td><td class="y">Yes</td><td class="n">No</td></tr>
+      <tr><td>Vendor scores</td><td class="n">None</td><td class="y">Recovery %, strain</td></tr>
+      <tr><td>Sign-in renewal</td><td class="n">Every 7 days (Google testing mode)</td><td class="y">Renews itself</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<footer>
+  <span>__SENTRA_NOTICE__</span>
+  <span>Source: Sentra processed tiers, refreshed daily after collection. Pseudonymous IDs only. Internal team only.</span>
+</footer>
+</div>
+<div id="tip" role="tooltip"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+const DATA = /*__SENTRA_DATA__*/[];
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const SERIES = ['--s1','--s2','--s3','--s4','--s5','--s6'];
+const METRICS = [
+  {k:'sleep', b:'sleep_b', lab:'Sleep', unit:'h', scale:1/60, dec:1, worse:'down', alert:0.75},
+  {k:'rhr', b:'rhr_b', lab:'Resting HR', unit:'bpm', scale:1, dec:0, worse:'up', alert:3},
+  {k:'hrv', b:'hrv_b', lab:'HRV', unit:'ms', scale:1, dec:0, worse:'down', alert:10},
+  {k:'sleep_hr', b:'sleep_hr_b', lab:'Sleeping HR', unit:'bpm', scale:1, dec:0, worse:'up', alert:Infinity},
+  {k:'br', b:'br_b', lab:'Breathing rate', unit:'/min', scale:1, dec:1, worse:'up', alert:Infinity},
+  {k:'temp', b:'temp_b', lab:'Skin temp', unit:'°C', scale:1, dec:1, worse:'up', alert:Infinity},
+  {k:'steps', b:'steps_b', lab:'Steps', unit:'', scale:1, dec:0, worse:'down', alert:Infinity},
+];
+const fmtDay = s => new Date(s+'T00:00:00Z').toLocaleDateString('en-GB',{day:'numeric',month:'short',timeZone:'UTC'});
+const FLAG = {short_sleep:'short sleep', rhr_up:'resting HR above normal', hrv_down:'HRV below normal', sleep_hr_up:'sleeping HR above normal'};
+const LVL = {green:'Green', amber:'Amber', red:'Red'};
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+if (!DATA.length || !DATA.some(p => p.days.length)) {
+  document.getElementById('empty').hidden = false;
+  document.querySelectorAll('[data-needs-data]').forEach(s => s.hidden = true);
+} else {
+
+/* ---------- cards ---------- */
+const cards = document.getElementById('cards');
+DATA.forEach((p,i) => {
+  if (!p.days.length) return;
+  const last = p.days[p.days.length-1];
+  const counts = {green:0,amber:0,red:0}; p.days.forEach(d=>{ if (d.lvl) counts[d.lvl]++ });
+  const row = m => {
+    const v = last[m.k]; if (v==null) return '';
+    const base = last[m.b];
+    const diff = base==null ? null : (v-base)*m.scale;
+    const bad = diff!=null && ((m.worse==='up' && diff>0) || (m.worse==='down' && diff<0)) && Math.abs(diff) >= m.alert;
+    const arrow = diff==null ? '' : diff>0 ? '▲' : diff<0 ? '▼' : '•';
+    return `<div class="stat"><span>${m.lab}</span><span class="v num">${(v*m.scale).toFixed(m.dec)} <small style="color:var(--muted);font-size:12px">${m.unit}</small></span>
+      <span class="d num ${bad?'bad':''}" title="Normal ${base==null?'n/a':(base*m.scale).toFixed(m.dec)} ${m.unit}">${diff==null?'':arrow+' '+Math.abs(diff).toFixed(m.dec)+' vs normal'}</span></div>`;
+  };
+  const extra = last.rec!=null ? `<div class="stat"><span>WHOOP recovery</span><span class="v num">${last.rec} <small style="color:var(--muted);font-size:12px">%</small></span><span class="d num"></span></div>` : '';
+  const why = last.f ? `Signals: ${last.f.map(f=>FLAG[f]||f).join(', ')}.` : (last.lvl ? 'No signals on the latest day.' : 'Not enough history for a level yet.');
+  const el = document.createElement('article');
+  el.className='card'; el.style.setProperty('--c', `var(${SERIES[i % SERIES.length]})`);
+  const lvl = last.lvl || 'none';
+  el.innerHTML = `<div class="chead"><div><div class="name num">${esc(p.name)}</div><div class="dev">${esc(p.device)} · ${p.days.length} days · latest ${fmtDay(last.d)}</div></div>
+    <span class="pill p-${lvl}"><i></i>${LVL[last.lvl] || 'No level'}</span></div>
+    <div class="stats">${METRICS.slice(0,4).map(row).join('')}${extra}</div>
+    <p class="why">${why}</p>
+    <div style="display:grid;gap:6px"><div class="mix" aria-hidden="true">
+      <span style="flex:${counts.green};background:var(--good)"></span><span style="flex:${counts.amber};background:var(--warn)"></span><span style="flex:${counts.red};background:var(--crit)"></span></div>
+      <div class="mixlbl num"><span>${counts.green} green</span><span>${counts.amber} amber</span><span>${counts.red} red</span></div></div>`;
+  cards.appendChild(el);
+});
+
+/* ---------- timeline ---------- */
+const all = [...new Set(DATA.flatMap(p=>p.days.map(d=>d.d)))].sort();
+const start = new Date(all[0]+'T00:00:00Z'), end = new Date(all[all.length-1]+'T00:00:00Z');
+const days = []; for (let t=new Date(start); t<=end; t.setUTCDate(t.getUTCDate()+1)) days.push(t.toISOString().slice(0,10));
+const tl = document.getElementById('tl'), tip = document.getElementById('tip');
+const cols = `repeat(${days.length},minmax(8px,1fr))`;
+DATA.forEach(p => {
+  const by = Object.fromEntries(p.days.map(d=>[d.d,d]));
+  const name = document.createElement('div'); name.className='tlname'; name.textContent=p.name; tl.appendChild(name);
+  const row = document.createElement('div'); row.className='tlrow'; row.style.gridTemplateColumns=cols;
+  days.forEach(dd => {
+    const c = document.createElement('div'); const r = by[dd];
+    c.className = 'cell ' + (r ? (r.lvl || 'nolevel') : ''); c.tabIndex = r ? 0 : -1;
+    const txt = r ? `<b>${esc(p.name)} · ${fmtDay(dd)}</b><br>${LVL[r.lvl]||'No level yet'}${r.f?': '+r.f.map(f=>FLAG[f]||f).join(', '):''}<br>Sleep ${r.sleep!=null?(r.sleep/60).toFixed(1)+' h':'n/a'} · RHR ${r.rhr??'n/a'} · HRV ${r.hrv!=null?r.hrv.toFixed(0):'n/a'}` : `${esc(p.name)} · ${fmtDay(dd)}: no data`;
+    c.setAttribute('aria-label', txt.replace(/<[^>]+>/g,' '));
+    const show = () => {tip.innerHTML=txt; tip.style.opacity=1; const b=c.getBoundingClientRect(); tip.style.left=Math.min(innerWidth-250,Math.max(8,b.left-100))+'px'; tip.style.top=Math.max(8,b.top-70)+'px'};
+    c.addEventListener('mouseenter',show); c.addEventListener('focus',show);
+    c.addEventListener('mouseleave',()=>tip.style.opacity=0); c.addEventListener('blur',()=>tip.style.opacity=0);
+    row.appendChild(c);
+  });
+  tl.appendChild(row);
+});
+const ax = document.createElement('div'); tl.appendChild(document.createElement('div'));
+ax.className='axis'; ax.style.gridTemplateColumns=cols;
+days.forEach((dd,i)=>{const s=document.createElement('span'); const dt=new Date(dd+'T00:00:00Z'); s.textContent = (dt.getUTCDate()===1||dt.getUTCDate()===15||i===0)? fmtDay(dd):''; s.style.whiteSpace='nowrap'; ax.appendChild(s)});
+tl.appendChild(ax);
+
+/* ---------- trend chart ---------- */
+let metric = METRICS[0], rel = false; const on = DATA.map(()=>true);
+const mseg = document.getElementById('metric');
+METRICS.forEach((m,i)=>{const b=document.createElement('button'); b.id='mt-'+m.k; b.textContent=m.lab; b.setAttribute('aria-pressed', i===0); b.onclick=()=>{metric=m; [...mseg.children].forEach(x=>x.setAttribute('aria-pressed', x===b)); draw()}; mseg.appendChild(b)});
+document.getElementById('m-abs').onclick=()=>{rel=false; setMode()}; document.getElementById('m-rel').onclick=()=>{rel=true; setMode()};
+function setMode(){document.getElementById('m-abs').setAttribute('aria-pressed',!rel); document.getElementById('m-rel').setAttribute('aria-pressed',rel); draw()}
+const who = document.getElementById('who');
+DATA.forEach((p,i)=>{const b=document.createElement('button'); b.className='chip'; b.id='who-'+p.id; b.style.setProperty('--c',`var(${SERIES[i % SERIES.length]})`); b.innerHTML=`<i></i>${esc(p.name)} <span style="color:var(--muted)">${esc(p.device)}</span>`; b.setAttribute('aria-pressed','true'); b.onclick=()=>{on[i]=!on[i]; b.setAttribute('aria-pressed',on[i]); draw()}; who.appendChild(b)});
+
+let chart;
+window.draw = function draw(){
+  const grid = css('--line'), muted = css('--muted');
+  const sets = DATA.map((p,i)=>{
+    const by = Object.fromEntries(p.days.map(d=>[d.d,d]));
+    const pts = days.map(dd=>{const r=by[dd]; if(!r||r[metric.k]==null) return null;
+      const base = r[metric.b];
+      if (rel && base==null) return null;
+      return +(((rel? r[metric.k]-base : r[metric.k]))*metric.scale).toFixed(2)});
+    const col = css(SERIES[i % SERIES.length]);
+    return {label:p.name, data:pts, borderColor:col, backgroundColor:col, borderWidth:2, pointRadius:2.5, pointHoverRadius:5, tension:.25, spanGaps:false, hidden:!on[i]};
+  });
+  document.getElementById('trendnote').textContent = rel
+    ? `${metric.lab}: difference from each person's own normal (${metric.unit||'count'}). Above zero means higher than usual.`
+    : `${metric.lab} per day (${metric.unit||'count'}). Each person has a different normal, so compare shapes, not levels. Missing days stay empty.`;
+  const cfg = {type:'line', data:{labels:days.map(fmtDay), datasets:sets},
+    options:{responsive:true, maintainAspectRatio:false, animation:false, interaction:{mode:'index',intersect:false},
+      plugins:{legend:{display:false}, tooltip:{callbacks:{label:c=>c.raw==null?null:`${c.dataset.label}: ${rel&&c.raw>0?'+':''}${c.raw.toFixed(metric.dec)} ${metric.unit}`}}},
+      scales:{x:{grid:{display:false}, ticks:{color:muted, maxTicksLimit:10, font:{family:"'IBM Plex Mono', ui-monospace, monospace", size:11}}},
+              y:{grid:{color:grid}, border:{display:false}, ticks:{color:muted, font:{family:"'IBM Plex Mono', ui-monospace, monospace", size:11}},
+                 title:{display:true, text:rel?`vs normal (${metric.unit})`:metric.unit, color:muted}}}}};
+  if (chart) chart.destroy();
+  chart = new Chart(document.getElementById('chart'), cfg);
+};
+if (window.Chart) draw(); else document.querySelector('.chartbox').innerHTML='<p class="note">The chart library did not load. The cards and timeline above still show every day.</p>';
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', ()=>window.Chart&&draw());
+new MutationObserver(()=>window.Chart&&draw()).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+}
+</script>
+</body>
+</html>

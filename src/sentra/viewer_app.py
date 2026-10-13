@@ -6,6 +6,7 @@ import tempfile
 import altair as alt
 import pandas as pd
 import streamlit as st
+import streamlit.components.v1 as components
 
 from .errors import SentraError
 from .viewer_config import emails, runtime_settings
@@ -170,6 +171,25 @@ def readable_chart(points,selection,label,unit,height):
         .configure_axis(gridColor='#efedf2',domain=False,ticks=False,labelColor='#686471',titleColor='#686471'))
 
 
+def wellness_board():
+    """Embedded wellness board (pseudonymous, internal) from the latest daily refresh."""
+    from .processing.board import render
+    principal()
+    with st.container(key='page-heading'):
+        st.caption('PRIVATE WORKSPACE')
+        st.title('Wellness board')
+    reload=st.sidebar.button('Reload board',icon=':material/refresh:')
+    if reload or 'audit_board' not in st.session_state:
+        with open_reader() as reader:
+            st.session_state['audit_board']=reader.board()
+    board=st.session_state['audit_board']
+    principal()
+    st.caption("Wellness indicators against each person's own recent pattern; not a medical assessment. "
+               f'Thresholds: {board.get("thresholds_status") or "v0 — pending medical expert sign-off"}. '
+               f'Refreshed {str(board.get("built_at") or "not yet")[:16].replace("T"," ")} UTC.')
+    components.html(render(board),height=2300,scrolling=True)
+
+
 def readable_view(selection,result,name):
     curated=result['curated']
     if name!='Data availability':
@@ -292,9 +312,12 @@ def main():
         if st.session_state.get('audit_owner')!=identity:
             clear_private_state()
             st.session_state['audit_owner']=identity
-        page=st.sidebar.radio('Explore',('Daily activity','Sleep','Workouts','Data availability'),
+        page=st.sidebar.radio('Explore',('Daily activity','Sleep','Workouts','Data availability','Wellness board'),
             key='explore',label_visibility='collapsed',width='stretch')
         st.sidebar.divider()
+        if page=='Wellness board':
+            wellness_board()
+            return
         if 'audit_catalog' not in st.session_state:
             with open_reader() as reader:
                 st.session_state['audit_catalog']=reader.catalog()
