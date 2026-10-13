@@ -78,7 +78,7 @@ class ViewerAppTests(unittest.TestCase):
             self.assertFalse(app.exception);self.assertFalse(app.error)
             self.assertEqual(len(app.radio),1)
             nav=app.radio[0]
-            self.assertEqual(nav.options,['Daily activity','Sleep','Workouts','Data availability'])
+            self.assertEqual(nav.options,['Daily activity','Sleep','Workouts','Data availability','Wellness board'])
             nav.set_value('Sleep').run()
             self.assertFalse(app.exception);self.assertFalse(app.error)
             self.assertEqual(app.dataframe[0].value.iloc[0]['Asleep'],'6 h 00 min')

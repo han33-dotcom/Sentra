@@ -22,9 +22,9 @@ from .observations import load
 from .pipeline import run
 
 
-def runtime_config(folder):
+def runtime_config(folder, env='SENTRA_PROCESSING_CONFIG'):
     try:
-        config = json.loads(os.environ['SENTRA_PROCESSING_CONFIG'])
+        config = json.loads(os.environ[env])
         if config.get('confirmed_free_plan') is not True:
             raise ValueError
         certificate = Path(folder) / 'supabase-ca.crt'

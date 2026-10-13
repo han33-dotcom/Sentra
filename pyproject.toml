@@ -33,3 +33,4 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "sentra.processing" = ["thresholds.json"]
+"sentra" = ["board/*.html"]

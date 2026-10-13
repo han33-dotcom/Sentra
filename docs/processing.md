@@ -40,9 +40,17 @@ and outputs must stay beneath `.private`.
 - **Sleep:** several sleep sessions on one wake day keep the longest duration (naps are
   not added). WHOOP asleep minutes = light + slow-wave + REM, only when all three are
   present.
-- **No sleep-stage timeline yet:** the minute grid has no stage data. `sleep_hr`,
-  `sleep_eff` and stage-based features stay empty. The resting-HR estimate can include
-  night minutes, but the vendor resting heart rate replaces it whenever it is returned.
+- **Fitbit sleep stages:** the Google sleep records already collected contain the stage
+  timeline (`/sleep/stages/N/{type,startTime,endTime}`) and per-stage minutes
+  (`/sleep/summary/stagesSummary/N`). `observations.google_sleep` maps them to
+  `sleep_stage` minutes and `daily_deep_sleep_min` / `daily_rem_sleep_min`.
+  Unknown stage types or unparseable times are skipped.
+  - Complete vendor sleep duration takes precedence over stage-derived `sleep_min`,
+    so skipped unknown stages cannot reduce the reported total. Stages supply the
+    fallback duration, `sleep_eff` and `sleep_hr` (mean minute heart rate while asleep).
+  - WHOOP has no stage timeline, so its `sleep_hr` stays empty and its sleep comes from
+    the nightly totals.
+  - Resting minutes now exclude stage-asleep minutes.
 - **No MET values:** `active_min` and `sedentary_min` stay empty.
 - **Cohort:** a day is shown only when at least `cohort_k_anonymity` (5) people have
   usable data. With the current two participants, every cohort day is suppressed.

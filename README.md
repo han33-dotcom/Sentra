@@ -112,6 +112,7 @@ See the [collection contracts and evidence](docs/stage-2-collection.md).
 | Read API and Docker | Read-only FastAPI over processed outputs; Compose runs only the API and the processing job | [Read API](docs/read-api.md) |
 | Repository rules | CI (`guard`, `test`), data guard, pre-commit hooks, PR template, code owners and branch model | [Contributing](CONTRIBUTING.md) |
 | Website | Static project site published to GitHub Pages | [website/README.md](website/README.md) |
+| Wellness board | Daily-refreshed pseudonymous board (latest day, wellness timeline, trends) inside the private viewer | [Wellness board](docs/wellness-board.md) |
 
 **Viewer.** The redesigned viewer has four views: **Daily activity**, **Sleep**,
 **Workouts** and **Data availability**.
@@ -248,8 +249,9 @@ pre-commit hook) and gitleaks block health data, exports and secrets. See
 
 ## Verification, privacy and remaining work
 
-**Tests.** The automated suite has **146 tests**. The most recent complete run had
-**141 passed and five opt-in live integration tests skipped**. CI runs the suite on Ubuntu and
+**Tests.** The Python suite has **159 tests**. The most recent complete run had
+**154 passed and five opt-in live integration tests skipped**. Three JavaScript regressions
+exercise the board's baseline comparisons. CI runs both suites on Ubuntu and
 Windows with Python 3.11 for every PR, and the live tests stay skipped there.
 
 **Live checks.** Selected live checks were run separately during the stages,
