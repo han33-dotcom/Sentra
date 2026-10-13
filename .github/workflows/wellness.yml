@@ -1,0 +1,48 @@
+name: Wellness board refresh
+
+# Daily after collection (00:00 Beirut): rebuild parquet tiers, run v0 processing and publish the
+# pseudonymous board JSON to the private sentra-tiers bucket. Skips when no collection run finished
+# since the last board, so a paused collector costs only a few kilobytes of egress.
+on:
+  schedule:
+    - cron: '30 1 * * *'
+      timezone: Asia/Beirut
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild even if no new collection run finished
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sentra-wellness
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    # Enable the schedule only after SENTRA_VIEWER_CONFIG is stored and the team agrees.
+    if: vars.SENTRA_ZERO_SPEND_CONFIRMED == 'true' && (github.event_name == 'workflow_dispatch' || vars.SENTRA_WELLNESS_ENABLED == 'true')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.11'
+      - name: Install pinned dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -r requirements-cloud.txt -r requirements-api.txt
+          python -m pip install --disable-pip-version-check --no-deps .
+          python -m pip check
+      - name: Refresh tiers, processing and board
+        env:
+          SENTRA_VIEWER_CONFIG: ${{ secrets.SENTRA_VIEWER_CONFIG }}
+          SENTRA_COLLECTOR_CONFIG: ${{ secrets.SENTRA_COLLECTOR_CONFIG }}
+          FORCE: ${{ inputs.force && '--force' || '' }}
+          PYTHONUNBUFFERED: '1'
+        run: python -m sentra.wellness_refresh $FORCE
