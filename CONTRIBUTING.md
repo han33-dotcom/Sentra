@@ -71,7 +71,7 @@ data in a test; build synthetic responses in the test or under `tests/fixtures/`
 [team workflow](docs/team-workflow.md) gives responsibilities, task status meanings
 and a simple dashboard date-filter example.
 
-Link the Notion task and acceptance criteria from the PR description. Explain what
+Link the GitHub issue and acceptance criteria from the PR description. Explain what
 changed, why, validation and limitations. Keep actionable review findings on GitHub;
 the author's assistant reads accepted findings directly and updates the branch.
 A human teammate reviews the latest head and decides whether to approve.
@@ -79,7 +79,7 @@ A human teammate reviews the latest head and decides whether to approve.
 Record lasting decisions in project documents or the task. Implemented means the
 required implementation PRs merged into `develop`; Done requires human verification
 of acceptance criteria. Release/deployment work remains separate when required.
-Automatic shared AI review, Slack notification and Notion sync are later rollout
+Automatic shared AI review, Slack notification and Project sync are later rollout
 steps; until they are enabled, share the PR link and update the tracker manually.
 
 After shared policy changes merge, update clean local `develop` with

@@ -1,6 +1,6 @@
 # Sentra agent instructions
 
-Policy version: 1. This is the canonical policy for coding and review agents.
+Policy version: 2. This is the canonical policy for coding and review agents.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) and the linked documents relevant to your task.
 Follow applicable nested instructions if they are added later.
 
@@ -13,6 +13,10 @@ layer and read-only API. Keep the existing project structure.
 - Database contracts: [docs/schema.md](docs/schema.md).
 - Processing and API: [docs/processing.md](docs/processing.md), [docs/read-api.md](docs/read-api.md).
 - Team handoff and rollout status: [docs/team-workflow.md](docs/team-workflow.md).
+
+Documentation index: [docs/README.md](docs/README.md). General references and meeting
+notes live in the project Wiki after publication. Consult relevant Wiki decisions
+when a task depends on them; summarize code-affecting decisions in reviewed docs.
 
 ## Starting work
 
@@ -57,9 +61,11 @@ actual PR results; a local success is not a claim that CI passed.
 
 ## Handoff and Definition of Done
 
-- Link the Notion task URL in the PR description, with its task ID when available.
+- Link the same-repository GitHub issue URL in the PR description.
   Explain what changed, why, validation and material limitations. For workflow
   maintenance or releases with no implementation task, explain the scope explicitly.
+- Use Related to #NUMBER, not automatic issue-closing keywords. Keep issues open
+  until a teammate records acceptance; Project Status and issue closure are distinct.
 - Record lasting decisions in repository documentation or the linked task; private
   chat memory is not shared project context.
 - Put actionable code-review findings on the PR, tied to files/lines and the reviewed
@@ -69,7 +75,7 @@ actual PR results; a local success is not a claim that CI passed.
 - Implementation is complete only when accepted changes are merged into `develop`.
   A task is Done only when its acceptance criteria have been verified by a human;
   release/deployment requirements remain separate when applicable.
-- Do not claim Slack notifications, shared AI review or Notion status sync occurred
+- Do not claim Slack notifications, shared AI review or Project status sync occurred
   unless their actual results are available. See the rollout status in the team guide.
 
 ## Code Review Rules

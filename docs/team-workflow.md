@@ -1,97 +1,79 @@
 # Sentra team workflow
 
-## Current rollout
+## Rollout status
 
-Shared policy and contributor guidance are introduced by this change. Existing CI,
-PR review and contribution procedures continue to apply. Shared automatic AI review,
-Slack notifications, Notion status sync and automated fixes are later rollout steps;
-this document describes their target behavior, not an assertion that they are active.
+Issue-based policy and Project synchronization code are prepared on the workflow
+foundation PR. They become active only after reviewed merges and owner activation.
+Project board creation, Wiki publication, Slack subscriptions and the human pilot
+are pending. Shared cloud AI review remains optional and deferred.
 
-Workspace: `nsquared`. Project channel: `#fyp-sentra`.
-Implementation flow: work branch → `develop`; release flow: `develop` → `main`.
+Workspace: `nsquared` (`T0C8YHJMXAN`). Channel: `#fyp-sentra`.
+Implementation PRs target `develop`. Sentra releases go `develop` → `main`.
 
-## Responsibilities
+## Where work lives
 
-| Participant/tool | Responsibility |
+| Place | Responsibility |
 |---|---|
-| Task owner and their assistant | Implement scoped work, run checks, open the PR, address accepted findings |
-| Human reviewer and their assistant | Inspect current code and criteria; leave findings on GitHub; human decides approval |
-| Notion | Task scope, owner/reviewer, acceptance criteria, deadlines and completion evidence |
-| GitHub | Code, test evidence, PR discussion, review and merge |
-| Slack | Team discussion and links to tasks/PRs |
-| Shared automation, when enabled | Run configured review jobs, send notifications and synchronize lifecycle evidence |
+| GitHub Issues + Project | Scope, assignee, reviewer, acceptance criteria, priority, due date and progress |
+| Repository `docs/` | Technical documentation, architecture, setup and API contracts |
+| Root AGENTS.md / CLAUDE.md | Shared coding/review policy and Claude Code import |
+| GitHub Wiki | Meeting notes, background and general references |
+| Slack | Discussion and project-specific task/PR links |
 
-Teammates may use different assistants. All use the same versioned `AGENTS.md`.
-Claude Code loads it through `CLAUDE.md`; other environments must explicitly load
-the current file if they do not support automatic repository instruction discovery.
+Start with the [documentation index](README.md). Keep one authoritative copy of a
+document. If Wiki decisions affect code, summarize the technical consequences in
+the relevant repository document through a PR. Agents consult Wiki context when
+needed; ordinary code clones do not include the separate Wiki repository.
+Existing Notion reports and original tasks remain available as historical records;
+new software tasks belong in GitHub. Private attachments and participant material
+must not be published in public Issues, Wiki pages or repository documentation.
 
 ## Everyday handoff
 
-1. Define a task in Notion with an owner, reviewer and observable acceptance criteria.
-2. Start a work branch from updated `develop`. Give your assistant the task link
-   and have it read the current instructions and relevant architecture documents.
-3. Implement and validate the work. Open a focused PR into `develop`.
-4. Put the task link, change explanation, check results and limitations in the PR.
-5. Ask the human reviewer to inspect that PR. Their assistant reads the same PR and
-   repository instructions; actionable findings stay on GitHub.
-6. Decide which findings require changes. The author/assistant fixes accepted findings
-   on the branch and reruns checks. Do not run two coding agents on that branch at once.
-7. The human reviewer checks the latest head and approves when satisfied.
-8. Merge according to the existing contribution flow; verify the task's acceptance
-   criteria and record completion evidence. Releases remain a separate PR into `main`.
+1. Create an issue using **Team task**; set its assignee, human reviewer, acceptance
+   checklist, priority and deadline. Add it to this project's board.
+2. Pull current `develop`, refresh the assistant's instructions and create a focused
+   work branch. One writer works on the branch at a time.
+3. Implement the issue scope and run the checks in AGENTS.md.
+4. Open a PR into `develop` with `Project: Sentra` and one full `Task URL:` pointing
+   to this repository's issue. Optional task ID uses the issue number, not a legacy
+   Notion ID. Include what/why, test evidence and risks.
+5. Use **Related to #NUMBER**, not Closes/Fixes/Resolves. Automatic closing keywords
+   would bypass the separate human acceptance step.
+6. The teammate opens the PR from GitHub or Slack and asks their own assistant to
+   review its current head and issue criteria. Findings stay on the PR.
+7. The author's assistant reads the findings directly, fixes accepted issues and
+   reruns checks. The human reviewer decides approval; agents do not approve or merge
+   on someone's behalf.
+8. Merge through the existing review rules. All required implementation PRs merged
+   means **Implemented**. A teammate records acceptance evidence, sets **Done** and
+   then closes the issue. Until activation, update the board and share links manually.
 
-Before automation is activated, notify the reviewer with the PR link and update
-Notion manually. After activation, use observed automation results; report failures
-instead of assuming a task was updated.
+The tracking issue for this rollout is [#16](https://github.com/han33-dotcom/Sentra/issues/16).
+Task ownership does not require buying a cloud AI reviewer. Personal assistants run
+when their human starts them; a Slack notification does not start a teammate's chat.
 
-## Simple example: date filter on the dashboard
-
-Hasan owns a Notion task to add a date filter. The task specifies that the selected
-range limits displayed records, empty ranges show an empty state, and access controls
-remain intact. Mohammad Nasrallah is the human reviewer.
-
-1. Hasan's assistant reads `AGENTS.md`, implements on `feat/dashboard-date-filter`,
-   runs the checks and opens a PR into `develop` linked to the task.
-2. GitHub runs existing CI. Hasan gives Mohammad the PR link. When enabled, the
-   shared AI reviewer adds findings and Slack posts the review notification.
-3. Mohammad asks Claude Code to review that PR against the task and shared rules.
-   Claude records code findings on GitHub; Mohammad decides what requires correction.
-4. Hasan asks his assistant to address accepted PR findings. It reads the comments
-   directly, updates the branch and reruns validation.
-5. Mohammad reviews the latest changes, approves and merges. The task is Implemented.
-   Once acceptance is verified, a human records Done. When enabled, synchronization
-   handles its configured status updates; it does not replace acceptance verification.
-
-The PR is the durable handoff. Neither assistant needs the other person's private
-conversation or a copied summary to inspect the implementation.
-
-## Task status meanings
+## Status meanings
 
 | Status | Evidence |
 |---|---|
-| Not started | Scoped task, work not begun |
-| In progress | Implementation underway |
-| In review | PR ready for review |
-| Changes requested | Accepted review findings remain to address |
-| Implemented | Required implementation PRs merged into develop |
-| Blocked | A person records a dependency or decision and its reason |
-| Done | Human verifies acceptance criteria and records evidence |
+| Not started | Scoped task, implementation not begun |
+| In progress | Work underway or only draft PRs open |
+| In review | At least one implementation PR ready for review |
+| Changes requested | Outstanding change request from an independent configured human reviewer |
+| Implemented | All linked implementation PRs merged into `develop` |
+| Blocked | Human-recorded dependency or decision; include reason |
+| Done | Teammate verifies acceptance and records evidence |
 
-The current tracker may not yet contain every target status. Use existing fields
-and a clear note until the tracker upgrade. One merged PR does not complete a task
-with other required PRs or acceptance work remaining.
+Automation never sets Done, closes issues or overwrites manual Done/Blocked.
+Closed-unmerged PRs require triage; reconcile removed scope/links explicitly.
+A release PR does not mark every associated feature accepted.
 
-## Keeping shared instructions current
+## Activation and collaborator refresh
 
-Policy changes are ordinary reviewed repository changes. After they merge:
-- Update `develop` with `git pull --ff-only` when its worktree is clean.
-- Update an ongoing feature branch deliberately with the latest `origin/develop`,
-  preserving local work and resolving any conflicts.
-- Restart or refresh the assistant session, then verify it can identify the active
-  instruction files, target branch and checks.
-- Ordinary web chats need current file contents/repository context supplied explicitly;
-  connecting a service alone does not prove the assistant has loaded these files.
-
-Each teammate configures their own tool/account. This repository does not alter
-private machine settings or grant credentials. Follow
-[collaborator-setup.md](collaborator-setup.md) for individual setup and evidence checks.
+Follow [GitHub workspace activation](github-workspace-activation.md) and
+[PR policy activation](pr-policy-activation.md). Each teammate still completes
+[collaborator setup](collaborator-setup.md). After policy merges, pull `develop`,
+update ongoing feature branches deliberately and refresh/restart the assistant.
+Normal web chats need current repository instructions supplied explicitly when
+automatic loading is unavailable.
