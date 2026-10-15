@@ -5,8 +5,10 @@
 Repository changes remain in the workflow foundation PR awaiting teammate review.
 The private [Sentra board](https://github.com/users/han33-dotcom/projects/1) and public
 [Wiki](https://github.com/han33-dotcom/Sentra/wiki) were published on October 14, 2026.
-Slack app subscriptions, remaining board access, sync credentials and the human
-acceptance pilot are pending. Board status is updated manually until activation.
+On October 15, approved board Write grants and Slack PR/review subscriptions were
+applied and verified. Project credentials, default-branch activation and the human
+acceptance pilot remain pending. Board status is updated manually until activation.
+Both repositories explicitly have `TEAM_SYNC_ENABLED=false`.
 No Notion API token or synchronization is needed for the new setup.
 
 ## Project board
@@ -29,9 +31,10 @@ Rollout issue #16 is attached, assigned to `han33-dotcom`, In progress and High
 priority. The four original university report/meeting records remain in Notion;
 no private records were published to the Wiki.
 
-Remaining board grants require explicit approval: `MohamadNasrallah` and
-`mhmdaboulhoda`, each with Write access to this private board. Repository permissions
-do not automatically confer Project access.
+The owner approved and applied Write access for `MohamadNasrallah` and
+`mhmdaboulhoda` on October 15; Manage access shows both with Role: Write.
+Teammates still need to verify opening the board from their own accounts.
+Repository permissions do not automatically confer Project access.
 
 Before activation, verify that the Project links exactly this repository and that
 collaborators can open it. Its private visibility does not make repository issues
@@ -86,17 +89,37 @@ that link to the normal implementation branch.
 
 ## Slack subscriptions
 
-In **nsquared**, install/authorize GitHub's Slack app and grant the intended repository
-access. In this project's channel, run:
+GitHub's official Slack app is installed in **nsquared** (`nsquared-corp`), with its
+GitHub installation restricted to Sentra and TechScout. Optional code-channel
+management was unchecked; shared cloud AI review remains deferred.
+
+In `#fyp-sentra`, GitHub [confirmed the subscription](https://nsquared-corp.slack.com/archives/C0C92DZ9TN0/p1792048788286009)
+for `pulls` and `reviews`; `/github subscribe list` shows only this repository.
+No existing subscription was removed. The configured command is:
 
 ```text
 /github subscribe han33-dotcom/Sentra pulls reviews
 ```
 
-Inspect `/github subscribe list` and disable unwanted subscriptions only after checking
-what already exists. Native messages handle PR/review events; no custom bot duplicates
+Inspect `/github subscribe list` before changing subscriptions. Native messages handle PR/review events; no custom bot duplicates
 those messages. Task descriptions and review details remain on GitHub. Receiving a
 notification does not automatically launch a teammate's personal AI assistant.
+
+## October 15 verification checkpoint
+
+- Foundation PR remains unmerged with no submitted teammate approval. `MohamadNasrallah` remains requested on #15.
+- The existing one-approval requirement and stale-review dismissal are preserved;
+  branch protections were not weakened.
+- CI and policy regression jobs passed at implementation head `b2128710b58a`.
+  Subsequent documentation-only commits need their own CI result. The metadata
+  job log confirms `Bootstrap pending`; the policy check is not activated as required.
+- `Team project sync` is absent from `main`; enabling it or dispatching a credentialed
+  run from the unreviewed foundation branch would not satisfy activation.
+- `PROJECTS_TOKEN` and actual `TEAM_PROJECT_ID` are not yet configured. Credential
+  entry must happen through a secure local prompt or GitHub, never chat or logs.
+- Subscription configuration is verified; actual PR/review notification delivery,
+  replay behavior and duplicate suppression still require the human pilot.
+- `SENTRA_COLLECTION_ENABLED=false` was verified and left unchanged.
 
 ## Pilot
 
