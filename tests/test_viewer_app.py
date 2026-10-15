@@ -1,6 +1,6 @@
 """Real Streamlit rendering with synthetic OIDC identities and synthetic rows."""
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 import time
 import unittest
@@ -74,6 +74,8 @@ class ViewerAppTests(unittest.TestCase):
         with patch.object(viewer_app.st,'user',FakeUser()),patch.object(viewer_app,'open_reader',reader):
             app=self.app();app.secrets['viewer']={'allowed_emails':['team@example.test']}
             app.run()
+            # Keep the fixed synthetic October 7 rows inside an explicit seven-day range.
+            app.date_input[0].set_value((date(2026,10,1),date(2026,10,7))).run()
             next(b for b in app.button if b.label=='Load selected data').click().run()
             self.assertFalse(app.exception);self.assertFalse(app.error)
             self.assertEqual(len(app.radio),1)

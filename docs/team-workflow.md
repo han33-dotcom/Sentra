@@ -1,0 +1,84 @@
+# Sentra team workflow
+
+## Rollout status
+
+The foundation PR was approved by `MohamadNasrallah` and merged on October 15, 2026,
+into `develop` ([#15](https://github.com/han33-dotcom/Sentra/pull/15)). A reviewed
+release to `main` is still required before default-branch synchronization.
+The private Project board, public Wiki, approved board access, Slack subscriptions
+and expiring sync credentials are configured. GitHub approval and merge messages
+were observed in the project channel. Sync remains disabled pending reviewed
+follow-ups, activation checks and the human pilot. Shared cloud AI review is deferred.
+
+Workspace: `nsquared` (`T0C8YHJMXAN`). Channel: `#fyp-sentra`.
+Implementation PRs target `develop`. Sentra releases go `develop` → `main`.
+
+## Where work lives
+
+| Place | Responsibility |
+|---|---|
+| GitHub Issues + Project | Scope, assignee, reviewer, acceptance criteria, priority, due date and progress |
+| Repository `docs/` | Technical documentation, architecture, setup and API contracts |
+| Root AGENTS.md / CLAUDE.md | Shared coding/review policy and Claude Code import |
+| GitHub Wiki | Meeting notes, background and general references |
+| Slack | Discussion and project-specific task/PR links |
+
+Start with the [documentation index](README.md). Keep one authoritative copy of a
+document. If Wiki decisions affect code, summarize the technical consequences in
+the relevant repository document through a PR. Agents consult Wiki context when
+needed; ordinary code clones do not include the separate Wiki repository.
+Existing Notion reports and original tasks remain available as historical records;
+new software tasks belong in GitHub. Private attachments and participant material
+must not be published in public Issues, Wiki pages or repository documentation.
+
+## Everyday handoff
+
+1. Create an issue using **Team task**; set its native Assignees field, **Human reviewer** (a teammate's GitHub handle),
+   acceptance checklist, Priority and Due date. Add it to this project's board.
+2. Pull current `develop`, refresh the assistant's instructions and create a focused
+   work branch. One writer works on the branch at a time.
+3. Implement the issue scope and run the checks in AGENTS.md.
+4. Open a PR into `develop` with `Project: Sentra` and one full `Task URL:` pointing
+   to this repository's issue. Optional task ID uses the issue number, not a legacy
+   Notion ID. Include what/why, test evidence and risks.
+5. Use **Related to #NUMBER**, not Closes/Fixes/Resolves. Automatic closing keywords
+   would bypass the separate human acceptance step.
+6. The teammate opens the PR from GitHub or Slack and asks their own assistant to
+   review its current head and issue criteria. Findings stay on the PR.
+7. The author's assistant reads the findings directly, fixes accepted issues and
+   reruns checks. The human reviewer decides approval; agents do not approve or merge
+   on someone's behalf.
+8. Merge through the existing review rules. All required implementation PRs merged
+   means **Implemented**. A teammate records acceptance evidence, sets **Done** and
+   then closes the issue. Until activation, update the board and share links manually.
+
+The tracking issue for this rollout is [#16](https://github.com/han33-dotcom/Sentra/issues/16).
+Task ownership does not require buying a cloud AI reviewer. Personal assistants run
+when their human starts them; a Slack notification does not start a teammate's chat.
+
+## Status meanings
+
+| Status | Evidence |
+|---|---|
+| Not started | Scoped task, implementation not begun |
+| In progress | Work underway or only draft PRs open |
+| In review | At least one implementation PR ready for review |
+| Changes requested | Outstanding change request from an independent configured human reviewer |
+| Implemented | All remaining implementation PRs merged into `develop` |
+| Done | Teammate verifies acceptance and records evidence |
+| Blocked | Human-recorded dependency or decision; include reason |
+
+Automation never sets Done, closes issues or overwrites manual Done/Blocked.
+Closed-unmerged PRs are treated as abandoned attempts when open or merged PRs
+remain for the same task. Only abandoned PRs still require triage and preserve the
+current status. Humans must reconcile any removed scope before accepting the task.
+A release PR does not mark every associated feature accepted.
+
+## Activation and collaborator refresh
+
+Follow [GitHub workspace activation](github-workspace-activation.md) and
+[PR policy activation](pr-policy-activation.md). Each teammate still completes
+[collaborator setup](collaborator-setup.md). After policy merges, pull `develop`,
+update ongoing feature branches deliberately and refresh/restart the assistant.
+Normal web chats need current repository instructions supplied explicitly when
+automatic loading is unavailable.

@@ -295,3 +295,11 @@ shared project (October 11) also succeeded.
 - Run the approved probe for the new Fitbit datasets and the first `tiers-build` to
   replace the estimates with measured sizes.
 - Revisit continuous collection once storage and sign-off are in place.
+
+## Team workspace
+
+Use the [documentation index](docs/README.md) and [team workflow](docs/team-workflow.md).
+Software tasks live in GitHub Issues and the project board; technical documents stay
+in this repository. Meeting notes and general references belong in the Wiki after
+publication. See [workspace activation](docs/github-workspace-activation.md) for the
+current rollout status. Shared cloud AI review is optional and deferred.
