@@ -52,6 +52,33 @@ Merging or deploying code never authorizes restarting collection. The daily
 collector (`.github/workflows/collect.yml`) stays paused until the team agrees and
 both controls described in the [operating guide](docs/operating-guide.md) are set.
 
+## Keeping release branches current
+
+Release from `develop` into `main`, using a **merge commit** rather than squash or
+rebase. This preserves the integration ancestry. The `release` exemption accepts
+only this exact same-repository branch pair and a label applied by another
+configured teammate; `codex/release-*` work branches are not release exemptions.
+
+After a release, bring `main` back into `develop` through a reviewed PR, also using
+a **merge commit**. Do not use GitHub's Update branch on a release PR to pull
+`main` into the protected `develop` branch without review.
+
+If the branches have already diverged (as after release #14), start a focused
+`codex/sync-main-into-develop` work branch from current `origin/develop`, merge
+`origin/main` into it locally, resolve conflicts, run CI and open a PR into
+`develop`. Link the same-repository release/synchronization issue and fill the
+normal handoff sections; do not claim the release exemption for this PR. Merge
+that reviewed synchronization PR with a **merge commit**, so `main` becomes an
+ancestor of `develop`. Recheck this before the next release:
+
+```text
+git fetch origin
+git merge-base --is-ancestor origin/main origin/develop
+```
+
+Exit code 0 confirms the ancestry. A nonzero result needs the reviewed
+synchronization above, never a force push or branch-protection bypass.
+
 ## Tests
 
 ```powershell
