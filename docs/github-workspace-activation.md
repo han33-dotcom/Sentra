@@ -2,28 +2,40 @@
 
 ## Current state
 
-Repository changes are prepared in the workflow foundation PR. Project boards,
-Wiki publishing, Slack app subscriptions and human acceptance pilot are pending.
+Repository changes remain in the workflow foundation PR awaiting teammate review.
+The private [Sentra board](https://github.com/users/han33-dotcom/projects/1) and public
+[Wiki](https://github.com/han33-dotcom/Sentra/wiki) were published on October 14, 2026.
+Slack app subscriptions, remaining board access, sync credentials and the human
+acceptance pilot are pending. Board status is updated manually until activation.
 No Notion API token or synchronization is needed for the new setup.
 
 ## Project board
 
-1. In the `han33-dotcom` account, create a **private** GitHub Project named `Sentra`.
-   Link only `han33-dotcom/Sentra` to it. Give this team's verified collaborators
-   write access to the board; repository access does not automatically grant it.
-2. Use a board grouped by **Status**, plus an All tasks table and an Assignee-me view.
-   Set Status options to Not started, In progress, In review, Changes requested,
-   Implemented, Blocked and Done. Rename defaults rather than maintaining synonyms.
-3. Add Priority (High/Medium/Low), Due date (date), Reviewer (text GitHub handle),
-   and Blocked reason (text). Use the native Assignees field for the task owner.
-   Acceptance checklists and completion evidence belong in the issue body.
-4. Configure native auto-add for `repo:han33-dotcom/Sentra is:issue` and set newly
-   added items to Not started. Add existing issues deliberately and preserve their
-   imported status, priority and deadline. Disable workflows that automatically set
-   Done on issue closure or PR merge; completion remains a human acceptance decision.
-5. Verify the new board's visibility, collaborator access and issue inventory before
-   importing private historical content. The repository's issues remain public even
-   when the Project board is private.
+The board already exists; do not create a duplicate. It has all seven Status options:
+Not started, In progress, In review, Changes requested, Implemented, Blocked and Done.
+The Status board and **All tasks** table are available. For your own work, filter
+Assignees with `assignee:@me`; a dedicated saved My tasks view remains optional polish.
+
+Use **Priority** (High/Medium/Low), **Due date** (date), **Human reviewer** (text GitHub
+handle) and **Blocked reason** (text). Use native **Assignees** for the task owner.
+GitHub's built-in Reviewers field refers to PR reviewers; it is not the task's Human
+reviewer field. Acceptance criteria and completion evidence belong in the issue body.
+
+Native auto-add is enabled only for `han33-dotcom/Sentra` with `is:issue`; new items
+start at Not started. Automatic issue closure, PR-merge completion and sub-issue
+addition are disabled. Keep Done under human acceptance control.
+
+Rollout issue #16 is attached, assigned to `han33-dotcom`, In progress and High
+priority. The four original university report/meeting records remain in Notion;
+no private records were published to the Wiki.
+
+Remaining board grants require explicit approval: `MohamadNasrallah` and
+`mhmdaboulhoda`, each with Write access to this private board. Repository permissions
+do not automatically confer Project access.
+
+Before activation, verify that the Project links exactly this repository and that
+collaborators can open it. Its private visibility does not make repository issues
+private; these issues and the Wiki are public.
 
 ## Project synchronization credentials and activation
 
@@ -61,15 +73,16 @@ state and rerun. This is not a guarantee of atomic human/automation updates.
 
 ## Wiki publication
 
-1. Verify Wiki is enabled. Public-repository Wikis are public; keep editing restricted
-   to repository collaborators. Do not publish participant data, private contacts,
-   university attachments or original private meeting records without explicit approval.
-2. Create the initial Home page in GitHub's Wiki tab; clone the separate Wiki repository
-   on your machine. Copy `.github/wiki-seed/*.md` into its root, inspect the content and
-   commit/push it. These are reviewed bootstrap pages, not a second maintained copy.
-3. Verify Home, sidebar, project background, meeting index, template and references.
-   Once published, edit general material in the Wiki and remove bootstrap copies in a
-   follow-up PR. Technical files stay authoritative in `docs/`; AGENTS.md stays at root.
+The Wiki has Home, project background, meeting-note index, meeting-note template,
+references and a sidebar. General material is maintained in the Wiki; temporary
+repository bootstrap copies have been removed. Technical documentation remains in
+`docs/`, with canonical agent instructions at the repository root.
+
+Wiki editing was verified as restricted to repository collaborators.
+Do not publish participant data, private contacts, university attachments or original
+private meeting records without explicit approval. The references page currently
+links agent instructions on the foundation branch; after the reviewed merge, update
+that link to the normal implementation branch.
 
 ## Slack subscriptions
 
