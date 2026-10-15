@@ -2,9 +2,9 @@
 
 ## Prepared versus active
 
-The policy implementation and regression tests are prepared on the foundation PR.
-Required-check enforcement is not active until a human merges the policy and an
-owner configures branch protection/rulesets. Existing review protections still apply.
+The foundation policy was reviewed by `MohamadNasrallah` and merged on October 15.
+Required-check enforcement still needs the owner activation and live test below.
+Existing review protections remain active; follow-up fixes need their own review.
 Individual collaborator onboarding can remain pending during this preparation.
 
 ## PR handoff
@@ -39,7 +39,15 @@ When using an approved exemption, remove the blank Task URL line from the templa
 An exemption still requires the project declaration, meaningful handoff sections,
 passing code checks and human PR approval.
 
-The `release` label can exempt the task link only for a same-repository `develop` → `main` release, applied by another configured teammate. It is not an application-PR bypass.
+The `release` label can exempt the task link only for a same-repository `develop` →
+`main` release, applied by another configured teammate. Named release work branches
+are intentionally ineligible. Follow [Keeping release branches current](../CONTRIBUTING.md#keeping-release-branches-current)
+before opening a release; it is not an application-PR bypass.
+
+Sentra exemption actors are `han33-dotcom`, `MohamadNasrallah` and
+`mhmdaboulhoda`. The owner explicitly confirmed `mhmdaboulhoda` on October 15.
+This authorizes independent exemption labels, not CODEOWNER approval; the author
+still cannot exempt their own PR.
 
 Labels must exist in GitHub before a teammate applies them. No author-created label
 is treated as independently approved merely because its text matches an exemption.
@@ -62,9 +70,12 @@ and approve the bootstrap merge under existing protections. Do not make this new
 check required before that bootstrap, and do not bypass existing required checks.
 Activate on `develop` after that merge. Activate on `main` only after the reviewed release carries the validator into `main`; its first release has the same bootstrap dependency.
 
-The workflow definition itself is reviewable PR content on the ordinary pull_request
-event. Protect workflow/policy files through human and CODEOWNER review; the check
-does not claim to prevent a privileged maintainer from rewriting enforcement rules.
+The Python validator checkout is trusted base code; the workflow definition is
+still PR-controlled content on the ordinary `pull_request` event. A PR changing
+`.github/workflows/pr-policy.yml` could change its steps. CODEOWNER review is the
+security boundary for workflow/policy changes, not a guarantee from this check.
+The existing wildcard CODEOWNERS rule covers these files. Sentra already requires
+CODEOWNER approval on `develop` and `main`.
 
 ## Owner activation checklist
 
