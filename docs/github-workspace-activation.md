@@ -63,8 +63,10 @@ the correct Project exists, and its fields, repository link and credentials are
 verified. Sentra therefore needs the normal reviewed develop-to-main release before
 its default-branch automation can run. Do not bypass branch protections.
 
-Run **Team project sync** manually with dry_run checked. Inspect proposed transitions,
-then run an approved fixture with dry_run unchecked. The worker consumes current
+After the preview-gate change reaches `main`, run **Team project sync** manually
+with dry_run checked while `TEAM_SYNC_ENABLED=false`. Inspect proposed transitions
+before enabling sync; scheduled/event runs and manual writes remain disabled.
+Then enable sync and run an approved fixture with dry_run unchecked. The worker consumes current
 metadata rather than event bodies; it does not check out PR code or execute task text.
 Events wake it through a separate signal workflow with no credentials or checkout.
 Daily reconciliation repairs missed events; same-repository writes are serialized.
@@ -88,9 +90,8 @@ repository bootstrap copies have been removed. Technical documentation remains i
 
 Wiki editing was verified as restricted to repository collaborators.
 Do not publish participant data, private contacts, university attachments or original
-private meeting records without explicit approval. The references page still needs
-its foundation-branch agent-instruction link updated to the normal implementation
-branch after rollout changes settle.
+private meeting records without explicit approval. The references page links agent instructions on the normal implementation branch
+(Sentra `develop`, TechScout `main`), updated on October 21.
 
 ## Slack subscriptions
 
@@ -110,7 +111,24 @@ Inspect `/github subscribe list` before changing subscriptions. Native messages 
 those messages. Task descriptions and review details remain on GitHub. Receiving a
 notification does not automatically launch a teammate's personal AI assistant.
 
-## October 15 verification checkpoint
+## October 21 activation checkpoint
+
+- Mohamad approved follow-up #17, which merged into `develop` on October 15.
+- Synchronization #19 repairs main ancestry without changing develop's file tree.
+  It must merge with a merge commit before release #18; release and the subsequent
+  reviewed back-merge also require merge commits and real human approval.
+- `pr-policy` is now required on `develop` alongside the existing guard and both
+  Python matrix jobs. Both integration branches require resolved review threads,
+  one CODEOWNER approval and stale-approval dismissal. Main retains its existing
+  code checks; add `pr-policy` only after the bootstrap release reaches main.
+- `TEAM_SYNC_ENABLED=false`, `SENTRA_COLLECTION_ENABLED=false` and the Project node
+  ID were read back. The existing `PROJECTS_TOKEN` secret remains present; its next
+  live authentication check is the default-branch preview. No live write or pilot
+  is claimed. Collection remains paused throughout activation.
+- Teammate board access checks, the full review/change/fix/acceptance pilot and
+  replay checks remain pending.
+
+## October 15 verification checkpoint (historical)
 
 - `MohamadNasrallah` approved the current foundation head and merged #15 into `develop`.
 - The existing one-approval requirement and stale-review dismissal are preserved;

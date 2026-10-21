@@ -3,7 +3,8 @@
 ## Prepared versus active
 
 The foundation policy was reviewed by `MohamadNasrallah` and merged on October 15.
-Required-check enforcement still needs the owner activation and live test below.
+The owner required `pr-policy` on `develop` on October 21; its live enforcement
+test remains pending. Main activation follows the reviewed bootstrap release.
 Existing review protections remain active; follow-up fixes need their own review.
 Individual collaborator onboarding can remain pending during this preparation.
 
@@ -79,8 +80,9 @@ CODEOWNER approval on `develop` and `main`.
 
 ## Owner activation checklist
 
-The connected GitHub tools do not expose branch-protection/ruleset writes. An owner
-must perform these settings steps, or explicitly authorize another supported route.
+The owner authorized settings changes through the authenticated GitHub REST API.
+Both branches now require resolved review threads; the existing review/code checks
+are preserved. Require `pr-policy` on main only after the bootstrap release.
 
 1. Inspect the PR and verify code, policy regression tests and existing CI results.
    Confirm at least one other human approval before merge.
