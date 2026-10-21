@@ -38,6 +38,9 @@ locally per the stage guides and are never committed.
 `main` and `develop` are protected: no direct pushes, a PR with green `guard` and
 `test` checks and one approving review. Work branches are squash-merged and
 deleted automatically.
+Required checks use strict up-to-date enforcement. Bring the target branch into
+work branches deliberately and rerun checks after integration changes. Releases
+and back-merges follow the reviewed merge-commit procedure below.
 
 ## Flow
 

@@ -3,8 +3,9 @@
 ## Prepared versus active
 
 The foundation policy was reviewed by `MohamadNasrallah` and merged on October 15.
-The owner required `pr-policy` on `develop` on October 21; its live enforcement
-test remains pending. Main activation follows the reviewed bootstrap release.
+The owner required `pr-policy` on `develop` and, after release #18, on `main` on
+October 21. Live policy failure/recovery tests on #20 passed. Isolating policy-based
+merge blocking with other requirements satisfied and the human pilot remain pending.
 Existing review protections remain active; follow-up fixes need their own review.
 Individual collaborator onboarding can remain pending during this preparation.
 
@@ -82,7 +83,7 @@ CODEOWNER approval on `develop` and `main`.
 
 The owner authorized settings changes through the authenticated GitHub REST API.
 Both branches now require resolved review threads; the existing review/code checks
-are preserved. Require `pr-policy` on main only after the bootstrap release.
+are preserved. Main's `pr-policy` requirement was enabled after the bootstrap release.
 
 1. Inspect the PR and verify code, policy regression tests and existing CI results.
    Confirm at least one other human approval before merge.
@@ -94,8 +95,10 @@ are preserved. Require `pr-policy` on main only after the bootstrap release.
    Keep force pushes/deletion blocked; avoid ordinary-user bypasses.
 5. Require the actual code-check names and `pr-policy`, selecting GitHub Actions as
    the expected source when offered. Do not require job names guessed from a matrix.
-6. Edit the test PR to remove its task link (without an exemption): verify the policy
-   check fails and GitHub blocks merge. Restore the link and verify a fresh success.
+6. With current human approval and other required checks passing, remove the task
+   link without an exemption: verify the policy fails and GitHub blocks merge.
+   Restore the link and verify fresh success. A blocked PR that also lacks approval
+   does not isolate which requirement caused the block.
 7. Confirm the author cannot supply their own required approval. A different teammate
    performs the approval and verifies approval becomes stale after a new commit.
 8. Record settings and pilot evidence in the workflow task; delete/close only the
