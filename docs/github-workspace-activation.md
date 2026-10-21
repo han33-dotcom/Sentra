@@ -3,8 +3,9 @@
 ## Current state
 
 Foundation [PR #15](https://github.com/han33-dotcom/Sentra/pull/15) was approved by
-`MohamadNasrallah` and merged into `develop` on October 15, 2026. Follow-up fixes
-and the reviewed release to `main` remain prerequisites for activation.
+`MohamadNasrallah` and merged into `develop` on October 15, 2026. Follow-up #17 is
+also merged. Synchronization #19, preview-gate #20 and reviewed release #18 remain
+prerequisites for activation on `main`.
 The private [Sentra board](https://github.com/users/han33-dotcom/projects/1) and public
 [Wiki](https://github.com/han33-dotcom/Sentra/wiki) were published on October 14, 2026.
 On October 15, approved board Write grants and Slack PR/review subscriptions were
@@ -127,6 +128,14 @@ notification does not automatically launch a teammate's personal AI assistant.
   is claimed. Collection remains paused throughout activation.
 - Teammate board access checks, the full review/change/fix/acceptance pilot and
   replay checks remain pending.
+- Live policy tests on #20 rejected a missing task link and a self-applied
+  exemption. GitHub reported merging blocked; restoring the task link and removing
+  the temporary label recovered a successful policy check. The
+  [self-exemption run](https://github.com/han33-dotcom/Sentra/actions/runs/39586012538/job/119175003125)
+  records the independent-label rejection. No human approval was supplied by an agent.
+- Dedicated synthetic pilot [#21](https://github.com/han33-dotcom/Sentra/issues/21)
+  records the remaining human actions and required evidence. Its criteria remain
+  unchecked until observed; the rollout issue remains open.
 
 ## October 15 verification checkpoint (historical)
 
