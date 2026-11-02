@@ -7,7 +7,8 @@ and live writes were verified on October 21, 2026. The private board, Wiki, appr
 access and native Slack subscriptions are configured. The owner confirmed the
 listed teammates' own-account board access. The human pilot (issue #21),
 acceptance reconciliation and local agent onboarding remain unverified; rollout
-issue #16 stays open. A merge gives Implemented, never automatic Done.
+issue #16 stays open. Merging all of a task's remaining linked implementation PRs
+gives Implemented; only a human sets Done.
 Release #18 is merged; reviewed merge-commit back-merge #22 remains pending.
 Collection remains paused. Shared cloud AI review is optional and deferred.
 
@@ -50,9 +51,10 @@ must not be published in public Issues, Wiki pages or repository documentation.
    reruns checks. The human reviewer decides approval; agents do not approve or merge
    on someone's behalf.
 8. Keep the branch up to date with `develop` and rerun required checks after
-   integration changes. Merge through the existing review rules. All required implementation PRs merged
-   means **Implemented**. A teammate records acceptance evidence, sets **Done** and
-   then closes the issue. Status synchronization is active; humans still own acceptance.
+   integration changes. Merge through the existing review rules. All required
+   implementation PRs merged means **Implemented**. A teammate records acceptance
+   evidence, sets **Done** and then closes the issue. Status synchronization is
+   active; humans still own acceptance.
 
 The tracking issue for this rollout is [#16](https://github.com/han33-dotcom/Sentra/issues/16).
 Task ownership does not require buying a cloud AI reviewer. Personal assistants run

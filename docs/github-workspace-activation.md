@@ -16,6 +16,8 @@ metadata-only status updates. No Notion token or synchronization is required.
 Release #18 merged with two parents (`c7c0548`). Back-merge #22 into `develop`
 requires human review and a merge commit. `pr-policy` is required on both branches.
 `SENTRA_COLLECTION_ENABLED=false`; collection stays paused.
+The current `PROJECTS_TOKEN` expires November 14, 2026. Renew it through secure
+credential entry before expiry and verify a credentialed preview after rotation.
 
 ## Project board
 
@@ -40,12 +42,13 @@ no private records were published to the Wiki.
 
 The owner approved and applied Write access for `MohamadNasrallah` and
 `mhmdaboulhoda` on October 15; Manage access shows both with Role: Write.
-The owner confirmed on October 21 that listed teammates opened the board from their own accounts.
+The owner confirmed on October 21 that listed teammates opened the board from
+their own accounts.
 Repository permissions do not automatically confer Project access.
 
 The authenticated Project API verified the owner, private visibility, required fields
-and exactly one linked repository matching this project on October 15. The owner confirmed teammate access on October 21. Its private visibility does not make repository issues
-private; these issues and the Wiki are public.
+and exactly one linked repository matching this project on October 15. Its private
+visibility does not make repository issues private; these issues and the Wiki are public.
 
 ## Project synchronization credentials and activation
 
@@ -121,7 +124,7 @@ notification does not automatically launch a teammate's personal AI assistant.
   passed on reviewed default-branch code while writes were disabled, including the
   synthetic draft pilot. Proposed transitions were inspected before enabling sync.
 - [First write run](https://github.com/han33-dotcom/Sentra/actions/runs/39604695546) passed
-  with `DRY_RUN=false`; pilot #21 moved Not started to In progress.
+  with `DRY_RUN=false`; pilot #21 moved from Not started to In progress.
 - [Independent readback](https://github.com/han33-dotcom/Sentra/actions/runs/39604893854)
   passed and showed the pilot already In progress, matching its planned status.
 - Rollout #16 moved to In review because back-merge #22 is still open. Collection
@@ -181,13 +184,19 @@ notification does not automatically launch a teammate's personal AI assistant.
 
 ## Pilot
 
-Use the rollout tracking issue and a synthetic/test-only PR. Open a draft, ready it,
-request a human review, request a change, push a fix and re-review the latest head.
-Observe In progress → In review → Changes requested → In review. Merge only after an
-actual teammate approval and required checks. Observe Implemented; the teammate then
-records acceptance, sets Done and closes the issue. Replay/reconcile and verify no
-incorrect transition or duplicate notification. Preserve the same branch flow and
-Sentra collection pause throughout.
+Use dedicated pilot issue [#21](https://github.com/han33-dotcom/Sentra/issues/21)
+and PR [#23](https://github.com/han33-dotcom/Sentra/pull/23), with the
+[synthetic fixture](workflow-pilot.md). The rollout issue #16 stays open until the
+whole rollout is accepted.
+
+Observe draft In progress, ready In review and a human review's Changes requested.
+After the fix, a re-review request or Comment review does not clear that request:
+the requesting reviewer must submit Approve on the latest head to return In review.
+Exercise policy blocking and stale-approval dismissal, then obtain fresh human
+approval and passing required checks before merge. Observe Implemented while #21
+remains open. A teammate records acceptance, sets Done and closes pilot issue #21.
+Replay/reconcile and verify preserved states and no duplicate notifications.
+Preserve the branch flow and Sentra collection pause throughout.
 
 ## References
 
