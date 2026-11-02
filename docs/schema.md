@@ -65,3 +65,22 @@ privileged access and should be limited to authorized operators.
 `last_success_at` reflects underlying successful collection, not present authorization
 or complete measurement availability. Cloud OAuth renewal/scheduling and teammate
 browser authentication remain Stages 4/5.
+
+## Organization access (`sql/007_organization_access.sql`, not yet applied)
+
+Schema `org` records who may see which participants, following
+[participation permissions](participation-permissions.md). It is read-only for
+`sentra_viewer`; the collector, `anon` and `authenticated` have no access, and writes
+are admin-only until enrollment tooling exists.
+
+| Table / view | Contents |
+| --- | --- |
+| `org.organizations` | Organization ID (`acme-ltd` style) and display name |
+| `org.org_users` | Lower-case Google sign-in e-mail per organization, role `officer` or `reviewer`, active flag |
+| `org.memberships` | One organization per pseudonymous participant, optional team for k-anonymous group views |
+| `org.consents` | Append-only consent history: version, `sharing` (`group_only` default or `individual`), demonstration consent, withdrawal |
+| `org.current_consent` | Latest consent row per participant (`security_invoker`, so the caller's permissions apply) |
+
+No participant names, contact details, location or routes are stored. A consent
+change or withdrawal adds a row; earlier rows are never updated. Applying this
+migration to the shared database is a separate owner step, after review.
