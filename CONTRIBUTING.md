@@ -47,6 +47,10 @@ deletion disabled, so release and back-merge PRs preserve them. The setting appl
 to future merges; historical branches need a separate check for merged work, later
 commits and open PR dependencies before deletion.
 
+Required checks use strict up-to-date enforcement. Bring the target branch into
+work branches deliberately and rerun checks after integration changes. Releases
+and back-merges follow the reviewed merge-commit procedure below.
+
 ## Flow
 
 1. `git switch develop && git pull`, then `git switch -c feat/<short-name>`.

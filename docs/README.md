@@ -30,6 +30,7 @@ Tasks belong in [GitHub Issues](https://github.com/han33-dotcom/Sentra/issues); 
 - [stage 7 audit plan](stage-7-audit-plan.md)
 - [storage plan](storage-plan.md)
 - [team workflow](team-workflow.md)
+- [synthetic workflow pilot](workflow-pilot.md)
 - [viewer redesign plan](viewer-redesign-plan.md)
 - [viewer redesign validation](viewer-redesign-validation.md)
 - [wellness board](wellness-board.md)
