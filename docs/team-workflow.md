@@ -9,7 +9,7 @@ listed teammates' own-account board access. The human pilot (issue #21),
 acceptance reconciliation and local agent onboarding remain unverified; rollout
 issue #16 stays open. Merging all of a task's remaining linked implementation PRs
 gives Implemented; only a human sets Done.
-Release #18 is merged; reviewed merge-commit back-merge #22 remains pending.
+Release #18 and reviewed merge-commit back-merge #22 are merged.
 Collection remains paused. Shared cloud AI review is optional and deferred.
 
 Workspace: `nsquared` (`T0C8YHJMXAN`). Channel: `#fyp-sentra`.

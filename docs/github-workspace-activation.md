@@ -13,8 +13,10 @@ are verified. Local agent onboarding is a separate, still-unverified check.
 The existing private Project board, public Wiki, approved Write grants and native
 Slack PR/review subscriptions remain in use. `TEAM_SYNC_ENABLED=true` now allows
 metadata-only status updates. No Notion token or synchronization is required.
-Release #18 merged with two parents (`c7c0548`). Back-merge #22 into `develop`
-requires human review and a merge commit. `pr-policy` is required on both branches.
+Release #18 merged with two parents (`c7c0548`); reviewed back-merge #22 also used
+a merge commit (`4fc98c6`). #25 adds Aboulhoda as CODEOWNER on `develop`; `main`
+receives that ownership change through the next reviewed release.
+`pr-policy` is required on both branches.
 `SENTRA_COLLECTION_ENABLED=false`; collection stays paused.
 The current `PROJECTS_TOKEN` expires November 14, 2026. Renew it through secure
 credential entry before expiry and verify a credentialed preview after rotation.

@@ -48,8 +48,10 @@ before opening a release; it is not an application-PR bypass.
 
 Sentra exemption actors are `han33-dotcom`, `MohamadNasrallah` and
 `mhmdaboulhoda`. The owner explicitly confirmed `mhmdaboulhoda` on October 15.
-This authorizes independent exemption labels, not CODEOWNER approval; the author
-still cannot exempt their own PR.
+Exemption authorization and CODEOWNER membership are separate settings.
+The CODEOWNERS file also lists all three teammates for every path; any independent
+listed owner's approval can satisfy required code-owner review. The author still
+cannot approve or exempt their own PR.
 
 Labels must exist in GitHub before a teammate applies them. No author-created label
 is treated as independently approved merely because its text matches an exemption.
