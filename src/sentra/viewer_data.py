@@ -109,6 +109,26 @@ def latest_timing(rows):
             'latest_civil_day':max((civil_day(r.get('civil_date')) for r in rows if civil_day(r.get('civil_date'))),default=None)}
 
 
+def latest_available_day(catalog, participant, provider):
+    """Latest observed overview day, never a collection/publication timestamp."""
+    days=[]
+    for row in catalog:
+        if row['participant_id']!=participant or row['provider']!=provider:
+            continue
+        dataset=row['dataset']
+        if dataset.startswith('minute_') or dataset=='original_heart-rate':
+            continue
+        civil=civil_day(row.get('latest_civil_day'))
+        if civil:
+            days.append(date.fromisoformat(civil))
+        interval='latest_interval_end' if dataset=='sleep' else 'latest_interval_start'
+        for field in ('latest_point_time',interval):
+            value=row.get(field)
+            if isinstance(value,datetime) and value.tzinfo is not None:
+                days.append(value.astimezone(BEIRUT).date())
+    return max(days,default=None)
+
+
 def fetch_status(state,dataset):
     last_success=max((s.get('last_success_at') for s in state['connection'] if s.get('last_success_at')),default=None)
     failures=[r.get('finished_at') or r['started_at'] for r in state['runs'] if r.get('status')!='paused' and

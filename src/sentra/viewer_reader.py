@@ -96,9 +96,10 @@ class ViewerReader:
 
     @safe_database
     def catalog(self):
-        return self._rows('''select s.participant_id,s.provider,s.dataset,s.authorization_status,
+        return self._rows(f'''select s.participant_id,s.provider,s.dataset,s.authorization_status,
           s.last_success_at,count(m.metric) measurement_rows,
-          max(m.measured_at) latest_point_time,max(m.interval_end) latest_interval_end
+          max(m.measured_at) latest_point_time,max(m.interval_end) latest_interval_end,
+          max(m.interval_start) latest_interval_start,max(({CIVIL})) latest_civil_day
           from audit.connection_state s left join audit.measurements m
           using(participant_id,provider,dataset) group by 1,2,3,4,5 order by 1,2,3''')
 
