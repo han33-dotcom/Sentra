@@ -88,7 +88,14 @@ produce green.** Missing values are never filled or treated as zero.
 Per day: `lvl` is `green`/`amber`/`red`, or absent for `insufficient`. `a` is `partial` or
 `insufficient` when the assessment is not complete, and `m` lists the reasons using the codes
 above. The page shows "Partial assessment" or "Not enough information" with the reasons,
-never a green pill.
+never a green pill. An amber or red day with `a = partial` reads "Amber · partial
+assessment" (or Red), so it is never mistaken for a complete assessment.
+
+The board also carries `assessment_version` (`ASSESSMENT_VERSION` in `pipeline.py`).
+Bump it whenever these rules or their meaning change. The daily refresh rebuilds any board
+published under another version from the existing data, even when no new collection has
+arrived. Boards from before this contract carry no version, so the first refresh after
+deployment replaces their misleading greens.
 
 ## Provider differences (preserved, not merged)
 

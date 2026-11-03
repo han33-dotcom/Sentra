@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .pipeline import NOTICE, TH
+from .pipeline import ASSESSMENT_VERSION, NOTICE, TH
 
 DEVICES = {'google_health': 'Fitbit', 'whoop': 'WHOOP'}
 FIELDS = {  # board key -> daily_features column, decimals
@@ -60,7 +60,7 @@ def payload(daily, devices, *, built_at, source_run=None):
         people.append({'id': str(pid), 'name': str(pid), 'device': DEVICES.get(devices.get(pid), 'Unknown'), 'days': days})
     latest = max((p['days'][-1]['d'] for p in people if p['days']), default=None)
     return {'built_at': built_at, 'source_run': source_run, 'data_through': latest, 'notice': NOTICE,
-            'thresholds_status': TH['_status'], 'people': people}
+            'thresholds_status': TH['_status'], 'assessment_version': ASSESSMENT_VERSION, 'people': people}
 
 
 def render(board):

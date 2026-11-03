@@ -211,6 +211,9 @@ RULES = {
 # so it adds a signal when available but its absence alone never blocks an assessment.
 CORE_RULES = ('sleep', 'rhr', 'hrv')
 LEVELS = ('green', 'amber', 'red', 'insufficient')
+# Bump when assessment rules or their meaning change: a board built under another version is
+# rebuilt from existing data on the next refresh, even when no new collection has arrived.
+ASSESSMENT_VERSION = 'assessment-v1'
 
 
 def rule_states(df: pd.DataFrame) -> pd.DataFrame:
