@@ -247,6 +247,40 @@ class TierTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder, self.assertRaises(SentraError):
             fetch(bucket, folder)
 
+    def test_retry_drops_objects_removed_from_the_new_report(self):
+        reader = Reader(FakeDB(), Limits())
+        objects, report = build(reader, Limits(), now=NOW)
+        removed = 'hr_raw/p01.parquet'
+        self.assertIn(removed, objects)
+        bucket = Bucket()
+        publish(objects, report, bucket, reader, Limits())
+        original, switched = bucket.request, False
+        current = {k: v[:-1] + b'\x03' for k, v in objects.items() if k != removed}
+        current_report = {**report, 'objects': {k: len(v) for k, v in current.items()}}
+
+        def during_download(method, key, data=None, **kw):
+            nonlocal switched
+            if method == 'GET' and key == 'slot-a/measurements.parquet' and not switched:
+                switched = True
+                publish(current, current_report, bucket, reader, Limits())
+                publish(current, current_report, bucket, reader, Limits())
+            return original(method, key, data, **kw)
+
+        bucket.request = during_download
+        with tempfile.TemporaryDirectory() as folder:
+            # Also remove a stale file from an earlier successful use of this cache.
+            path = Path(folder) / removed
+            path.parent.mkdir(parents=True)
+            path.write_bytes(objects[removed])
+            note = Path(folder) / 'operator-note.txt'
+            note.write_text('keep')
+            fetched = fetch(bucket, folder)
+            self.assertNotIn(removed, fetched['objects'])
+            self.assertFalse(path.exists())
+            self.assertEqual(note.read_text(), 'keep')
+            for key, data in current.items():
+                self.assertEqual((Path(folder) / key).read_bytes(), data)
+
     def test_fetch_reads_the_original_unslotted_layout(self):
         bucket = Bucket()
         bucket.objects = {'size_report.json': json.dumps({'objects': {'sessions.parquet': 3}}).encode(), 'sessions.parquet': b'abc'}

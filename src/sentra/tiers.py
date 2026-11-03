@@ -16,6 +16,8 @@ import hashlib
 import io
 import json
 from pathlib import Path
+import shutil
+import tempfile
 
 import psycopg
 
@@ -284,12 +286,28 @@ def fetch(storage, folder, *, maximum=MAX_OBJECT_BYTES, attempts=3):
     Slots are reused, so a slow reader could see a slot overwritten mid-download. Every object is
     checked against the report's SHA-256; on any change the report is read again and the whole set
     is fetched afresh, so a mixed set is never returned."""
+    folder = Path(folder)
+    folder.parent.mkdir(parents=True, exist_ok=True)
     for _ in range(attempts):
         code, body = storage.request('GET', 'size_report.json', maximum=1_000_000)
         if code != 200:
             raise SentraError(f'Tier report unavailable (HTTP {code}); run tiers-build first.')
         report = json.loads(body)
-        if _download(storage, folder, report, maximum):
+        # A failed attempt must not leave objects that disappear from the next report.
+        with tempfile.TemporaryDirectory(prefix='.sentra-tiers-', dir=folder.parent) as staging:
+            if not _download(storage, staging, report, maximum):
+                continue
+            folder.mkdir(parents=True, exist_ok=True)
+            wanted = set(report.get('objects', {}))
+            # These directories belong to this derived cache; preserve unrelated files.
+            for directory in ('hr_raw', 'hr_minute'):
+                for old in (folder / directory).glob('*.parquet'):
+                    if old.relative_to(folder).as_posix() not in wanted:
+                        old.unlink()
+            for key in wanted:
+                target = folder / key
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(Path(staging) / key, target)
             return report
     raise SentraError('Tiers kept changing while they were downloaded; nothing processed. Retry later.')
 
