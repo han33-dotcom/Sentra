@@ -88,3 +88,10 @@ consent; the old episode's participant, organization and dates cannot be rewritt
 Behaviour tests in `tests/test_organization_access_db.py` run when
 `SENTRA_TEST_DATABASE_URL` points at a throwaway PostgreSQL 15+ server. Applying
 this migration to the shared database is a separate owner step, after review.
+
+`sentra.access.resolve()` turns these rows into a deny-by-default decision for the
+signed-in e-mail. Team operators on the viewer allowlist keep operator access. An
+organization user sees only their own organization: individual details need a current,
+non-withdrawn `individual` consent in an open episode, and group statistics count
+only current, non-withdrawn consents in open episodes, published with at least
+`cohort_k_anonymity` contributors. The viewer and API don't call it yet.
