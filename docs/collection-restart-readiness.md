@@ -211,3 +211,19 @@ After integrating PR #52 from current `develop`:
 Remote CI and independent human review are separate evidence. These checks do
 not exercise live refresh/OAuth, a collection run, a hosted deployment, five
 participants, backup/restore, compaction or an approved restart.
+
+### Review correction: stored OAuth client fields
+
+MohamadNasrallah identified that absent OAuth client fields could incorrectly
+pass inspection. The check now treats missing, null, empty, whitespace-only or
+non-string `client_id`/`client_secret` as `credential_metadata_invalid`, blocking
+inspection for both current and expired access tokens. Regression tests use a
+complete valid connection fixture, check both fields and keep credential values
+out of reports. Valid Google Health and WHOOP connections retain their expected
+`access_current`/`refresh_needed` states. No renewal or provider request is needed
+to detect this local metadata defect.
+
+Review-fix validation: the new regression reproduced the incorrect ready result
+before the fix. Afterward, `python -m pytest tests/test_readiness.py -q` passed
+all 42 cases; `python -m pytest -ra` passed 282 with the same 25 opt-in skips.
+The data guard, three board JavaScript checks and diff checks also passed.

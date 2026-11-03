@@ -18,11 +18,13 @@ from sentra.shared import CapacityStop, Limits
 
 
 NOW = datetime(2026, 11, 3, 16, tzinfo=timezone.utc)
+MISSING = object()
 
 
 def envelope(provider='whoop', **changes):
     connection = {'provider': provider, 'participant_id': 'p9999', 'agreed': True,
-                  'publishing_status': 'testing', 'client_secret': 'example-private-client'}
+                  'publishing_status': 'testing', 'client_id': 'example-private-id',
+                  'client_secret': 'example-private-client'}
     token = {'access_token': 'example-private-access', 'refresh_token': 'example-private-refresh',
              'expires_at': NOW.timestamp() - 1, 'authorized_at': NOW.timestamp() - 86400,
              'scope': list(PROVIDERS[provider].scopes)}
@@ -88,11 +90,15 @@ def test_pending_or_withdrawn_connection_requires_attention(status, expected):
     assert credential_check(value['connection'], value['token'], status, NOW)['status'] == expected
 
 
-def test_inspection_is_bounded_and_never_fetches_or_rotates_credentials():
-    backend, cipher, statements = backend_fixture()
+@pytest.mark.parametrize('provider', ['google_health', 'whoop'])
+@pytest.mark.parametrize('access_lifetime,expected', [(-1, 'refresh_needed'), (3600, 'access_current')])
+def test_inspection_is_bounded_and_never_fetches_or_rotates_credentials(provider, access_lifetime, expected):
+    backend, cipher, statements = backend_fixture(envelope(provider, expires_at=NOW.timestamp() + access_lifetime))
     with patch('requests.sessions.Session.request', side_effect=AssertionError('No HTTP allowed')):
-        result = inspect_readiness(backend, {'whoop': 'p9999'}, cipher, now=NOW)
+        result = inspect_readiness(backend, {provider: 'p9999'}, cipher, now=NOW)
     assert result['decision'] == 'operator_review_required'
+    assert result['blockers'] == []
+    assert result['connections'][0]['status'] == expected
     assert result['provider_requests'] == 0
     assert result['sql_control'] == 'paused'
     assert result['operator_evidence_required']
@@ -102,6 +108,29 @@ def test_inspection_is_bounded_and_never_fetches_or_rotates_credentials():
     assert 'example-private' not in encoded
     assert 'access_token' not in encoded
     assert 'refresh_token' not in encoded
+
+
+@pytest.mark.parametrize('field', ['client_id', 'client_secret'])
+@pytest.mark.parametrize('invalid', [
+    pytest.param(MISSING, id='missing'), pytest.param(None, id='null'),
+    pytest.param('', id='empty'), pytest.param(123, id='non-string'),
+    pytest.param('   ', id='whitespace'),
+])
+@pytest.mark.parametrize('access_lifetime', [-1, 3600], ids=['expired-access', 'current-access'])
+def test_invalid_client_fields_block_inspection_without_disclosing_credentials(field, invalid, access_lifetime):
+    value = envelope(expires_at=NOW.timestamp() + access_lifetime)
+    if invalid is MISSING:
+        del value['connection'][field]
+    else:
+        value['connection'][field] = invalid
+    backend, cipher, _ = backend_fixture(value)
+    with patch('requests.sessions.Session.request', side_effect=AssertionError('No HTTP allowed')):
+        result = inspect_readiness(backend, {'whoop': 'p9999'}, cipher, now=NOW)
+    assert result['decision'] == 'blocked'
+    assert result['blockers'] == ['connection_requires_attention']
+    assert result['connections'][0]['status'] == 'credential_metadata_invalid'
+    assert result['provider_requests'] == 0
+    assert 'example-private' not in json.dumps(result)
 
 
 def test_stale_egress_stops_before_any_control_or_credential_read():

@@ -33,6 +33,9 @@ def credential_check(connection, token, refresh_status, now):
     if connection.get('agreed') is not True:
         return {**result, 'status': 'agreement_missing'}
     try:
+        if not all(isinstance(connection.get(k), str) and connection[k].strip()
+                   for k in ('client_id', 'client_secret')):
+            raise ValueError
         if not all(isinstance(token.get(k), str) and token[k] for k in ('access_token', 'refresh_token')):
             raise ValueError
         expires = _timestamp(token['expires_at'])
