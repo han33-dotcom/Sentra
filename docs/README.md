@@ -9,6 +9,7 @@ Tasks belong in [GitHub Issues](https://github.com/han33-dotcom/Sentra/issues); 
 - [collaborator setup](collaborator-setup.md)
 - [data dictionary](data-dictionary.md)
 - [dashboard restoration](dashboard-restoration.md)
+- [enrollment runbook](enrollment-runbook.md)
 - [operating guide](operating-guide.md)
 - [parquet tiers](parquet-tiers.md)
 - [participation permissions](participation-permissions.md)
