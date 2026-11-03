@@ -249,7 +249,8 @@ Operational prerequisites still open:
   requires membership for developer access, so a free account alone is not an
   alternative. See [WHOOP requirements](https://developer.whoop.com/docs/developing/overview/)
   and [redirect/team configuration](https://developer.whoop.com/docs/developing/getting-started/).
-- **Assessment:** reviewed processing eligibility from #45/#49 is still needed.
+- **Assessment:** the assessment contract in PR #56 is now on `develop`, but a
+  bounded enrollment-facing eligibility feed from #45/#49 is still needed.
   Do not infer insufficient history, readiness or a wellness result from signup,
   credential presence, last fetch time or arbitrary readings.
 - **Availability:** Render Free sleeps after inactivity. A November 3 return
@@ -257,6 +258,9 @@ Operational prerequisites still open:
   prove reliable cold starts. A retry button cannot repair an unreachable HTML
   host. Retain the zero-spend constraint; no paid upgrade or periodic keepalive
   has been enabled.
+  A November 4 check after more than 15 minutes idle returned health HTTP 200 in
+  36.95 seconds without a restart. This verifies that wake-up succeeded once,
+  while still demonstrating a delay that participants must allow for.
 - **Organization-hosted acceptance:** use an explicitly designated organization
   test identity. The earlier participant-only account clarification must be
   respected; participants do not receive officer privileges for this test.
