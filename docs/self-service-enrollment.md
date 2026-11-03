@@ -18,6 +18,13 @@ lets an existing participant sign in through the same provider to manage their
 sharing, reconnect, add another supported provider, sign out, or withdraw.
 Sessions last 30 minutes; the same provider login works in another browser.
 
+Participants are recorded in memberships and consent history. Do **not** add a
+participant to `org.org_users`, the viewer's team-operator allowlist, or the
+private viewer's hosting invitations just to let them enroll. Those grant a
+different kind of access. Organization officers/reviewers need a separately
+designated organization identity. A participant owning the WHOOP developer app
+does not make them a Sentra officer.
+
 An invitation carries its secret in a URL **fragment**, which is not sent in HTTP
 URLs. The browser removes it before starting the session and submits it in a
 same-origin POST. Do not post invitations in public issues or logs. One link can
@@ -182,6 +189,79 @@ service does not yet have verified processing eligibility; it never infers an
 assessment from arbitrary readings or registration. Processing eligibility belongs
 to #45/#49. Organization-facing views/downloads still require #27's shared access
 enforcement; a completed enrollment does not certify that separate release.
+
+With private enrollment configuration, operators can inspect bounded counts:
+
+```text
+python -m sentra.enrollment --organization YOUR_ORG_ID --summary
+```
+
+This creates no invitation, changes no participation, and prints no identifiers,
+readings or credentials. It stops above 100 participants and reserves a separate
+64 KB allowance per participant before checking encrypted connection metadata.
+`assessable: null` with `assessment_unknown` means processing eligibility is
+unavailable; it is not a verified zero eligible participants.
+
+## Current deployment and remaining acceptance
+
+The November 3 release, PR #54 (`7419856`), is published on `main`. The participant
+page is https://sentra-enrollment.onrender.com/join, on Render Free in Frankfurt,
+with manual deployments from `main`. The existing private viewer remains
+https://sentra-wearable-audit.streamlit.app, using its retained `ETL-pipeline`
+deployment reference at the released commit. Preserve the private audience,
+viewer-only secrets, existing URLs and Google callbacks when deploying.
+
+Real Google signup and returning-account sharing updates were reported on a phone
+and verified privately. HTTPS, cookies, origin/body-size enforcement, hosted
+database sessions and anonymous mobile OAuth cancellation passed. No participant
+phone timing has been supplied. Reconnect/withdrawal with a real person and final
+human acceptance remain separate from the synthetic checks.
+
+Acceptance corrections in the current work branch:
+
+- The viewer rechecks organization permissions at the start of every render, so
+  sharing/withdrawal changes and removed roles apply on the next page render.
+  The access decision is reused within that render to bound database work. This
+  does not recall data or exports already delivered to an open browser.
+- Failed initial requests offer **Try again** and keep the invitation only in
+  page memory until a session succeeds. API requests time out after 20 seconds;
+  mutations are never automatically replayed. Reopening the original invitation
+  is needed if the browser page itself is closed before session creation.
+  Initialization requests are serialized so opening an invitation while a
+  returning-session request is pending cannot replace the invitation with an
+  older session response.
+- Reconnect-required accounts are described as needing reconnect, rather than
+  described as connected while waiting for data.
+- Private aggregate counts preserve the difference between an unavailable
+  assessment result and a verified zero.
+
+These corrections need independent review and release before they are claimed
+as deployed behavior. Synthetic tests use fake accounts/records and an isolated
+loopback PostgreSQL database; they grant no real person organization access.
+
+Operational prerequisites still open:
+
+- **WHOOP:** the app is implemented but is not enabled on the current Google-only
+  host. The existing WHOOP app owner must add
+  `https://sentra-enrollment.onrender.com/oauth/whoop/callback`, preserving existing
+  redirects and read-only scopes and including `read:profile`. The owner can do
+  this remotely; participant passwords are not handed to the operator. WHOOP
+  requires membership for developer access, so a free account alone is not an
+  alternative. See [WHOOP requirements](https://developer.whoop.com/docs/developing/overview/)
+  and [redirect/team configuration](https://developer.whoop.com/docs/developing/getting-started/).
+- **Assessment:** reviewed processing eligibility from #45/#49 is still needed.
+  Do not infer insufficient history, readiness or a wellness result from signup,
+  credential presence, last fetch time or arbitrary readings.
+- **Availability:** Render Free sleeps after inactivity. A November 3 return
+  visit timed out and required a restart; successful warm-page checks do not
+  prove reliable cold starts. A retry button cannot repair an unreachable HTML
+  host. Retain the zero-spend constraint; no paid upgrade or periodic keepalive
+  has been enabled.
+- **Organization-hosted acceptance:** use an explicitly designated organization
+  test identity. The earlier participant-only account clarification must be
+  respected; participants do not receive officer privileges for this test.
+
+Collection remains paused; these enrollment checks do not enable a first import.
 
 ## Verification
 
