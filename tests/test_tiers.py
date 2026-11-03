@@ -80,7 +80,22 @@ class Reader(AuditReader):
 class Storage:
     def __init__(self, code=200): self.code, self.calls = code, []
     def request(self, method, key, **kw):
+        if method == 'GET':
+            return 404, b''
         self.calls.append((method, key, kw['upsert'], kw['content_type'])); return self.code, b''
+
+
+class Bucket:
+    """In-memory tier bucket; uploads fail once `fail_at` objects have been written."""
+    def __init__(self, fail_at=None): self.objects, self.fail_at = {}, fail_at
+    def request(self, method, key, data=None, **kw):
+        if method == 'GET':
+            return (200, self.objects[key]) if key in self.objects else (404, b'')
+        if self.fail_at is not None and self.fail_at <= 0:
+            return 503, b''
+        self.fail_at = None if self.fail_at is None else self.fail_at - 1
+        self.objects[key] = data
+        return 200, b''
 
 
 class TierTests(unittest.TestCase):
@@ -169,6 +184,112 @@ class TierTests(unittest.TestCase):
             publish(objects, report, Storage(), reader, tight)
         with self.assertRaises(SentraError):
             publish(objects, report, Storage(code=403), reader, Limits())
+
+    def test_publication_alternates_slots_and_a_failed_upload_keeps_the_previous_set(self):
+        reader = Reader(FakeDB(), Limits())
+        objects, report = build(reader, Limits(), now=NOW)
+        bucket = Bucket()
+        self.assertEqual(publish(objects, report, bucket, reader, Limits())['slot'], 'slot-a/')
+        first = bucket.objects['size_report.json']
+        self.assertEqual(publish(objects, report, bucket, reader, Limits())['slot'], 'slot-b/')
+        bucket.objects['size_report.json'] = first  # readers are on slot-a again
+        bucket.fail_at = 2  # the third object of the next upload fails
+        with self.assertRaises(SentraError):
+            publish(objects, report, bucket, reader, Limits())
+        self.assertEqual(bucket.objects['size_report.json'], first)  # the pointer never moved
+        with tempfile.TemporaryDirectory() as folder:
+            fetched = fetch(bucket, folder)
+            self.assertEqual(fetched['prefix'], 'slot-a/')
+            for key, data in objects.items():
+                self.assertEqual((Path(folder) / key).read_bytes(), data)
+
+    def test_an_unreadable_or_malformed_report_stops_publication_before_any_write(self):
+        reader = Reader(FakeDB(), Limits())
+        objects, report = build(reader, Limits(), now=NOW)
+        bucket = Bucket()
+        publish(objects, report, bucket, reader, Limits())  # readers are on slot-a
+        live = dict(bucket.objects)
+        for code, body in ((503, b'Service Unavailable'), (400, b'{"error":"InvalidJWT"}'), (200, b'not json'),
+                           (200, b'{"prefix":"slot-z/"}')):
+            failing = Bucket(); failing.objects = dict(live)
+            failing.request = (lambda inner: lambda method, key, data=None, **kw: (code, body)
+                               if method == 'GET' and key == 'size_report.json' else inner(method, key, data, **kw))(failing.request)
+            with self.subTest(code=code, body=body), self.assertRaises(SentraError):
+                publish(objects, report, failing, reader, Limits())
+            self.assertEqual(failing.objects, live)  # the live slot was never touched
+        missing = Bucket()
+        missing.request = (lambda inner: lambda method, key, data=None, **kw: (400, b'{"statusCode":"404","error":"not_found"}')
+                           if method == 'GET' else inner(method, key, data, **kw))(missing.request)
+        self.assertEqual(publish(objects, report, missing, reader, Limits())['slot'], 'slot-a/')  # first ever build
+
+    def test_a_reader_spanning_slot_reuse_never_returns_a_mixed_set(self):
+        reader = Reader(FakeDB(), Limits())
+        objects, report = build(reader, Limits(), now=NOW)
+        generation = lambda n: {k: v[:-1] + bytes([n]) for k, v in objects.items()}  # same sizes per generation
+        bucket = Bucket()
+        publish(generation(1), report, bucket, reader, Limits())
+        keys, downloads, original = sorted(objects), [], bucket.request
+
+        def slow_reader(method, key, data=None, **kw):
+            if method == 'GET' and key.startswith('slot-'):
+                downloads.append(key)
+                if len(downloads) == 2:  # two publications land while the first set is half read
+                    publish(generation(2), report, bucket, reader, Limits())
+                    publish(generation(3), report, bucket, reader, Limits())
+            return original(method, key, data, **kw)
+        bucket.request = slow_reader
+        with tempfile.TemporaryDirectory() as folder:
+            fetched = fetch(bucket, folder)
+            self.assertEqual(fetched['prefix'], 'slot-a/')
+            self.assertEqual({k: (Path(folder) / k).read_bytes() for k in keys}, generation(3))  # one complete set
+        bucket.request = lambda method, key, data=None, **kw: (  # keeps changing on every read
+            original(method, key, data, **kw) if key == 'size_report.json' else (200, original(method, key, data, **kw)[1][:-1] + b'\xff'))
+        with tempfile.TemporaryDirectory() as folder, self.assertRaises(SentraError):
+            fetch(bucket, folder)
+
+    def test_retry_drops_objects_removed_from_the_new_report(self):
+        reader = Reader(FakeDB(), Limits())
+        objects, report = build(reader, Limits(), now=NOW)
+        removed = 'hr_raw/p01.parquet'
+        self.assertIn(removed, objects)
+        bucket = Bucket()
+        publish(objects, report, bucket, reader, Limits())
+        original, switched = bucket.request, False
+        current = {k: v[:-1] + b'\x03' for k, v in objects.items() if k != removed}
+        current_report = {**report, 'objects': {k: len(v) for k, v in current.items()}}
+
+        def during_download(method, key, data=None, **kw):
+            nonlocal switched
+            if method == 'GET' and key == 'slot-a/measurements.parquet' and not switched:
+                switched = True
+                publish(current, current_report, bucket, reader, Limits())
+                publish(current, current_report, bucket, reader, Limits())
+            return original(method, key, data, **kw)
+
+        bucket.request = during_download
+        with tempfile.TemporaryDirectory() as folder:
+            # Also remove a stale file from an earlier successful use of this cache.
+            path = Path(folder) / removed
+            path.parent.mkdir(parents=True)
+            path.write_bytes(objects[removed])
+            note = Path(folder) / 'operator-note.txt'
+            note.write_text('keep')
+            fetched = fetch(bucket, folder)
+            self.assertNotIn(removed, fetched['objects'])
+            self.assertFalse(path.exists())
+            self.assertEqual(note.read_text(), 'keep')
+            for key, data in current.items():
+                self.assertEqual((Path(folder) / key).read_bytes(), data)
+
+    def test_fetch_reads_the_original_unslotted_layout(self):
+        bucket = Bucket()
+        bucket.objects = {'size_report.json': json.dumps({'objects': {'sessions.parquet': 3}}).encode(), 'sessions.parquet': b'abc'}
+        with tempfile.TemporaryDirectory() as folder:
+            fetch(bucket, folder)
+            self.assertEqual((Path(folder) / 'sessions.parquet').read_bytes(), b'abc')
+        bucket.objects['size_report.json'] = json.dumps({'prefix': '../', 'objects': {}}).encode()
+        with tempfile.TemporaryDirectory() as folder, self.assertRaises(SentraError):
+            fetch(bucket, folder)
 
     def test_local_output_writes_files_without_upload(self):
         reader = Reader(FakeDB(), Limits())
