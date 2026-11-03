@@ -5,6 +5,7 @@ from pathlib import Path
 import time
 import unittest
 from unittest.mock import Mock, patch
+from zoneinfo import ZoneInfo
 
 from test_viewer_app import FakeReader
 from sentra.processing.pipeline import ASSESSMENT_VERSION
@@ -147,6 +148,24 @@ class OrganizationPageTests(unittest.TestCase):
         next(r for r in app.radio if r.label == 'Period').set_value('Last 7 days').run()
         self.assertFalse(app.exception)
         self.assertEqual(self.table(app)['Sleep']['Contributors'], '5')
+
+    def test_profile_explains_observations_for_permitted_people_only(self):
+        today = datetime.now(timezone.utc).astimezone(ZoneInfo('Asia/Beirut')).date().isoformat()
+        people = [{**p, 'days': [{'d': today, 'lvl': 'amber', 'f': ['rhr_up'], 'rhr': 64, 'rhr_b': 55.0, 'rhr_z': 2.4,
+                                  'a': 'partial', 'm': ['hrv:baseline_building']}]} for p in BOARD['people']]
+        board = {**BOARD, 'people': people, 'data_through': today, 'assessment_version': ASSESSMENT_VERSION}
+        with patch.object(OrgReader, 'board', lambda self: board):
+            app = self.open('officer@a.test', 'Profiles')
+        text = ' '.join(m.value for m in app.markdown) + ' '.join(c.value for c in app.caption)
+        self.assertIn('Resting heart rate above your normal', text)
+        self.assertIn('Partial assessment', text)
+        self.assertIn('Heart-rate variability: personal normal still building', text)
+        self.assertIn('not a medical conclusion', text)
+        self.assertEqual(app.selectbox[0].options, ['p91'])  # group-only people get no observations
+
+    def test_profile_observations_wait_for_the_current_rules(self):
+        app = self.open('officer@a.test', 'Profiles')  # BOARD carries no assessment_version
+        self.assertIn('Published under older rules', ' '.join(m.value for m in app.markdown))
 
 
 if __name__ == '__main__':
