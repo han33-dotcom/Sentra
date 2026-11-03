@@ -86,8 +86,8 @@ def refresh(reader, limits, storage, *, force=False, now=None, log=print):
     body = json.dumps(board, separators=(',', ':')).encode()
     if len(body) > MAX_BOARD_BYTES:
         raise SentraError('Board payload exceeds 5 MB; narrow the history before publishing.')
-    limits.check(reader.usage(), object_add=len(body))
-    publish(objects, report, storage, reader, limits)
+    # One capacity check before any write covers the tiers, their report and the board together.
+    publish(objects, report, storage, reader, limits, extra_bytes=len(body))
     code, _ = storage.request('POST', BOARD_KEY, data=body, maximum=65_536, upsert=True, content_type='application/json')
     if code not in (200, 201):
         raise SentraError(f'Board upload failed (HTTP {code}); tiers were published, board unchanged.')

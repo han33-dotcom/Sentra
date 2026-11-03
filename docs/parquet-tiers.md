@@ -17,8 +17,19 @@ change and need a separate, reviewed decision.
 The tier objects above live under one of two slots, `slot-a/` or `slot-b/`. A build
 uploads every object to the slot readers are **not** using and writes `size_report.json`
 last, so readers switch to the new set in one replace. If any upload fails, the report
-still points at the previous complete set; repeating the build is safe. Reports without
-`prefix` (written before slots) are read from the bucket root. Two slots keep at most two
+still points at the previous complete set; repeating the build is safe.
+
+- **Which slot is live:** only an explicit "not found" for `size_report.json` (the first
+  build) starts at `slot-a/`. Any other read failure or a malformed report stops the build
+  before it writes, so the live slot is never overwritten.
+- **Readers get one complete set:** the report lists each object's SHA-256. `fetch()` checks
+  every download against it. If a slot was rewritten mid-download (two publications during
+  one slow read), it reads the report again and fetches the whole set afresh, up to three
+  times, and never returns a mixed set.
+- **Capacity:** one check before any write covers the tiers, the report and the board together.
+
+Reports without `prefix` (written before slots) are read from the bucket root, checked by
+size only. Two slots keep at most two
 copies of the few-MB tiers; the bucket has no delete policy, so the original root objects
 remain until an admin removes them.
 

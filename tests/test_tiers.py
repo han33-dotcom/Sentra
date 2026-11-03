@@ -203,6 +203,50 @@ class TierTests(unittest.TestCase):
             for key, data in objects.items():
                 self.assertEqual((Path(folder) / key).read_bytes(), data)
 
+    def test_an_unreadable_or_malformed_report_stops_publication_before_any_write(self):
+        reader = Reader(FakeDB(), Limits())
+        objects, report = build(reader, Limits(), now=NOW)
+        bucket = Bucket()
+        publish(objects, report, bucket, reader, Limits())  # readers are on slot-a
+        live = dict(bucket.objects)
+        for code, body in ((503, b'Service Unavailable'), (400, b'{"error":"InvalidJWT"}'), (200, b'not json'),
+                           (200, b'{"prefix":"slot-z/"}')):
+            failing = Bucket(); failing.objects = dict(live)
+            failing.request = (lambda inner: lambda method, key, data=None, **kw: (code, body)
+                               if method == 'GET' and key == 'size_report.json' else inner(method, key, data, **kw))(failing.request)
+            with self.subTest(code=code, body=body), self.assertRaises(SentraError):
+                publish(objects, report, failing, reader, Limits())
+            self.assertEqual(failing.objects, live)  # the live slot was never touched
+        missing = Bucket()
+        missing.request = (lambda inner: lambda method, key, data=None, **kw: (400, b'{"statusCode":"404","error":"not_found"}')
+                           if method == 'GET' else inner(method, key, data, **kw))(missing.request)
+        self.assertEqual(publish(objects, report, missing, reader, Limits())['slot'], 'slot-a/')  # first ever build
+
+    def test_a_reader_spanning_slot_reuse_never_returns_a_mixed_set(self):
+        reader = Reader(FakeDB(), Limits())
+        objects, report = build(reader, Limits(), now=NOW)
+        generation = lambda n: {k: v[:-1] + bytes([n]) for k, v in objects.items()}  # same sizes per generation
+        bucket = Bucket()
+        publish(generation(1), report, bucket, reader, Limits())
+        keys, downloads, original = sorted(objects), [], bucket.request
+
+        def slow_reader(method, key, data=None, **kw):
+            if method == 'GET' and key.startswith('slot-'):
+                downloads.append(key)
+                if len(downloads) == 2:  # two publications land while the first set is half read
+                    publish(generation(2), report, bucket, reader, Limits())
+                    publish(generation(3), report, bucket, reader, Limits())
+            return original(method, key, data, **kw)
+        bucket.request = slow_reader
+        with tempfile.TemporaryDirectory() as folder:
+            fetched = fetch(bucket, folder)
+            self.assertEqual(fetched['prefix'], 'slot-a/')
+            self.assertEqual({k: (Path(folder) / k).read_bytes() for k in keys}, generation(3))  # one complete set
+        bucket.request = lambda method, key, data=None, **kw: (  # keeps changing on every read
+            original(method, key, data, **kw) if key == 'size_report.json' else (200, original(method, key, data, **kw)[1][:-1] + b'\xff'))
+        with tempfile.TemporaryDirectory() as folder, self.assertRaises(SentraError):
+            fetch(bucket, folder)
+
     def test_fetch_reads_the_original_unslotted_layout(self):
         bucket = Bucket()
         bucket.objects = {'size_report.json': json.dumps({'objects': {'sessions.parquet': 3}}).encode(), 'sessions.parquet': b'abc'}
