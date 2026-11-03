@@ -162,7 +162,9 @@ Provider rotation history is not recoverable from an old local token snapshot.
 Default restore leaves operational tables intact and verifies a new admin-only
 `sentra_restore_*` schema. It consumes database quota; review rehearsal retention
 before further restores. `--empty-audit` is for an initialized replacement project
-whose seven audit tables are all empty; it refuses populated targets. Recreate
+whose seven audit tables are all empty; it refuses populated targets and requires
+`--target-project <ref>` naming the configured project before writing (see
+[recovery-rehearsal.md](recovery-rehearsal.md)). Recreate
 migrations/permissions/configuration and reconnect before operating a replacement.
 A full new-project disaster recovery and off-machine key recovery have not been
 demonstrated. Free hosting needs manual backups; [Supabase's backup guide](https://supabase.com/docs/guides/platform/backups)
