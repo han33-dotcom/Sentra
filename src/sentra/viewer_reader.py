@@ -94,6 +94,20 @@ class ViewerReader:
             cursor.execute(query,values)
             return cursor.fetchall()
 
+    def organization_rows(self):
+        """Organization users and current consent for access decisions; empty until migration 007 exists."""
+        try:
+            users=self._rows('select org_id,email,role,active from org.org_users',allowance=65_536)
+            consents=self._rows('''select participant_id,org_id,sharing,withdrawn,membership_open
+              from org.current_consent''',allowance=65_536)
+            return users,consents
+        except (psycopg.errors.UndefinedTable,psycopg.errors.InvalidSchemaName):
+            # Without the org schema nobody outside the team allowlist is authorized.
+            self.db.rollback()
+            return [],[]
+        except psycopg.Error:
+            raise SentraError('Viewer database request unavailable. Check project pause and viewer configuration; sensitive details omitted.') from None
+
     @safe_database
     def catalog(self):
         return self._rows(f'''select s.participant_id,s.provider,s.dataset,s.authorization_status,

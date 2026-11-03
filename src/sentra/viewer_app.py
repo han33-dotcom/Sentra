@@ -2,15 +2,17 @@
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 import tempfile
+import time
 
 import altair as alt
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
+from .access import resolve
 from .errors import SentraError
 from .viewer_config import emails, runtime_settings
-from .viewer_data import BEIRUT, Selection, authorize, inline_download, measurement_csv, sampling_summary, civil_day, latest_timing, latest_available_day
+from .viewer_data import BEIRUT, Selection, verified_email, inline_download, measurement_csv, sampling_summary, civil_day, latest_timing, latest_available_day
 from .viewer_reader import ViewerReader
 from .curated import curate, curated_csv, record_day, stamp
 from .metric_dictionary import METRICS
@@ -19,13 +21,39 @@ from .datasets import canonical
 from .viewer_style import BRAND, STYLE
 
 
-def principal():
+ACCESS_TTL_SECONDS=60  # consent/withdrawal changes apply within a minute
+
+
+def load_organization_rows(email):
+    """Read org users and current consent with a reader bound to the verified identity only."""
+    with tempfile.TemporaryDirectory(prefix='sentra-viewer-') as folder:
+        credentials,limits,_=runtime_settings(st.secrets,folder)
+        reader=ViewerReader(credentials,limits,lambda:email)
+        try: return reader.organization_rows()
+        finally: reader.close()
+
+
+def current_access():
+    """Team allowlist first (no database read); otherwise organization membership and consent."""
     try:
         allowed=emails(list(st.secrets['viewer']['allowed_emails']))
         claims=st.user.to_dict()
     except Exception:
         raise SentraError('Viewer sign-in configuration is incomplete. Ask the operator to finish setup.') from None
-    return authorize(claims,allowed)
+    email=verified_email(claims)
+    if email in allowed:
+        return resolve(email,team_emails=allowed)
+    cached=st.session_state.get('audit_access')
+    if cached and cached[0]==email and time.monotonic()-cached[1]<ACCESS_TTL_SECONDS:
+        return cached[2]
+    users,consents=load_organization_rows(email)
+    decision=resolve(email,team_emails=allowed,org_users=users,consents=consents)
+    st.session_state['audit_access']=(email,time.monotonic(),decision)
+    return decision
+
+
+def principal():
+    return current_access().email
 
 
 def clear_private_state():
@@ -339,7 +367,11 @@ def main():
             st.stop()
         identity=principal()
         if st.session_state.get('audit_owner')!=identity:
+            # Keep only the access decision just made for this same identity.
+            decision=st.session_state.get('audit_access')
             clear_private_state()
+            if decision and decision[0]==identity:
+                st.session_state['audit_access']=decision
             st.session_state['audit_owner']=identity
         page=st.sidebar.radio('Explore',('Daily activity','Sleep','Workouts','Data availability','Wellness board'),
             key='explore',label_visibility='collapsed',width='stretch')

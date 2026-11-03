@@ -25,6 +25,27 @@ class ViewerReaderTests(unittest.TestCase):
             with self.assertRaisesRegex(SentraError,'denied'): call()
         db.execute.assert_not_called()
 
+    def test_organization_rows_fall_back_to_none_without_the_org_schema(self):
+        import psycopg
+        m=self.module()
+        for missing in (psycopg.errors.UndefinedTable, psycopg.errors.InvalidSchemaName):
+            db=Mock()
+            db.cursor.return_value.__enter__=Mock(return_value=Mock(execute=Mock(side_effect=missing('absent'))))
+            db.cursor.return_value.__exit__=Mock(return_value=False)
+            reader=m.ViewerReader({},Limits(),lambda:'officer@a.test',db=db,budget_db=Mock())
+            with self.subTest(error=missing.__name__):
+                self.assertEqual(reader.organization_rows(),([],[]))
+                db.rollback.assert_called_once()
+        db=Mock()
+        db.cursor.return_value.__enter__=Mock(return_value=Mock(execute=Mock(side_effect=psycopg.OperationalError('down'))))
+        db.cursor.return_value.__exit__=Mock(return_value=False)
+        reader=m.ViewerReader({},Limits(),lambda:'officer@a.test',db=db,budget_db=Mock())
+        with self.assertRaisesRegex(SentraError,'unavailable'):reader.organization_rows()
+        denied=Mock(side_effect=SentraError('denied'));db=Mock()
+        with self.assertRaisesRegex(SentraError,'denied'):
+            m.ViewerReader({},Limits(),denied,db=db).organization_rows()
+        db.cursor.assert_not_called()
+
     def test_curated_records_recheck_access_and_refuse_oversized_before_transfer(self):
         m=self.module()
         self.assertTrue(hasattr(m.ViewerReader,'records'),'Bounded curated read missing')
