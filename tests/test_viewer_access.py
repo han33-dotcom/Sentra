@@ -137,7 +137,7 @@ class ViewerAccessTests(unittest.TestCase):
         revoked = resolve('officer@a.test', team_emails=TEAM, org_users=USERS, consents=consents(withdrawn=True))
         decisions = iter([allowed, allowed, revoked, revoked, revoked])
         captured = {}
-        def build(credentials, limits, principal, can_view):
+        def build(credentials, limits, principal, can_view, can_count=None):
             captured['reader'] = ViewerReader(credentials, Limits(), lambda: 'officer@a.test', db=Mock(),
                                               budget_db=Mock(), can_view=can_view)
             return captured['reader']

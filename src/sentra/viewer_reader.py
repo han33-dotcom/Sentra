@@ -64,11 +64,15 @@ def check_result_size(count, size):
 class ViewerReader:
     # Per-participant decision from sentra.access; the default keeps team-only callers unchanged.
     can_view = staticmethod(lambda participant: True)
+    # Who may count towards group statistics (individual or group_only consent); aggregate use only.
+    can_count = staticmethod(lambda participant: True)
 
-    def __init__(self, credentials, limits, principal, *, db=None, budget_db=None, can_view=None):
+    def __init__(self, credentials, limits, principal, *, db=None, budget_db=None, can_view=None, can_count=None):
         self.credentials,self.limits,self.principal = credentials,limits,principal
         if can_view is not None:
             self.can_view = can_view
+        if can_count is not None:
+            self.can_count = can_count
         if db is None:
             principal()
         self.db = db if db is not None else connect_db(credentials)
@@ -120,13 +124,20 @@ class ViewerReader:
 
     @safe_database
     def catalog(self):
-        rows=self._rows(f'''select s.participant_id,s.provider,s.dataset,s.authorization_status,
+        return [r for r in self._catalog_rows() if self.can_view(r['participant_id'])]
+
+    @safe_database
+    def group_catalog(self):
+        """Catalog rows for group contributors; callers aggregate them and never show them per person."""
+        return [r for r in self._catalog_rows() if self.can_count(r['participant_id'])]
+
+    def _catalog_rows(self):
+        return self._rows(f'''select s.participant_id,s.provider,s.dataset,s.authorization_status,
           s.last_success_at,count(m.metric) measurement_rows,
           max(m.measured_at) latest_point_time,max(m.interval_end) latest_interval_end,
           max(m.interval_start) latest_interval_start,max(({CIVIL})) latest_civil_day
           from audit.connection_state s left join audit.measurements m
           using(participant_id,provider,dataset) group by 1,2,3,4,5 order by 1,2,3''')
-        return [r for r in rows if self.can_view(r['participant_id'])]
 
     @safe_database
     def metrics(self, selection):
@@ -237,6 +248,19 @@ class ViewerReader:
 
     @safe_database
     def board(self):
+        """Latest pseudonymous wellness board, only people this user may see individually."""
+        board=self._published_board()
+        board['people']=[p for p in board['people'] if isinstance(p,dict) and self.can_view(p.get('id'))]
+        return board
+
+    @safe_database
+    def group_board(self):
+        """Board rows for group contributors; callers aggregate them and never show them per person."""
+        board=self._published_board()
+        board['people']=[p for p in board['people'] if isinstance(p,dict) and self.can_count(p.get('id'))]
+        return board
+
+    def _published_board(self):
         """Latest pseudonymous wellness board published by the daily refresh (read-only)."""
         self.principal()
         storage=PrivateStorage(self.credentials,self.reserve,bucket=TIER_BUCKET)
@@ -248,8 +272,6 @@ class ViewerReader:
         except ValueError: raise SentraError('Wellness board is malformed; ask the operator to rerun the refresh.') from None
         if not isinstance(board,dict) or not isinstance(board.get('people'),list):
             raise SentraError('Wellness board is malformed; ask the operator to rerun the refresh.')
-        # Only participants this user may see individually remain on the board.
-        board['people']=[p for p in board['people'] if isinstance(p,dict) and self.can_view(p.get('id'))]
         return board
 
     @safe_database
