@@ -50,6 +50,12 @@ def payload(daily, devices, *, built_at, source_run=None):
             flags = [code for column, code in FLAGS.items() if column in rows and pd.notna(row[column]) and bool(row[column])]
             if flags:
                 day['f'] = flags
+            state = row.get('assessment_state')
+            if state in ('partial', 'insufficient'):  # why a day is not fully assessed, e.g. "hrv:baseline_building"
+                day['a'] = state
+                reasons = row.get('assessment_reasons')
+                if isinstance(reasons, str) and reasons:
+                    day['m'] = reasons.split(';')
             days.append(day)
         people.append({'id': str(pid), 'name': str(pid), 'device': DEVICES.get(devices.get(pid), 'Unknown'), 'days': days})
     latest = max((p['days'][-1]['d'] for p in people if p['days']), default=None)

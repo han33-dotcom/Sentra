@@ -200,6 +200,29 @@ def baselines(day_df: pd.DataFrame) -> pd.DataFrame:
 
 # ------------------------------------------------------------------ 5. flags -
 WELLNESS_SIGNALS = ['flag_short_sleep', 'flag_rhr_above_baseline', 'flag_sleep_hr_above_baseline', 'flag_hrv_below_baseline']
+# Indicator contract (docs/indicator-contract.md): code -> (flag, today's value, personal baseline or None).
+RULES = {
+    'sleep': ('flag_short_sleep', 'sleep_min', None),
+    'rhr': ('flag_rhr_above_baseline', 'rhr', 'rhr_base'),
+    'sleep_hr': ('flag_sleep_hr_above_baseline', 'sleep_hr', 'sleep_hr_base'),
+    'hrv': ('flag_hrv_below_baseline', 'daily_hrv_rmssd', 'daily_hrv_rmssd_base'),
+}
+# "green" needs these assessed. Sleeping HR needs a stage timeline that WHOOP does not provide,
+# so it adds a signal when available but its absence alone never blocks an assessment.
+CORE_RULES = ('sleep', 'rhr', 'hrv')
+LEVELS = ('green', 'amber', 'red', 'insufficient')
+
+
+def rule_states(df: pd.DataFrame) -> pd.DataFrame:
+    """Per rule: signal | clear | no_reading (today's value missing) | baseline_building (< 7 of 28 days)."""
+    missing = pd.Series(np.nan, index=df.index)
+    out = {}
+    for code, (flag, value, base) in RULES.items():
+        state = np.where(df[flag], 'signal', 'clear').astype(object)
+        if base is not None:
+            state = np.where(df.get(base, missing).isna(), 'baseline_building', state)
+        out[f'assess_{code}'] = np.where(df.get(value, missing).isna(), 'no_reading', state)
+    return pd.DataFrame(out, index=df.index)
 
 
 def flags(df: pd.DataFrame) -> pd.DataFrame:
@@ -214,7 +237,17 @@ def flags(df: pd.DataFrame) -> pd.DataFrame:
     df['flag_sustained_high_hr'] = df.sustained_hr_max_run >= TH['sustained_hr_min_minutes']
     df['flag_long_inactivity_in_shift'] = df.longest_still_in_shift >= TH['long_inactivity_minutes']
     df['wellness_signals'] = df[WELLNESS_SIGNALS].sum(axis=1)
-    df['wellness_level'] = pd.cut(df.wellness_signals, [-1, 0, 1, 4], labels=['green', 'amber', 'red']).astype(str)
+    # Missing data must never look reassuring: "green" only when every core rule was assessed.
+    states = rule_states(df)
+    df = pd.concat([df, states], axis=1)
+    assessed = states.isin(['signal', 'clear'])
+    core = assessed[[f'assess_{c}' for c in CORE_RULES]].sum(axis=1)
+    df['rules_assessed'] = assessed.sum(axis=1)
+    df['assessment_state'] = np.select([core == len(CORE_RULES), df.rules_assessed > 0], ['complete', 'partial'], 'insufficient')
+    df['assessment_reasons'] = [';'.join(f'{c}:{s}' for c, s in zip(RULES, row) if s not in ('signal', 'clear'))
+                                for row in states.itertuples(index=False)]
+    level = pd.cut(df.wellness_signals, [-1, 0, 1, 4], labels=['green', 'amber', 'red']).astype(str)
+    df['wellness_level'] = level.where((df.wellness_signals > 0) | (df.assessment_state == 'complete'), 'insufficient')
     return df
 
 
@@ -222,10 +255,11 @@ def flags(df: pd.DataFrame) -> pd.DataFrame:
 def cohort(df: pd.DataFrame) -> pd.DataFrame:
     k = TH['cohort_k_anonymity']
     d = df[df.usable_day].copy()
-    known_wellness = d.filter(items=['sleep_min', 'rhr_z', 'sleep_hr_z', 'daily_hrv_rmssd_z']).notna().any(axis=1)
+    # Only assessed days count toward the wellness share; an "insufficient" day is not a calm day.
+    assessed = d.wellness_level.isin(['green', 'amber', 'red']) if 'wellness_level' in d else pd.Series(False, index=d.index)
     d['flag_short_sleep'] = d.flag_short_sleep.where(d.sleep_min.notna())
     d['flag_sustained_high_hr'] = d.flag_sustained_high_hr.where(d.hr_mean.notna())
-    d['wellness_signals'] = d.wellness_signals.where(known_wellness)
+    d['wellness_signals'] = d.wellness_signals.where(assessed)
     c = d.groupby('date').agg(
         workers=('subject_id', 'nunique'),
         pct_short_sleep=('flag_short_sleep', 'mean'),
@@ -237,12 +271,14 @@ def cohort(df: pd.DataFrame) -> pd.DataFrame:
     hidden = c.workers < k  # never show a group smaller than k people
     c[c.columns[2:]] = c[c.columns[2:]].astype('float64')
     c.loc[hidden, c.columns[2:]] = np.nan
-    # Each published statistic needs k contributors who actually supplied its inputs.
+    # Each published statistic needs k contributors who actually supplied its inputs; the
+    # eligible count is published next to it so consumers never re-derive it.
     for output, source in {'pct_short_sleep': 'flag_short_sleep',
             'pct_wellness_amber_or_red': 'wellness_signals', 'pct_sustained_high_hr': 'flag_sustained_high_hr',
             'median_sleep_h': 'sleep_min', 'median_steps': 'steps'}.items():
-        contributors = d[d[source].notna()].groupby('date').subject_id.nunique()
-        c.loc[c.date.map(contributors).fillna(0) < k, output] = np.nan
+        contributors = c.date.map(d[d[source].notna()].groupby('date').subject_id.nunique()).fillna(0).astype(int)
+        c.loc[contributors < k, output] = np.nan
+        c[f'n_{output}'] = contributors
     c['suppressed'] = hidden
     return c
 
