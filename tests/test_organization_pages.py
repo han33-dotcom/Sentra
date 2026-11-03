@@ -101,6 +101,14 @@ class OrganizationPageTests(unittest.TestCase):
                          ('401 min', '410 min', '-9 min'))
         self.assertIn('Not enough history', rows['Resting heart rate']['Note'])
 
+    def test_latest_group_day_excludes_other_organizations(self):
+        people = [{**p, 'days': [dict(p['days'][0])]} for p in BOARD['people']]
+        people[-1]['days'][0]['d'] = '2026-11-03'  # org-b updated after org-a
+        with patch.dict(BOARD, people=people, data_through='2026-11-03'):
+            app = self.open('officer@a.test', 'Organization overview')
+            self.assertEqual(self.table(app)['Sleep']['Group median'], '403 min')
+            self.assertTrue(any('Published days through 2026-10-07.' in c.value for c in app.caption))
+
     def test_assessable_counts_consume_the_versioned_board_state(self):
         from sentra import viewer_app
         people = [{**p, 'days': [{**p['days'][0], 'lvl': 'green'}]} for p in BOARD['people']]

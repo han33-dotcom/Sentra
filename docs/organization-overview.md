@@ -39,7 +39,8 @@ inferring completeness from a baseline.
 
 ## Group summary
 
-For the latest published day or the last 7 published days ending there:
+For the latest published day within the permitted group, or the last 7 days ending there
+(newer data from another organization cannot move this period):
 - each contributing person gives one value: the median of their available days in the period;
 - the group value is the median of those per-person values, **separately per device**: Fitbit and
   WHOOP measure HRV, resting heart rate and sleep differently, so they are never pooled

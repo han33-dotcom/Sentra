@@ -378,7 +378,7 @@ def team_consents():
 def organization_overview():
     """Group summaries and participation for the signed-in user's scope (#39)."""
     from .access import K_ANONYMITY
-    from .organization import group_summary, participation, shown_count, team_scope
+    from .organization import group_summary, latest_group_day, participation, shown_count, team_scope
     principal()
     with st.container(key='page-heading'):
         st.caption('ORGANIZATION')
@@ -427,12 +427,12 @@ def organization_overview():
         st.caption(f'Team view: also includes {pilot} pilot participant(s) with data but no recorded consent. '
                    'Withdrawn participants are excluded.')
     st.subheader('Group summary')
-    through=civil_day(data['board'].get('data_through'))
-    if not through:
+    end=latest_group_day(people)
+    if not end:
         st.info('No processed days are published yet.')
         return
+    through=end.isoformat()
     period=st.radio('Period',('Latest day','Last 7 days'),horizontal=True,key='audit_org_period')
-    end=date.fromisoformat(through)
     rows=group_summary(people,scope,end=end,days=1 if period=='Latest day' else 7)
     st.dataframe([{'Measure':r['label'],
                    'Device':r['device'] or '',

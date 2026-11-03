@@ -47,6 +47,11 @@ def _days(person):
     return [d for d in person.get('days', ()) if isinstance(d, dict) and _day(d.get('d'))]
 
 
+def latest_group_day(people):
+    """Latest valid published day among the already authorized group contributors."""
+    return max((_day(d['d']) for person in people for d in _days(person)), default=None)
+
+
 def shown_count(count, k=K_ANONYMITY):
     """A contributor count safe to display: exact from k upwards, otherwise only '<k'."""
     return str(count) if count == 0 or publishable(count, k) else f'<{k}'
