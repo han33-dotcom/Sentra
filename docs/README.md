@@ -7,6 +7,7 @@ Tasks belong in [GitHub Issues](https://github.com/han33-dotcom/Sentra/issues); 
 ## Documents
 
 - [collaborator setup](collaborator-setup.md)
+- [collection restart readiness](collection-restart-readiness.md)
 - [data dictionary](data-dictionary.md)
 - [dashboard restoration](dashboard-restoration.md)
 - [operating guide](operating-guide.md)
