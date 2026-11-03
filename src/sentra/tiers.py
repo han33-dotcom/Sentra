@@ -12,9 +12,12 @@ private 'sentra-tiers' bucket after the object-capacity guard accepts their tota
 """
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
+import hashlib
 import io
 import json
 from pathlib import Path
+import shutil
+import tempfile
 
 import psycopg
 
@@ -31,6 +34,7 @@ HR_MINUTE_METRICS = {'/heartRate/beatsPerMinuteAvg': 'mean', '/heartRate/beatsPe
 RESERVE_CHUNK = 90_000_000  # the viewer reservation function accepts at most 100 MB per call
 DEFAULT_MAX_READ_BYTES = 500_000_000
 MAX_OBJECT_BYTES = 52_428_800  # bucket file_size_limit in sql/006_parquet_tiers.sql
+SLOTS = ('slot-a/', 'slot-b/')  # two complete tier sets; size_report.json points at one
 
 QUERIES = {
     'hr_raw': ('''select participant_id,provider,measured_at,value from audit.measurements
@@ -276,41 +280,118 @@ def build(reader, limits, *, now=None, employees=10, period_days=30):
     return objects, report
 
 
-def fetch(storage, folder, *, maximum=MAX_OBJECT_BYTES):
-    """Download the latest published tiers listed in size_report.json; storage.reserve covers egress."""
-    code, body = storage.request('GET', 'size_report.json', maximum=1_000_000)
-    if code != 200:
-        raise SentraError(f'Tier report unavailable (HTTP {code}); run tiers-build first.')
-    report = json.loads(body)
+def fetch(storage, folder, *, maximum=MAX_OBJECT_BYTES, attempts=3):
+    """Download the latest published tiers listed in size_report.json; storage.reserve covers egress.
+
+    Slots are reused, so a slow reader could see a slot overwritten mid-download. Every object is
+    checked against the report's SHA-256; on any change the report is read again and the whole set
+    is fetched afresh, so a mixed set is never returned."""
+    folder = Path(folder)
+    folder.parent.mkdir(parents=True, exist_ok=True)
+    for _ in range(attempts):
+        code, body = storage.request('GET', 'size_report.json', maximum=1_000_000)
+        if code != 200:
+            raise SentraError(f'Tier report unavailable (HTTP {code}); run tiers-build first.')
+        report = json.loads(body)
+        # A failed attempt must not leave objects that disappear from the next report.
+        with tempfile.TemporaryDirectory(prefix='.sentra-tiers-', dir=folder.parent) as staging:
+            if not _download(storage, staging, report, maximum):
+                continue
+            folder.mkdir(parents=True, exist_ok=True)
+            wanted = set(report.get('objects', {}))
+            # These directories belong to this derived cache; preserve unrelated files.
+            for directory in ('hr_raw', 'hr_minute'):
+                for old in (folder / directory).glob('*.parquet'):
+                    if old.relative_to(folder).as_posix() not in wanted:
+                        old.unlink()
+            for key in wanted:
+                target = folder / key
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(Path(staging) / key, target)
+            return report
+    raise SentraError('Tiers kept changing while they were downloaded; nothing processed. Retry later.')
+
+
+def _download(storage, folder, report, maximum):
+    """True when every listed object matched the report; False when one changed since it was written."""
+    prefix, digests = report.get('prefix', ''), report.get('sha256', {})
+    if prefix not in SLOTS + ('',):
+        raise SentraError('Tier report names an unknown slot; nothing processed.')
+    if prefix and set(digests) != set(report.get('objects', {})):
+        raise SentraError('Tier report lacks object digests; nothing processed.')
     for key, size in report.get('objects', {}).items():
         path = (Path(folder) / key).resolve()
         if (not isinstance(size, int) or not 0 <= size <= maximum or '..' in key
                 or '\\' in key or ':' in key or not path.is_relative_to(Path(folder).resolve())):
             raise SentraError('Tier report lists an invalid object; nothing processed.')
-        code, data = storage.request('GET', key, maximum=size + 65_536)
-        if code != 200 or len(data) != size:
-            raise SentraError(f'Tier object {key} missing or changed since its report; rebuild tiers.')
+        code, data = storage.request('GET', prefix + key, maximum=size + 65_536)
+        if code != 200:
+            raise SentraError(f'Tier object {key} missing; rebuild tiers.')
+        if key in digests:
+            if len(data) != size or hashlib.sha256(data).hexdigest() != digests[key]:
+                return False  # the slot was rewritten while we read it
+        elif len(data) != size:
+            raise SentraError(f'Tier object {key} changed since its report; rebuild tiers.')
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
-    return report
+    return True
 
 
-def publish(objects, report, storage, reader, limits, *, local_dir=None):
-    """Upload after the capacity guard accepts the full size, or write to a private local folder."""
-    body = json.dumps(report, indent=2).encode()
+def _missing(code, body):
+    """Only an explicit not-found counts as "no report yet"; Supabase may wrap it in HTTP 400."""
+    if code == 404:
+        return True
+    try:
+        error = json.loads(body) if code == 400 else {}
+    except ValueError:
+        return False
+    return isinstance(error, dict) and (str(error.get('statusCode')) == '404'
+                                        or str(error.get('error', '')).lower() in ('not_found', 'not found'))
+
+
+def current_slot(storage):
+    """Slot prefix readers use now: None when no report exists yet, '' for the unslotted layout.
+
+    Any other failure stops publication before a write, so the live slot is never overwritten."""
+    code, body = storage.request('GET', 'size_report.json', maximum=1_000_000)
+    if code != 200:
+        if _missing(code, body):
+            return None
+        raise SentraError(f'Tier report unreadable (HTTP {code}); nothing published, readers keep the current tiers.')
+    try:
+        prefix = json.loads(body).get('prefix', '')
+    except (ValueError, AttributeError):
+        prefix = None
+    if prefix not in SLOTS + ('',):
+        raise SentraError('Tier report malformed; nothing published, readers keep the current tiers.')
+    return prefix
+
+
+def publish(objects, report, storage, reader, limits, *, local_dir=None, extra_bytes=0):
+    """Upload after the capacity guard accepts the full size, or write to a private local folder.
+
+    Objects go to the slot readers are not using; size_report.json, written last, switches readers
+    over in one replace. A failed upload therefore leaves the previous complete set in use.
+    extra_bytes covers anything uploaded right after (the board), so one capacity check spans it all.
+    """
     if any(len(b) > MAX_OBJECT_BYTES for b in objects.values()):
         raise SentraError('A tier object exceeds the 50 MB bucket limit; split the tier before uploading.')
     if local_dir is not None:
-        for key, data in {**objects, 'size_report.json': body}.items():
+        for key, data in {**objects, 'size_report.json': json.dumps(report, indent=2).encode()}.items():
             path = Path(local_dir) / key
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
         return {'uploaded': 0, 'local': str(local_dir)}
+    slot = SLOTS[1] if current_slot(storage) == SLOTS[0] else SLOTS[0]
+    digests = {key: hashlib.sha256(data).hexdigest() for key, data in objects.items()}
+    body = json.dumps({**report, 'prefix': slot, 'sha256': digests}, indent=2).encode()
     # Conservative: replaced objects are counted at full size, never netted against older versions.
-    limits.check(reader.usage(), object_add=sum(len(b) for b in objects.values()) + len(body))
-    for key, data in {**objects, 'size_report.json': body}.items():
-        code, _ = storage.request('POST', key, data=data, maximum=65_536, upsert=True,
-                                  content_type='application/json' if key.endswith('.json') else PARQUET)
+    limits.check(reader.usage(), object_add=sum(len(b) for b in objects.values()) + len(body) + extra_bytes)
+    for key, data in objects.items():
+        code, _ = storage.request('POST', slot + key, data=data, maximum=65_536, upsert=True, content_type=PARQUET)
         if code not in (200, 201):
-            raise SentraError(f'Tier upload failed (HTTP {code}) at {key}; earlier tier objects may be newer than others. Repeat the build.')
-    return {'uploaded': len(objects) + 1, 'bucket': TIER_BUCKET}
+            raise SentraError(f'Tier upload failed (HTTP {code}) at {key}; readers keep the previous complete tiers.')
+    code, _ = storage.request('POST', 'size_report.json', data=body, maximum=65_536, upsert=True, content_type='application/json')
+    if code not in (200, 201):
+        raise SentraError(f'Tier report upload failed (HTTP {code}); readers keep the previous complete tiers.')
+    return {'uploaded': len(objects) + 1, 'bucket': TIER_BUCKET, 'slot': slot}
