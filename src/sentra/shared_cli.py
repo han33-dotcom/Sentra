@@ -12,7 +12,7 @@ from .errors import SentraError
 from .local_store import LocalStore
 from .providers import PROVIDERS
 from .shared_backend import SharedBackend,PrivateStorage,connect_db,BUCKET
-from . import capacity
+from . import capacity, compaction
 from .shared_backup import make_backup,BackupReader,restore_backup,verify_backup
 from .shared_config import read_shared
 from .shared_setup import bootstrap,read_admin,set_budget
@@ -38,6 +38,15 @@ def add_commands(sub):
     p.add_argument('--participant')
     p.add_argument('--provider',choices=PROVIDERS)
     p.add_argument('--dataset')
+    for name in ('shared-compact','shared-compact-verify'):
+        p = sub.add_parser(name,help='Compact dense rows into audit.series (never deletes measurements)' if name == 'shared-compact'
+                           else 'Re-check compacted series against measurement rows and report measured sizes')
+        p.add_argument('--participant',required=True)
+        p.add_argument('--provider',choices=PROVIDERS,required=True)
+        p.add_argument('--dataset',required=True)
+        if name == 'shared-compact':
+            p.add_argument('--limit',type=int,default=200,help='original responses per batch')
+            p.add_argument('--repair',action='store_true',help='rebuild compacted responses whose measurement rows changed since')
     p = sub.add_parser('shared-backup-verify',help='Offline check of an encrypted backup: hashes, row counts, fingerprints, originals')
     p.add_argument('backup',type=Path)
     p = sub.add_parser('shared-restore',help='Restore health-only backup into a new isolated private schema')
@@ -179,6 +188,21 @@ def run_command(args):
                 require_agreement(load_connection(args.config,provider,require_client=False))
             path = make_backup(backend,private/'backups',cipher,participant=args.participant,provider=args.provider,dataset=args.dataset)
             print('Encrypted private backup manifest: '+str(path))
+        elif args.command in ('shared-compact','shared-compact-verify'):
+            scope = (args.participant,args.provider,args.dataset)
+            backend.lock()
+            try:
+                if args.command == 'shared-compact':
+                    result = compaction.compact(backend.db,backend.guard,*scope,limit=max(1,min(args.limit,2000)),repair=args.repair)
+                else:
+                    backend.reserve(1_000_000)
+                    result = {**compaction.verify(backend.db,*scope),**compaction.sizes(backend.db,*scope)}
+            finally: backend.unlock()
+            print(json.dumps(result,indent=2))
+            if result['mismatched_responses']:
+                # Not lossless evidence: stale copies need `shared-compact --repair` before any later storage step.
+                print('Compacted series differ from measurement rows for some responses; run shared-compact --repair.',flush=True)
+                return 1
         elif args.command == 'shared-restore':
             path = args.backup.resolve()
             if not path.is_relative_to(private/'backups'):
