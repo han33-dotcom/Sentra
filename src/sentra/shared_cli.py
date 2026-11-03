@@ -41,7 +41,9 @@ def add_commands(sub):
         p.add_argument('--participant',required=True)
         p.add_argument('--provider',choices=PROVIDERS,required=True)
         p.add_argument('--dataset',required=True)
-        if name == 'shared-compact': p.add_argument('--limit',type=int,default=200,help='original responses per batch')
+        if name == 'shared-compact':
+            p.add_argument('--limit',type=int,default=200,help='original responses per batch')
+            p.add_argument('--repair',action='store_true',help='rebuild compacted responses whose measurement rows changed since')
     p = sub.add_parser('shared-restore',help='Restore health-only backup into a new isolated private schema')
     p.add_argument('backup',type=Path)
     p.add_argument('--empty-audit',action='store_true',help='Operational restoration only into completely empty initialized audit tables')
@@ -170,12 +172,16 @@ def run_command(args):
             backend.lock()
             try:
                 if args.command == 'shared-compact':
-                    result = compaction.compact(backend.db,backend.guard,*scope,limit=max(1,min(args.limit,2000)))
+                    result = compaction.compact(backend.db,backend.guard,*scope,limit=max(1,min(args.limit,2000)),repair=args.repair)
                 else:
                     backend.reserve(1_000_000)
                     result = {**compaction.verify(backend.db,*scope),**compaction.sizes(backend.db,*scope)}
             finally: backend.unlock()
             print(json.dumps(result,indent=2))
+            if result['mismatched_responses']:
+                # Not lossless evidence: stale copies need `shared-compact --repair` before any later storage step.
+                print('Compacted series differ from measurement rows for some responses; run shared-compact --repair.',flush=True)
+                return 1
         elif args.command == 'shared-restore':
             path = args.backup.resolve()
             if not path.is_relative_to(private/'backups'):

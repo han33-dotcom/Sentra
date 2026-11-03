@@ -55,22 +55,35 @@ def build(db, participant, provider, dataset, responses):
           resolution_seconds::text''', (*scope, responses))
 
 
-def verify(db, participant, provider, dataset, responses=None):
-    """Compare every compacted response (or the given ones) with its measurement rows."""
-    scope = _scope(participant, provider, dataset)
+def _comparison(scope, responses):
+    """Per response: measurement and series row counts and fingerprints (null where absent)."""
     only = ' and source_response_id = any(%s)' if responses is not None else ''
     params = (*scope, responses) if responses is not None else scope
-    rows = db.execute(f'''with m as (select source_response_id, count(*) n, {FINGERPRINT} h
+    query = f'''with m as (select source_response_id, count(*) n, {FINGERPRINT} h
             from audit.measurements t where {SCOPE}{only} group by 1),
           s as (select source_response_id, count(*) n, {FINGERPRINT} h
-            from audit.series_rows t where {SCOPE}{only} group by 1)
-        select count(*) filter (where s.n is not null and m.n = s.n and m.h = s.h),
-               count(*) filter (where s.n is not null and (m.n is distinct from s.n or m.h is distinct from s.h)),
-               count(*) filter (where s.n is null),
-               coalesce(sum(s.n) filter (where m.n = s.n and m.h = s.h), 0)
-        from m full join s using (source_response_id)''', (*params, *params)).fetchone()
+            from audit.series_rows t where {SCOPE}{only} group by 1),
+          c as (select source_response_id, m.n mn, s.n sn,
+                       s.n is not null and (m.n is distinct from s.n or m.h is distinct from s.h) stale
+                from m full join s using (source_response_id))'''
+    return query, (*params, *params)
+
+
+def verify(db, participant, provider, dataset, responses=None):
+    """Compare every compacted response (or the given ones) with its measurement rows."""
+    query, params = _comparison(_scope(participant, provider, dataset), responses)
+    rows = db.execute(query + '''select count(*) filter (where sn is not null and not stale),
+               count(*) filter (where stale), count(*) filter (where sn is null),
+               coalesce(sum(sn) filter (where sn is not null and not stale), 0) from c''', params).fetchone()
     return {'verified_responses': rows[0], 'mismatched_responses': rows[1], 'pending_responses': rows[2],
             'verified_rows': int(rows[3])}
+
+
+def stale(db, participant, provider, dataset, *, limit):
+    """Compacted responses whose measurement rows have since changed, moved away or gone."""
+    query, params = _comparison(_scope(participant, provider, dataset), None)
+    return [r[0] for r in db.execute(query + 'select source_response_id from c where stale order by 1 limit %s',
+                                     (*params, limit)).fetchall()]
 
 
 def sizes(db, participant, provider, dataset):
@@ -88,10 +101,15 @@ def sizes(db, participant, provider, dataset):
             'meaning': 'pg_column_size of row data only; indexes and tuple headers excluded on both sides'}
 
 
-def compact(db, guard, participant, provider, dataset, *, limit=200):
-    """Compact up to `limit` pending responses in one transaction; rolled back unless every one verifies."""
+def compact(db, guard, participant, provider, dataset, *, limit=200, repair=False):
+    """Compact up to `limit` pending responses in one transaction; rolled back unless every one verifies.
+
+    With repair=True the batch is instead the stale responses (corrected after compaction, or whose
+    readings moved to another response): each is rebuilt from its current rows, and one with no rows
+    left loses its series copy. The measurement rows themselves are never changed."""
+    select = stale if repair else pending
     with db.transaction():
-        responses = pending(db, participant, provider, dataset, limit=limit)
+        responses = select(db, participant, provider, dataset, limit=limit)
         if not responses:
             return {'compacted_responses': 0, **verify(db, participant, provider, dataset)}
         bytes_in = db.execute(f'''select coalesce(sum(pg_column_size(m.*)), 0) from audit.measurements m
@@ -99,7 +117,7 @@ def compact(db, guard, participant, provider, dataset, *, limit=200):
         guard(database_add=int(bytes_in) + 1_000_000)  # worst case: no saving at all
         build(db, participant, provider, dataset, responses)
         result = verify(db, participant, provider, dataset, responses)
-        if result['mismatched_responses'] or result['verified_responses'] != len(responses):
+        if result['mismatched_responses'] or result['pending_responses']:
             raise SentraError('Compacted series differ from measurement rows; batch rolled back, nothing kept.')
     overall = verify(db, participant, provider, dataset)
     return {'compacted_responses': len(responses), 'batch_verified_rows': result['verified_rows'], **overall}

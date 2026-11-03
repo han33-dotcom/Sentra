@@ -82,6 +82,48 @@ class CompactionDatabaseTests(unittest.TestCase):
         compaction.build(self.db, 'p01', 'google_health', 'minute_steps', [RESPONSE])
         self.assertEqual(compaction.verify(self.db, 'p01', 'google_health', 'minute_steps')['mismatched_responses'], 0)
 
+    def test_repair_rebuilds_corrected_and_moved_readings_through_the_public_path(self):
+        self.rows(RESPONSE, ['12', '13'])
+        compaction.compact(self.db, self.guard, 'p01', 'google_health', 'minute_steps')
+        self.db.execute("update audit.measurements set value=14 where record_key=%s", (f'{RESPONSE[:4]}-0000',))
+        result = compaction.compact(self.db, self.guard, 'p01', 'google_health', 'minute_steps')
+        self.assertEqual((result['compacted_responses'], result['mismatched_responses']), (0, 1))  # ordinary run cannot fix it
+        result = compaction.compact(self.db, self.guard, 'p01', 'google_health', 'minute_steps', repair=True)
+        self.assertEqual((result['compacted_responses'], result['mismatched_responses'], result['verified_rows']), (1, 0, 2))
+        # A corrected record moves to a newer original response: the old copy must not keep the reading.
+        moved = 'b' * 64
+        self.db.execute("update audit.records set source_response_id=%s where record_key=%s", (moved, f'{RESPONSE[:4]}-0001'))
+        self.db.execute("update audit.measurements set source_response_id=%s where record_key=%s", (moved, f'{RESPONSE[:4]}-0001'))
+        compaction.compact(self.db, self.guard, 'p01', 'google_health', 'minute_steps')
+        self.assertEqual(compaction.verify(self.db, 'p01', 'google_health', 'minute_steps')['mismatched_responses'], 1)
+        result = compaction.compact(self.db, self.guard, 'p01', 'google_health', 'minute_steps', repair=True)
+        self.assertEqual((result['mismatched_responses'], result['verified_responses'], result['verified_rows']), (0, 2, 2))
+        self.db.execute("delete from audit.measurements where source_response_id=%s", (moved,))  # every reading gone
+        result = compaction.compact(self.db, self.guard, 'p01', 'google_health', 'minute_steps', repair=True)
+        self.assertEqual((result['mismatched_responses'], result['verified_responses']), (0, 1))
+        self.assertEqual(self.db.execute('select count(*) from audit.series where source_response_id=%s', (moved,)).fetchone()[0], 0)
+
+    def test_cli_exits_nonzero_while_any_copy_is_stale(self):
+        from argparse import Namespace
+        from unittest import mock
+        from sentra import shared_cli
+        self.rows(RESPONSE, ['12', '13'])
+        compaction.compact(self.db, self.guard, 'p01', 'google_health', 'minute_steps')
+        self.db.execute("update audit.measurements set value=14 where record_key=%s", (f'{RESPONSE[:4]}-0000',))
+        backend = mock.Mock(db=self.db, guard=self.guard)
+        connection = mock.Mock(private_dir=Path('.private'))
+        run = lambda command, **extra: shared_cli.run_command(Namespace(
+            command=command, config=Path('config/local.toml'), participant='p01', provider='google_health',
+            dataset='minute_steps', **extra))
+        with mock.patch.object(shared_cli, 'local_cipher'), \
+                mock.patch.object(shared_cli, 'load_connection', return_value=connection), \
+                mock.patch.object(shared_cli, 'read_shared', return_value=({}, None, Path('.private'))), \
+                mock.patch.object(shared_cli, 'SharedBackend', return_value=backend), mock.patch('builtins.print'):
+            self.assertEqual(run('shared-compact-verify'), 1)
+            self.assertEqual(run('shared-compact', limit=200, repair=False), 1)
+            self.assertEqual(run('shared-compact', limit=200, repair=True), 0)
+            self.assertEqual(run('shared-compact-verify'), 0)
+
     def test_sparse_datasets_are_refused(self):
         with self.assertRaises(SentraError):
             compaction.compact(self.db, self.guard, 'p01', 'whoop', 'recovery')

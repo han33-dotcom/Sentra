@@ -121,8 +121,12 @@ rows.**
   exact per-row fingerprint with the source rows. The fingerprint uses JSON text, so numeric
   scale, nulls, jsonb and timestamps must all match. Any difference rolls the whole batch back.
 - `sentra shared-compact-verify …` re-checks everything compacted so far and reports measured
-  sizes. A later correction to measurement rows shows up as a mismatch until the response is
-  rebuilt.
+  sizes. A later correction to measurement rows, including a reading that moves to a newer
+  original response, shows up as a mismatch. While any copy is mismatched, both commands
+  **exit 1**, so a mismatched copy is never taken as lossless evidence.
+- `sentra shared-compact --repair …` rebuilds those stale responses from their current rows,
+  with the same lock, capacity guard and batch verification. A response with no rows left
+  loses its series copy. Measurement rows are never changed.
 
 **Measured (3 Nov 2026, local throwaway PostgreSQL 16, not Supabase):** 65 days of one
 participant's real minute step readings were loaded in the collector's exact row shape:
