@@ -2,15 +2,17 @@
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
 import tempfile
+import time
 
 import altair as alt
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
+from .access import resolve
 from .errors import SentraError
 from .viewer_config import emails, runtime_settings
-from .viewer_data import BEIRUT, Selection, authorize, inline_download, measurement_csv, sampling_summary, civil_day, latest_timing, latest_available_day
+from .viewer_data import BEIRUT, Selection, verified_email, inline_download, measurement_csv, sampling_summary, civil_day, latest_timing, latest_available_day
 from .viewer_reader import ViewerReader
 from .curated import curate, curated_csv, record_day, stamp
 from .metric_dictionary import METRICS
@@ -19,13 +21,44 @@ from .datasets import canonical
 from .viewer_style import BRAND, STYLE
 
 
-def principal():
+ACCESS_TTL_SECONDS=60  # consent/withdrawal changes apply within a minute
+
+
+def load_organization_rows(email):
+    """Read org users and current consent with a reader bound to the verified identity only."""
+    with tempfile.TemporaryDirectory(prefix='sentra-viewer-') as folder:
+        credentials,limits,_=runtime_settings(st.secrets,folder)
+        reader=ViewerReader(credentials,limits,lambda:email)
+        try: return reader.organization_rows()
+        finally: reader.close()
+
+
+def current_access():
+    """Team allowlist first (no database read); otherwise organization membership and consent."""
     try:
         allowed=emails(list(st.secrets['viewer']['allowed_emails']))
         claims=st.user.to_dict()
     except Exception:
         raise SentraError('Viewer sign-in configuration is incomplete. Ask the operator to finish setup.') from None
-    return authorize(claims,allowed)
+    email=verified_email(claims)
+    if email in allowed:
+        return resolve(email,team_emails=allowed)
+    cached=st.session_state.get('audit_access')
+    if cached and cached[0]==email and time.monotonic()-cached[1]<ACCESS_TTL_SECONDS:
+        return cached[2]
+    users,consents=load_organization_rows(email)
+    decision=resolve(email,team_emails=allowed,org_users=users,consents=consents)
+    st.session_state['audit_access']=(email,time.monotonic(),decision)
+    return decision
+
+
+def principal():
+    return current_access().email
+
+
+def access_scope(decision):
+    """What a cached catalog/board was fetched for: the team, or a specific permitted set."""
+    return 'team' if decision.is_team else tuple(sorted(decision.individuals))
 
 
 def clear_private_state():
@@ -68,7 +101,9 @@ def open_reader():
     principal()
     with tempfile.TemporaryDirectory(prefix='sentra-viewer-') as folder:
         credentials,limits,_=runtime_settings(st.secrets,folder)
-        reader=ViewerReader(credentials,limits,principal)
+        # Consult the current decision at every read, so a refresh during an open reader applies.
+        reader=ViewerReader(credentials,limits,principal,
+                            can_view=lambda participant:current_access().can_view_individual(participant))
         try: yield reader
         finally: reader.close()
 
@@ -203,11 +238,15 @@ def wellness_board():
         st.caption('PRIVATE WORKSPACE')
         st.title('Wellness board')
     reload=st.sidebar.button('Reload board',icon=':material/refresh:')
-    if reload or 'audit_board' not in st.session_state:
+    decision=current_access()
+    # Refetch when the permitted set changes; filtering a cached copy cannot add newly shared people.
+    if reload or 'audit_board' not in st.session_state or st.session_state.get('audit_board_scope')!=access_scope(decision):
         with open_reader() as reader:
             st.session_state['audit_board']=reader.board()
-    board=st.session_state['audit_board']
-    principal()
+        st.session_state['audit_board_scope']=access_scope(decision)
+    # Re-filter the cached board so a withdrawal applies without a manual reload.
+    board={**st.session_state['audit_board'],'people':[p for p in st.session_state['audit_board']['people']
+                                                         if decision.can_view_individual(p.get('id'))]}
     st.caption("Wellness indicators against each person's own recent pattern; not a medical assessment. "
                f'Thresholds: {board.get("thresholds_status") or "v0 — pending medical expert sign-off"}.')
     latest=civil_day(board.get('data_through'))
@@ -312,6 +351,8 @@ def readable_view(selection,result,name):
         if civil:st.caption('Latest selected vendor civil day: '+civil)
         st.caption('Dates and physical timestamps use Asia/Beirut. Sleep uses its wake date; workouts use their start date. Vendor civil dates remain calendar dates. Scores from different providers have different definitions.')
         st.caption('Readable CSV includes exact source values, units, state and references for the selected participant and dates. Detailed field CSV and unchanged original responses are in Audit details.')
+    if not current_access().is_team:
+        return  # Organization sharing and downloads belong to permitted reports (#42).
     if st.button('Prepare readable CSV',icon=':material/download:'):
         principal();st.session_state['audit_readable_csv']=curated_csv(curated['export'])
     if st.session_state.get('audit_readable_csv') is not None:
@@ -339,7 +380,11 @@ def main():
             st.stop()
         identity=principal()
         if st.session_state.get('audit_owner')!=identity:
+            # Keep only the access decision just made for this same identity.
+            decision=st.session_state.get('audit_access')
             clear_private_state()
+            if decision and decision[0]==identity:
+                st.session_state['audit_access']=decision
             st.session_state['audit_owner']=identity
         page=st.sidebar.radio('Explore',('Daily activity','Sleep','Workouts','Data availability','Wellness board'),
             key='explore',label_visibility='collapsed',width='stretch')
@@ -347,12 +392,22 @@ def main():
         if page=='Wellness board':
             wellness_board()
             return
-        if 'audit_catalog' not in st.session_state:
+        decision=current_access()
+        # Refetch when the permitted set changes; filtering a cached copy cannot add newly shared people.
+        if 'audit_catalog' not in st.session_state or st.session_state.get('audit_catalog_scope')!=access_scope(decision):
             with open_reader() as reader:
                 st.session_state['audit_catalog']=reader.catalog()
-        catalog=st.session_state['audit_catalog']
+            st.session_state['audit_catalog_scope']=access_scope(decision)
+        # Re-filter cached rows so consent changes apply without a manual refresh.
+        catalog=[r for r in st.session_state['audit_catalog'] if decision.can_view_individual(r['participant_id'])]
+        if st.session_state.get('audit_participant') and not decision.can_view_individual(st.session_state['audit_participant']):
+            clear_selection_state()
         if not catalog:
-            st.info('No collected datasets are available yet.')
+            st.info('No collected datasets are available yet.' if current_access().is_team else
+                    'No participant has shared individual details with your organization yet.')
+            if st.sidebar.button('Check again',icon=':material/refresh:'):
+                clear_private_state()
+                st.rerun()
             st.stop()
         participants=sorted({r['participant_id'] for r in catalog})
         remembered=st.session_state.get('audit_participant')
@@ -452,6 +507,8 @@ def main():
             with st.container(border=True):
                 st.subheader('Start with your selected days')
                 st.caption('Choose a participant, provider and dates, then load their returned data. Changing filters clears results and prepared downloads.')
+        if not current_access().is_team:
+            st.stop()  # Source fields and original responses stay with Sentra operators.
         with st.expander('Audit details · source fields, exact values and original responses'):
             st.caption('These details use the sidebar audit dataset, metric and text filters. Full record context remains available for the overview dates.')
             if overview is not None:

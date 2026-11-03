@@ -18,6 +18,7 @@ from .vault import local_cipher,TokenVault
 
 
 def add_commands(sub):
+    sub.add_parser('cloud-readiness',help='Inspect stored cloud authorization/capacity without provider calls; encrypted private report')
     sub.add_parser('cloud-prepare',help='Deploy additive daily-state schema and prepare separate encrypted cloud key/config')
     sub.add_parser('cloud-github-secrets',help='Configure private repository secrets with schedule paused; no commits/pushes')
     p=sub.add_parser('cloud-connect',help='Move credential ownership to hosted state, or reconnect under cloud/local locks')
@@ -75,6 +76,9 @@ def reconnect(repo,c,vault,cipher):
 
 
 def run_command(args):
+    if args.command=='cloud-readiness':
+        from .readiness import run_readiness
+        return run_readiness(args.config)
     # Reject ambiguous operator input before connecting or consuming quota.
     if args.command=='cloud-window':
         settings=collection_control(start=args.start,pause=args.pause,approved=args.approved,ongoing=args.ongoing)

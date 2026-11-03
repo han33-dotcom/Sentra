@@ -45,6 +45,13 @@ secrets and restart; previously downloaded files cannot be recalled.
 
 ## Operator setup
 
+Before resuming the paused collector, use the current
+[collection restart readiness ledger](collection-restart-readiness.md) for #44.
+`sentra cloud-readiness` inspects stored authorization/capacity without provider
+calls and saves encrypted private evidence; it never authorizes or enables a run.
+Historical stage acceptance and the zero-spend variable do not replace fresh
+readiness checks, agreed windows and restart authorization.
+
 Use an existing authorized checkout and Python 3.11. Follow [Stage 1](stage-1-setup.md)
 for the local environment/OS vault, [Stage 3](stage-3-storage.md) for restricted
 Supabase configuration and [Stage 4](stage-4-collection.md) for cloud credential

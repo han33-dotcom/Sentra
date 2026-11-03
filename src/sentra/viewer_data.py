@@ -22,20 +22,27 @@ MEASUREMENT_COLUMNS = ('participant_id','provider','dataset','record_key','metri
     'source_response_id','source_pointer','provisional','score_state')
 
 
-def authorize(claims, allowed_emails, *, now=None):
-    """Claims are supplied by Streamlit's verified OIDC cookie, never query input."""
+def verified_email(claims, *, now=None):
+    """Verified, unexpired Google identity from Streamlit's OIDC cookie; no authorization decision."""
     try:
         email = claims.get('email','').strip().lower()
-        allowed = {item.strip().lower() for item in allowed_emails}
         expiry = claims.get('exp')
         if (claims.get('is_logged_in') is not True or claims.get('email_verified') is not True
                 or claims.get('iss') not in ('https://accounts.google.com','accounts.google.com')
-                or not email or email not in allowed or type(expiry) not in (int,float)
+                or not email or type(expiry) not in (int,float)
                 or not math.isfinite(expiry) or expiry <= (clock.time() if now is None else now)):
             raise ValueError
         return email
     except (ValueError,TypeError,AttributeError):
         raise SentraError('Access restricted to authorized team accounts. Sign in again if your session expired.') from None
+
+
+def authorize(claims, allowed_emails, *, now=None):
+    """Claims are supplied by Streamlit's verified OIDC cookie, never query input."""
+    email = verified_email(claims, now=now)
+    if email not in {item.strip().lower() for item in allowed_emails}:
+        raise SentraError('Access restricted to authorized team accounts. Sign in again if your session expired.')
+    return email
 
 
 @dataclass(frozen=True)
