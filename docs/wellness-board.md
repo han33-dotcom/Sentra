@@ -26,8 +26,13 @@ Streamlit viewer "Wellness board" page      ->  reads board/board.json, renders 
      **unless** the previous board was built under a different `assessment_version` (or none).
      Then it is rebuilt from the existing data so new assessment rules apply without restarting
      collection.
-  2. Otherwise it rebuilds the tiers, runs processing and uploads
-     `sentra-tiers/board/board.json`.
+  2. Otherwise it rebuilds the tiers and runs processing **before publishing anything**.
+     A processing failure leaves the previous tiers and board unchanged.
+  3. It then publishes the tiers into the unused slot (see
+     [parquet-tiers.md](parquet-tiers.md)), switches `size_report.json`, and uploads
+     `sentra-tiers/board/board.json` last. If the board upload fails, the previous board
+     stays published and the next run rebuilds it, because the board's `source_run` is older
+     than the newest collection.
 - **Viewer:** the **Wellness board** page. It is available only after the existing Google
   sign-in and approved-email check, and it is cleared on sign-out like other private
   state.
