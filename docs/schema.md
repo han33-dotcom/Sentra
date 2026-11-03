@@ -65,3 +65,60 @@ privileged access and should be limited to authorized operators.
 `last_success_at` reflects underlying successful collection, not present authorization
 or complete measurement availability. Cloud OAuth renewal/scheduling and teammate
 browser authentication remain Stages 4/5.
+
+## Organization access (`sql/007_organization_access.sql`, not yet applied)
+
+Schema `org` records who may see which participants, following
+[participation permissions](participation-permissions.md). It is read-only for
+`sentra_viewer`; the collector, `anon` and `authenticated` have no access, and writes
+are admin-only until enrollment tooling exists.
+
+| Table / view | Contents |
+| --- | --- |
+| `org.organizations` | Organization ID (`acme-ltd` style) and display name |
+| `org.org_users` | Lower-case Google sign-in e-mail per organization, role `officer` or `reviewer`, active flag |
+| `org.memberships` | Membership episodes: participant, organization, optional team for k-anonymous group views, `joined_on`/`left_on`; at most one open episode per participant |
+| `org.consents` | Append-only consent history per episode: version, `sharing` (`group_only` default or `individual`), demonstration consent, withdrawal. Triggers reject `UPDATE`, `DELETE` and `TRUNCATE`, including from the admin path |
+| `org.current_consent` | Latest consent row per participant with `membership_open` (`security_invoker`, so the caller's permissions apply) |
+
+No participant names, contact details, location or routes are stored. A consent
+change or withdrawal adds a row; earlier rows are never updated. Moving to another
+organization closes the old episode (`left_on`) and opens a new one with fresh
+consent; the old episode's participant, organization and dates cannot be rewritten.
+Behaviour tests in `tests/test_organization_access_db.py` run when
+`SENTRA_TEST_DATABASE_URL` points at a throwaway PostgreSQL 15+ server. Applying
+this migration to the shared database is a separate owner step, after review.
+
+`sentra.access.resolve()` turns these rows into a deny-by-default decision for the
+signed-in e-mail. Team operators on the viewer allowlist keep operator access. An
+organization user sees only their own organization: individual details need a current,
+non-withdrawn `individual` consent in an open episode, and group statistics count
+only current, non-withdrawn consents in open episodes, published with at least
+`cohort_k_anonymity` contributors. The viewer enforces it at sign-in, on every
+participant read and on the wellness board; source fields, original responses and
+downloads stay team-only. The read API remains a team operator credential (see
+[read API](read-api.md)).
+
+## Self-service enrollment (`sql/008_self_service_enrollment.sql`, not yet applied)
+
+After 007, a dedicated `sentra_enrollment` role can append consent and create/close
+membership episodes, allocate pseudonyms and store encrypted provider credentials.
+The existing viewer/API remain read-only. This role has no access to wearable
+measurement/record tables, collector controls or organization-user accounts.
+
+Private tables hold bounded invitations, encrypted expiring sessions, keyed hashes
+of provider identities and short-lived hashed request-rate buckets. RLS is forced;
+`anon`, `authenticated` and `sentra_viewer` cannot access them. No names, email
+addresses or provider account IDs are retained. Consent remains append-only.
+
+`enrollment_private.participation_status(pid)` returns only latest received time,
+latest usable measurement day, collection pause state and explicit unavailable
+assessment status. Only the trusted enrollment backend may call it.
+`collector_private.enrolled_connections()` returns at most 101 pseudonymous
+participant/provider pairs to the collector; runtime refuses more than 100. It
+excludes withdrawn or closed episodes. Withdrawal marks credentials `withdrawn`
+transactionally, preventing subsequent provider requests without deleting history.
+Collection discovery is opt-in and does not change existing activation controls.
+
+See [self-service enrollment](self-service-enrollment.md) for configuration,
+deployment, participant behavior and the isolated PostgreSQL verification fixture.

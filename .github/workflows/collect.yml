@@ -16,6 +16,9 @@ on:
         type: choice
         options: [all, google_health, whoop]
         default: all
+      participant:
+        description: Optional participant ID; select one for a new participant's bounded first import
+        type: string
       start:
         description: Inclusive Beirut date for initial/recovery (YYYY-MM-DD)
         type: string
@@ -57,6 +60,7 @@ jobs:
           SENTRA_TOKEN_KEY: ${{ secrets.SENTRA_TOKEN_KEY }}
           COLLECTION_MODE: ${{ inputs.mode || 'daily' }}
           COLLECTION_PROVIDER: ${{ inputs.provider || 'all' }}
+          COLLECTION_PARTICIPANT: ${{ inputs.participant }}
           COLLECTION_START: ${{ inputs.start }}
           COLLECTION_END: ${{ inputs.end }}
           COLLECTION_DATASET: ${{ inputs.dataset }}
@@ -67,7 +71,7 @@ jobs:
           import os
           from sentra.cloud_run import main
           args = ['--mode', os.environ['COLLECTION_MODE'], '--provider', os.environ['COLLECTION_PROVIDER']]
-          for field in ('start', 'end', 'dataset'):
+          for field in ('participant', 'start', 'end', 'dataset'):
               value = os.environ['COLLECTION_' + field.upper()]
               if value:
                   args.extend(['--' + field, value])

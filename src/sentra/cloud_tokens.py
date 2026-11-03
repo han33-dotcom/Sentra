@@ -48,6 +48,8 @@ class CloudTokenVault:
 
     def envelope(self):
         row=self.repository.read(self.pid,self.provider)
+        if row['refresh_status']=='withdrawn':
+            raise SentraError('Participation withdrawn; provider requests are disabled.')
         if row['refresh_status'] in ('handoff_pending','reconnect_pending'):
             raise SentraError('Cloud authorization handoff/reconnect incomplete; repeat the operator command.')
         try:
@@ -59,6 +61,10 @@ class CloudTokenVault:
         return row,value
 
     def connection(self): return SimpleNamespace(**self.envelope()[1]['connection'])
+
+    def ensure_active(self):
+        if self.repository.read(self.pid,self.provider)['refresh_status']=='withdrawn':
+            raise SentraError('Participation withdrawn; provider requests are disabled.')
 
     def read(self): return self.envelope()[1]['token']
 

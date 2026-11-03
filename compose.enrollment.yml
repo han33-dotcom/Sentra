@@ -1,0 +1,18 @@
+# Standalone enrollment service. Does not launch processing or collection.
+# Terminate TLS at a trusted reverse proxy and mount the official database CA.
+name: sentra-enrollment
+services:
+  enrollment:
+    build: .
+    image: sentra-api:local
+    command: ["uvicorn", "sentra.enrollment_web:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log", "--proxy-headers"]
+    environment:
+      SENTRA_ENROLLMENT_CONFIG: ${SENTRA_ENROLLMENT_CONFIG:?private enrollment configuration JSON}
+      FORWARDED_ALLOW_IPS: ${SENTRA_ENROLLMENT_PROXY_IPS:-127.0.0.1}
+    volumes:
+      - ${SENTRA_ENROLLMENT_CA_FILE:?official Supabase database certificate file}:/run/sentra/database-ca.crt:ro
+    ports:
+      - "127.0.0.1:${ENROLLMENT_PORT:-8010}:8000"
+    read_only: true
+    tmpfs: [/tmp]
+    restart: unless-stopped

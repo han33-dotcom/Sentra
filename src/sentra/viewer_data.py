@@ -22,20 +22,27 @@ MEASUREMENT_COLUMNS = ('participant_id','provider','dataset','record_key','metri
     'source_response_id','source_pointer','provisional','score_state')
 
 
-def authorize(claims, allowed_emails, *, now=None):
-    """Claims are supplied by Streamlit's verified OIDC cookie, never query input."""
+def verified_email(claims, *, now=None):
+    """Verified, unexpired Google identity from Streamlit's OIDC cookie; no authorization decision."""
     try:
         email = claims.get('email','').strip().lower()
-        allowed = {item.strip().lower() for item in allowed_emails}
         expiry = claims.get('exp')
         if (claims.get('is_logged_in') is not True or claims.get('email_verified') is not True
                 or claims.get('iss') not in ('https://accounts.google.com','accounts.google.com')
-                or not email or email not in allowed or type(expiry) not in (int,float)
+                or not email or type(expiry) not in (int,float)
                 or not math.isfinite(expiry) or expiry <= (clock.time() if now is None else now)):
             raise ValueError
         return email
     except (ValueError,TypeError,AttributeError):
         raise SentraError('Access restricted to authorized team accounts. Sign in again if your session expired.') from None
+
+
+def authorize(claims, allowed_emails, *, now=None):
+    """Claims are supplied by Streamlit's verified OIDC cookie, never query input."""
+    email = verified_email(claims, now=now)
+    if email not in {item.strip().lower() for item in allowed_emails}:
+        raise SentraError('Access restricted to authorized team accounts. Sign in again if your session expired.')
+    return email
 
 
 @dataclass(frozen=True)
@@ -107,6 +114,26 @@ def latest_timing(rows):
     return {'latest_point_time':max((r['measured_at'] for r in rows if r.get('measured_at')),default=None),
             'latest_interval_end':max((r['interval_end'] for r in rows if r.get('interval_end')),default=None),
             'latest_civil_day':max((civil_day(r.get('civil_date')) for r in rows if civil_day(r.get('civil_date'))),default=None)}
+
+
+def latest_available_day(catalog, participant, provider):
+    """Latest observed overview day, never a collection/publication timestamp."""
+    days=[]
+    for row in catalog:
+        if row['participant_id']!=participant or row['provider']!=provider:
+            continue
+        dataset=row['dataset']
+        if dataset.startswith('minute_') or dataset=='original_heart-rate':
+            continue
+        civil=civil_day(row.get('latest_civil_day'))
+        if civil:
+            days.append(date.fromisoformat(civil))
+        interval='latest_interval_end' if dataset=='sleep' else 'latest_interval_start'
+        for field in ('latest_point_time',interval):
+            value=row.get(field)
+            if isinstance(value,datetime) and value.tzinfo is not None:
+                days.append(value.astimezone(BEIRUT).date())
+    return max(days,default=None)
 
 
 def fetch_status(state,dataset):

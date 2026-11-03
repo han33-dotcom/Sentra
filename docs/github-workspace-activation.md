@@ -2,18 +2,24 @@
 
 ## Current state
 
-Foundation [PR #15](https://github.com/han33-dotcom/Sentra/pull/15) was approved by
-`MohamadNasrallah` and merged into `develop` on October 15, 2026. Follow-up #17 is
-also merged. Synchronization #19, preview-gate #20 and reviewed release #18 remain
-prerequisites for activation on `main`.
-The private [Sentra board](https://github.com/users/han33-dotcom/projects/1) and public
-[Wiki](https://github.com/han33-dotcom/Sentra/wiki) were published on October 14, 2026.
-On October 15, approved board Write grants and Slack PR/review subscriptions were
-applied and verified. Expiring Projects credentials and the actual Project node IDs
-were securely saved and verified later that day. Default-branch activation and the
-human acceptance pilot remain pending. Board status is updated manually until activation.
-Both repositories explicitly have `TEAM_SYNC_ENABLED=false`.
-No Notion API token or synchronization is needed for the new setup.
+The reviewed workflow is on `main`. Project synchronization was enabled on
+October 21, 2026 after successful credentialed no-write previews and the owner's
+confirmation that the listed teammates can open their private boards from their
+own accounts. Live status writes succeeded; the full human acceptance pilot
+[#21](https://github.com/han33-dotcom/Sentra/issues/21) remains pending.
+The rollout issue #16 stays open until that pilot and acceptance reconciliation
+are verified. Local agent onboarding is a separate, still-unverified check.
+
+The existing private Project board, public Wiki, approved Write grants and native
+Slack PR/review subscriptions remain in use. `TEAM_SYNC_ENABLED=true` now allows
+metadata-only status updates. No Notion token or synchronization is required.
+Release #18 merged with two parents (`c7c0548`); reviewed back-merge #22 also used
+a merge commit (`4fc98c6`). #25 adds Aboulhoda as CODEOWNER on `develop`; `main`
+receives that ownership change through the next reviewed release.
+`pr-policy` is required on both branches.
+`SENTRA_COLLECTION_ENABLED=false`; collection stays paused.
+The current `PROJECTS_TOKEN` expires November 14, 2026. Renew it through secure
+credential entry before expiry and verify a credentialed preview after rotation.
 
 ## Project board
 
@@ -38,13 +44,13 @@ no private records were published to the Wiki.
 
 The owner approved and applied Write access for `MohamadNasrallah` and
 `mhmdaboulhoda` on October 15; Manage access shows both with Role: Write.
-Teammates still need to verify opening the board from their own accounts.
+The owner confirmed on October 21 that listed teammates opened the board from
+their own accounts.
 Repository permissions do not automatically confer Project access.
 
 The authenticated Project API verified the owner, private visibility, required fields
-and exactly one linked repository matching this project on October 15. Before
-activation, teammates must also verify opening the board from their own accounts. Its private visibility does not make repository issues
-private; these issues and the Wiki are public.
+and exactly one linked repository matching this project on October 15. Its private
+visibility does not make repository issues private; these issues and the Wiki are public.
 
 ## Project synchronization credentials and activation
 
@@ -64,7 +70,7 @@ the correct Project exists, and its fields, repository link and credentials are
 verified. Sentra therefore needs the normal reviewed develop-to-main release before
 its default-branch automation can run. Do not bypass branch protections.
 
-After the preview-gate change reaches `main`, run **Team project sync** manually
+For activation or reactivation, run **Team project sync** manually
 with dry_run checked while `TEAM_SYNC_ENABLED=false`. Inspect proposed transitions
 before enabling sync; scheduled/event runs and manual writes remain disabled.
 Then enable sync and run an approved fixture with dry_run unchecked. The worker consumes current
@@ -112,7 +118,23 @@ Inspect `/github subscribe list` before changing subscriptions. Native messages 
 those messages. Task descriptions and review details remain on GitHub. Receiving a
 notification does not automatically launch a teammate's personal AI assistant.
 
-## October 21 activation checkpoint
+## October 21 live activation evidence
+
+- The owner confirmed all listed teammates opened their boards from their own
+  accounts. This confirms access, not their local assistant setup or task acceptance.
+- [Credentialed preview](https://github.com/han33-dotcom/Sentra/actions/runs/39604502075)
+  passed on reviewed default-branch code while writes were disabled, including the
+  synthetic draft pilot. Proposed transitions were inspected before enabling sync.
+- [First write run](https://github.com/han33-dotcom/Sentra/actions/runs/39604695546) passed
+  with `DRY_RUN=false`; pilot #21 moved from Not started to In progress.
+- [Independent readback](https://github.com/han33-dotcom/Sentra/actions/runs/39604893854)
+  passed and showed the pilot already In progress, matching its planned status.
+- Rollout #16 moved to In review because back-merge #22 is still open. Collection
+  remains paused. Main now requires `pr-policy` after the reviewed release.
+- No human change request, approval-staleness, final merge/acceptance or closed/
+  Done/Blocked replay is claimed. Those steps remain in the pilot issue.
+
+## October 21 checkpoint before live activation (historical)
 
 - Mohamad approved follow-up #17, which merged into `develop` on October 15.
 - Synchronization #19 repairs main ancestry without changing develop's file tree.
@@ -129,7 +151,8 @@ notification does not automatically launch a teammate's personal AI assistant.
 - Teammate board access checks, the full review/change/fix/acceptance pilot and
   replay checks remain pending.
 - Live policy tests on #20 rejected a missing task link and a self-applied
-  exemption. GitHub reported merging blocked; restoring the task link and removing
+  exemption. GitHub reported merging blocked while human approval was also missing;
+  this did not isolate which requirement blocked it. Restoring the task link and removing
   the temporary label recovered a successful policy check. The
   [self-exemption run](https://github.com/han33-dotcom/Sentra/actions/runs/39586012538/job/119175003125)
   records the independent-label rejection. No human approval was supplied by an agent.
@@ -163,13 +186,19 @@ notification does not automatically launch a teammate's personal AI assistant.
 
 ## Pilot
 
-Use the rollout tracking issue and a synthetic/test-only PR. Open a draft, ready it,
-request a human review, request a change, push a fix and re-review the latest head.
-Observe In progress → In review → Changes requested → In review. Merge only after an
-actual teammate approval and required checks. Observe Implemented; the teammate then
-records acceptance, sets Done and closes the issue. Replay/reconcile and verify no
-incorrect transition or duplicate notification. Preserve the same branch flow and
-Sentra collection pause throughout.
+Use dedicated pilot issue [#21](https://github.com/han33-dotcom/Sentra/issues/21)
+and PR [#23](https://github.com/han33-dotcom/Sentra/pull/23), with the
+[synthetic fixture](workflow-pilot.md). The rollout issue #16 stays open until the
+whole rollout is accepted.
+
+Observe draft In progress, ready In review and a human review's Changes requested.
+After the fix, a re-review request or Comment review does not clear that request:
+the requesting reviewer must submit Approve on the latest head to return In review.
+Exercise policy blocking and stale-approval dismissal, then obtain fresh human
+approval and passing required checks before merge. Observe Implemented while #21
+remains open. A teammate records acceptance, sets Done and closes pilot issue #21.
+Replay/reconcile and verify preserved states and no duplicate notifications.
+Preserve the branch flow and Sentra collection pause throughout.
 
 ## References
 

@@ -7,9 +7,17 @@ physical sensor signals. No AI model or health-risk score is implemented.
 
 ## Start here
 
-The [private viewer](https://sentra-wearable-audit.streamlit.app) runs from
-`ETL-pipeline`, `viewer/app.py`. Sign in with an approved Google account, choose
-participant/provider and Beirut dates, then **Load selected data**.
+The [private viewer](https://sentra-wearable-audit.streamlit.app) uses
+`viewer/app.py` and Python 3.11. The existing host is configured for `ETL-pipeline`;
+that deployment reference must exist while the host uses it. See the
+[dashboard restoration runbook](dashboard-restoration.md) for the verified
+configuration and recovery evidence. Sign in with an approved Google account,
+choose participant/provider and Beirut dates, then **Load selected data**.
+After the restoration changes are released, the initial dates select the latest
+available measurement week for that participant/provider. **Latest available week**
+returns to that period; **Last 7 calendar days** selects the trailing seven calendar days.
+Manual dates survive navigation through the Wellness board. Measurement dates
+come from returned records, not the time of a successful fetch or board publication.
 The displayed end date is included. Use sidebar search for export filtering;
 table search/sort only changes the display. Daily activity has one row per day;
 Sleep and Workouts have one row per session. Sleep uses its Beirut wake date;
@@ -36,6 +44,13 @@ another platform invitation. Operators remove access through managed viewer
 secrets and restart; previously downloaded files cannot be recalled.
 
 ## Operator setup
+
+Before resuming the paused collector, use the current
+[collection restart readiness ledger](collection-restart-readiness.md) for #44.
+`sentra cloud-readiness` inspects stored authorization/capacity without provider
+calls and saves encrypted private evidence; it never authorizes or enables a run.
+Historical stage acceptance and the zero-spend variable do not replace fresh
+readiness checks, agreed windows and restart authorization.
 
 Use an existing authorized checkout and Python 3.11. Follow [Stage 1](stage-1-setup.md)
 for the local environment/OS vault, [Stage 3](stage-3-storage.md) for restricted
@@ -100,6 +115,8 @@ and [WHOOP renewal](https://developer.whoop.com/docs/developing/oauth/).
 | Reconnect required | Use the affected cloud reconnect command; never print tokens or provider error bodies. |
 | Capacity stop or unavailable/stale budget | Check organization usage and the next batch size; preserve data and thresholds. |
 | Viewer database unavailable | Check project pause, connection/certificate and viewer-only secrets. Resume a paused Free project through its dashboard. |
+| Streamlit says no access or app does not exist | Sign in to the deployment account at share.streamlit.io. Confirm the app, branch and entrypoint before changing sharing. This message alone does not establish that the app was deleted. |
+| Streamlit source download fails / main module does not exist | Check that the configured Git branch exists. Preserve the existing private app, secrets and URL; see the restoration runbook before replacing a deployment. |
 
 ```powershell
 .venv/Scripts/sentra.exe shared-growth

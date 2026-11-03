@@ -36,8 +36,20 @@ locally per the stage guides and are never committed.
 | `chore/`, `ci/`, `docs/` | Tooling, pipelines, documentation | You |
 
 `main` and `develop` are protected: no direct pushes, a PR with green `guard` and
-`test` checks and one approving review. Work branches are squash-merged and
-deleted automatically.
+`test` checks and one approving code-owner review. The code owners are
+`han33-dotcom`, `MohamadNasrallah` and `mhmdaboulhoda`; another listed owner must
+approve an owner's PR.
+
+Work branches are squash-merged. GitHub's **Automatically delete head branches**
+setting is enabled: work branches are deleted after their PR merges, including PRs
+into `develop`. Keep `main` and `develop` permanently; both are protected with branch
+deletion disabled, so release and back-merge PRs preserve them. The setting applies
+to future merges; historical branches need a separate check for merged work, later
+commits and open PR dependencies before deletion.
+
+Required checks use strict up-to-date enforcement. Bring the target branch into
+work branches deliberately and rerun checks after integration changes. Releases
+and back-merges follow the reviewed merge-commit procedure below.
 
 ## Flow
 
