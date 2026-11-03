@@ -31,6 +31,7 @@ HR_MINUTE_METRICS = {'/heartRate/beatsPerMinuteAvg': 'mean', '/heartRate/beatsPe
 RESERVE_CHUNK = 90_000_000  # the viewer reservation function accepts at most 100 MB per call
 DEFAULT_MAX_READ_BYTES = 500_000_000
 MAX_OBJECT_BYTES = 52_428_800  # bucket file_size_limit in sql/006_parquet_tiers.sql
+SLOTS = ('slot-a/', 'slot-b/')  # two complete tier sets; size_report.json points at one
 
 QUERIES = {
     'hr_raw': ('''select participant_id,provider,measured_at,value from audit.measurements
@@ -282,12 +283,15 @@ def fetch(storage, folder, *, maximum=MAX_OBJECT_BYTES):
     if code != 200:
         raise SentraError(f'Tier report unavailable (HTTP {code}); run tiers-build first.')
     report = json.loads(body)
+    prefix = report.get('prefix', '')
+    if prefix not in SLOTS + ('',):
+        raise SentraError('Tier report names an unknown slot; nothing processed.')
     for key, size in report.get('objects', {}).items():
         path = (Path(folder) / key).resolve()
         if (not isinstance(size, int) or not 0 <= size <= maximum or '..' in key
                 or '\\' in key or ':' in key or not path.is_relative_to(Path(folder).resolve())):
             raise SentraError('Tier report lists an invalid object; nothing processed.')
-        code, data = storage.request('GET', key, maximum=size + 65_536)
+        code, data = storage.request('GET', prefix + key, maximum=size + 65_536)
         if code != 200 or len(data) != size:
             raise SentraError(f'Tier object {key} missing or changed since its report; rebuild tiers.')
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -295,22 +299,40 @@ def fetch(storage, folder, *, maximum=MAX_OBJECT_BYTES):
     return report
 
 
+def current_slot(storage):
+    """Slot prefix of the complete tier set readers use now ('' for the original unslotted layout)."""
+    code, body = storage.request('GET', 'size_report.json', maximum=1_000_000)
+    if code != 200:
+        return None
+    try:
+        return json.loads(body).get('prefix', '')
+    except ValueError:
+        return None
+
+
 def publish(objects, report, storage, reader, limits, *, local_dir=None):
-    """Upload after the capacity guard accepts the full size, or write to a private local folder."""
-    body = json.dumps(report, indent=2).encode()
+    """Upload after the capacity guard accepts the full size, or write to a private local folder.
+
+    Objects go to the slot readers are not using; size_report.json, written last, switches readers
+    over in one replace. A failed upload therefore leaves the previous complete set in use.
+    """
     if any(len(b) > MAX_OBJECT_BYTES for b in objects.values()):
         raise SentraError('A tier object exceeds the 50 MB bucket limit; split the tier before uploading.')
     if local_dir is not None:
-        for key, data in {**objects, 'size_report.json': body}.items():
+        for key, data in {**objects, 'size_report.json': json.dumps(report, indent=2).encode()}.items():
             path = Path(local_dir) / key
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
         return {'uploaded': 0, 'local': str(local_dir)}
+    slot = SLOTS[1] if current_slot(storage) == SLOTS[0] else SLOTS[0]
+    body = json.dumps({**report, 'prefix': slot}, indent=2).encode()
     # Conservative: replaced objects are counted at full size, never netted against older versions.
     limits.check(reader.usage(), object_add=sum(len(b) for b in objects.values()) + len(body))
-    for key, data in {**objects, 'size_report.json': body}.items():
-        code, _ = storage.request('POST', key, data=data, maximum=65_536, upsert=True,
-                                  content_type='application/json' if key.endswith('.json') else PARQUET)
+    for key, data in objects.items():
+        code, _ = storage.request('POST', slot + key, data=data, maximum=65_536, upsert=True, content_type=PARQUET)
         if code not in (200, 201):
-            raise SentraError(f'Tier upload failed (HTTP {code}) at {key}; earlier tier objects may be newer than others. Repeat the build.')
-    return {'uploaded': len(objects) + 1, 'bucket': TIER_BUCKET}
+            raise SentraError(f'Tier upload failed (HTTP {code}) at {key}; readers keep the previous complete tiers.')
+    code, _ = storage.request('POST', 'size_report.json', data=body, maximum=65_536, upsert=True, content_type='application/json')
+    if code not in (200, 201):
+        raise SentraError(f'Tier report upload failed (HTTP {code}); readers keep the previous complete tiers.')
+    return {'uploaded': len(objects) + 1, 'bucket': TIER_BUCKET, 'slot': slot}

@@ -73,7 +73,7 @@ def refresh(reader, limits, storage, *, force=False, now=None, log=print):
             log('No changed collection data since the last board; tiers not read or published.')
             return {'status': 'skipped', 'source_run': source}
     objects, report = build(reader, limits, now=now)
-    publish(objects, report, storage, reader, limits)
+    # Process before publishing anything: a processing failure leaves both tiers and board unchanged.
     with tempfile.TemporaryDirectory(prefix='sentra-wellness-') as folder:
         for key, data in objects.items():
             path = Path(folder) / key
@@ -87,6 +87,7 @@ def refresh(reader, limits, storage, *, force=False, now=None, log=print):
     if len(body) > MAX_BOARD_BYTES:
         raise SentraError('Board payload exceeds 5 MB; narrow the history before publishing.')
     limits.check(reader.usage(), object_add=len(body))
+    publish(objects, report, storage, reader, limits)
     code, _ = storage.request('POST', BOARD_KEY, data=body, maximum=65_536, upsert=True, content_type='application/json')
     if code not in (200, 201):
         raise SentraError(f'Board upload failed (HTTP {code}); tiers were published, board unchanged.')

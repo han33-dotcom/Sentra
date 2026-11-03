@@ -226,6 +226,15 @@ class RefreshTests(unittest.TestCase):
             with self.assertRaises(Exception):
                 w.refresh(self.Reader(datetime(2026, 10, 12, tzinfo=UTC)), tight, self.Storage(), now=NOW, log=lambda *_: None)
 
+    def test_processing_failure_publishes_neither_tiers_nor_board(self):
+        from sentra import wellness_refresh as w
+        storage = self.Storage()
+        with mock.patch.object(w, 'build', return_value=({'measurements.parquet': b'not parquet'}, {})), \
+                mock.patch.object(w, 'publish') as publish, self.assertRaises(Exception):
+            w.refresh(self.Reader(datetime(2026, 10, 11, tzinfo=UTC)), Limits(), storage, now=NOW, log=lambda *_: None)
+        publish.assert_not_called()
+        self.assertEqual(storage.posts, {})
+
     def test_collector_storage_requires_complete_credentials(self):
         from sentra import wellness_refresh as w
         for env in ({}, {'SENTRA_COLLECTOR_CONFIG': json.dumps({'credentials': {'url': 'https://x.supabase.co'}})}):
