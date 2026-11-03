@@ -481,6 +481,7 @@ def main():
     # A sharing change, withdrawal or removed role must apply on the next render.
     # Reuse the decision during this render to avoid repeating guarded DB reads.
     st.session_state.pop('audit_access', None)
+    st.session_state.pop('audit_team_consents', None)
     st.html(STYLE)
     st.sidebar.html(BRAND)
     try:

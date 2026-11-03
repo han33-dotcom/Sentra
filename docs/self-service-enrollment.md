@@ -221,6 +221,7 @@ Acceptance corrections in the current work branch:
 
 - The viewer rechecks organization permissions at the start of every render, so
   sharing/withdrawal changes and removed roles apply on the next page render.
+  The team overview also refreshes its consent scope on each render.
   The access decision is reused within that render to bound database work. This
   does not recall data or exports already delivered to an open browser.
 - Failed initial requests offer **Try again** and keep the invitation only in
