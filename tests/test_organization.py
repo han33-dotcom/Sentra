@@ -2,7 +2,7 @@
 from datetime import date, datetime, timezone
 import unittest
 
-from sentra.organization import group_summary, participation, profile
+from sentra.organization import group_summary, participation, profile, shown_count, team_scope
 
 END = date(2026, 11, 3)
 
@@ -25,7 +25,18 @@ class GroupSummaryTests(unittest.TestCase):
         self.assertEqual((rows['rhr']['status'], rows['rhr']['contributors'], rows['rhr']['value']),
                          ('suppressed', 4, None))
         self.assertIn('Fewer than 5', rows['rhr']['reason'])
+        self.assertNotIn('4', rows['rhr']['reason'])  # the exact small count is not repeated in the note
         self.assertEqual(rows['hrv']['status'], 'no_data')
+
+    def test_devices_are_never_pooled(self):
+        people = [person(f'p9{i}', hrv=50.0) for i in range(5)]
+        people += [{**person(f'p8{i}', hrv=30.0), 'device': 'Fitbit'} for i in range(3)]
+        rows = [r for r in group_summary(people, {p['id'] for p in people}, end=END) if r['key'] == 'hrv']
+        self.assertEqual([(r['device'], r['status'], r['contributors'], r['value']) for r in rows],
+                         [('Fitbit', 'suppressed', 3, None), ('WHOOP', 'available', 5, 50.0)])
+
+    def test_small_counts_are_shown_only_as_below_k(self):
+        self.assertEqual([shown_count(n) for n in (0, 1, 4, 5, 12)], ['0', '<5', '<5', '5', '12'])
 
     def test_only_eligible_contributors_count(self):
         people = [person(f'p9{i}', steps=1000 * i) for i in range(6)]
@@ -69,7 +80,29 @@ class ParticipationTests(unittest.TestCase):
                                   'recent_days': 3})
 
 
+class TeamScopeTests(unittest.TestCase):
+    def test_withdrawn_participants_leave_the_team_view(self):
+        consents = [{'participant_id': 'p90', 'org_id': 'org-a', 'sharing': 'group_only', 'withdrawn': False,
+                     'membership_open': True},
+                    {'participant_id': 'p91', 'org_id': 'org-a', 'sharing': 'individual', 'withdrawn': True,
+                     'membership_open': True},
+                    {'participant_id': 'p92', 'org_id': 'org-a', 'sharing': 'individual', 'withdrawn': False,
+                     'membership_open': False}]
+        enrolled, included = team_scope({'p90', 'p91', 'p92', 'p93'}, consents)
+        self.assertEqual(enrolled, {'p90'})
+        self.assertEqual(included, {'p90', 'p93'})  # p93: pilot data, no consent record
+
+
 class ProfileTests(unittest.TestCase):
+    def test_malformed_dates_are_skipped_not_fatal(self):
+        days = [{'d': '2026-11-01', 'sleep': 400}, {'d': '2026-11-1', 'sleep': 1}, {'d': ''}, {'d': '2026-13-02'}]
+        p = profile({'id': 'p90', 'days': days}, today=END)
+        self.assertEqual((p['data_through'], p['days_with_data_last_7']), (date(2026, 11, 1), 1))
+        self.assertEqual(by_key(p['metrics'])['sleep']['value'], 400)
+        people = [{'id': f'p9{i}', 'days': [{'d': END.isoformat(), 'sleep': 400}, {'d': 'x', 'sleep': 1}]}
+                  for i in range(5)]
+        self.assertEqual(by_key(group_summary(people, {p['id'] for p in people}, end=END))['sleep']['value'], 400)
+
     def test_latest_values_against_own_baseline_and_explicit_gaps(self):
         days = [{'d': '2026-10-30', 'sleep': 300},
                 {'d': '2026-11-02', 'sleep': 420, 'sleep_b': 400, 'rhr': 58, 'steps': 5000, 'steps_b': 6000}]

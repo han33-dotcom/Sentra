@@ -34,9 +34,15 @@ CATALOG = [{'participant_id': f'p9{i}', 'provider': 'google_health', 'dataset': 
 
 
 class OrgReader(FakeReader):
+    catalog_calls = 0
+    def catalog(self):
+        OrgReader.catalog_calls += 1
+        return list(CATALOG)
     def board(self): return {**BOARD, 'people': list(BOARD['people'])}
     def group_board(self): return {**BOARD, 'people': list(BOARD['people'])}
-    def group_catalog(self): return list(CATALOG)
+    def group_catalog(self):
+        OrgReader.catalog_calls += 1
+        return list(CATALOG)
 
 
 class User:
@@ -49,16 +55,17 @@ class User:
 
 
 class OrganizationPageTests(unittest.TestCase):
-    def open(self, email, page):
+    def open(self, email, page, consents=CONSENTS):
         from sentra import viewer_app
         from streamlit.testing.v1 import AppTest
         @contextmanager
         def reader(): yield OrgReader()
         self.patches = [patch.object(viewer_app.st, 'user', User(email)),
                         patch.object(viewer_app, 'open_reader', reader),
-                        patch.object(viewer_app, 'load_organization_rows', Mock(return_value=(USERS, CONSENTS)))]
+                        patch.object(viewer_app, 'load_organization_rows', Mock(return_value=(USERS, consents)))]
         for p in self.patches: p.start()
         self.addCleanup(lambda: [p.stop() for p in self.patches])
+        OrgReader.catalog_calls = 0
         app = AppTest.from_file(Path(__file__).resolve().parents[1] / 'viewer' / 'app.py', default_timeout=10)
         app.secrets['viewer'] = {'allowed_emails': TEAM}
         app.run()
@@ -77,11 +84,13 @@ class OrganizationPageTests(unittest.TestCase):
         self.assertEqual(metrics['Enrolled'], '5')
         self.assertEqual(metrics['Connected'], '5')
         rows = self.table(app)
-        self.assertEqual((rows['Sleep']['Contributors'], rows['Sleep']['Group median']), (5, '403 min'))
+        self.assertEqual((rows['Sleep']['Contributors'], rows['Sleep']['Group median']), ('5', '403 min'))
+        self.assertEqual(rows['Sleep']['Device'], 'Fitbit')
+        # Four contributors: suppressed, and the exact count is not disclosed.
         self.assertEqual((rows['Resting heart rate']['Contributors'], rows['Resting heart rate']['Group median']),
-                         (4, 'Not shown'))
+                         ('<5', 'Not shown'))
         self.assertIn('Fewer than 5', rows['Resting heart rate']['Note'])
-        self.assertEqual(rows['Heart rate variability']['Contributors'], 0)
+        self.assertEqual(rows['Heart rate variability']['Contributors'], '0')
 
     def test_group_only_and_other_organization_never_appear_on_profiles(self):
         app = self.open('officer@a.test', 'Profiles')
@@ -94,15 +103,28 @@ class OrganizationPageTests(unittest.TestCase):
     def test_team_operator_sees_all_participants(self):
         app = self.open('team@example.test', 'Organization overview')
         self.assertEqual({m.label: m.value for m in app.metric}['Enrolled'], '6')
-        self.assertEqual(self.table(app)['Resting heart rate']['Contributors'], 5)
+        self.assertEqual(self.table(app)['Resting heart rate']['Contributors'], '5')
         app.radio(key='explore').set_value('Profiles').run()
         self.assertEqual(app.selectbox[0].options, [f'p9{i}' for i in range(1, 7)])
+
+    def test_team_view_excludes_withdrawn_participants(self):
+        withdrawn = [{**c, 'withdrawn': True} if c['participant_id'] == 'p96' else c for c in CONSENTS]
+        app = self.open('team@example.test', 'Organization overview', consents=withdrawn)
+        self.assertEqual({m.label: m.value for m in app.metric}['Enrolled'], '5')
+        self.assertEqual(self.table(app)['Sleep']['Contributors'], '5')
+        self.assertEqual(self.table(app)['Resting heart rate']['Contributors'], '<5')
+
+    def test_team_overview_reuses_the_explore_catalog(self):
+        app = self.open('team@example.test', 'Daily activity')
+        app.radio(key='explore').set_value('Organization overview').run()
+        self.assertFalse(app.exception)
+        self.assertEqual(OrgReader.catalog_calls, 1)  # one catalog query for both pages
 
     def test_period_switch_and_empty_board_are_explicit(self):
         app = self.open('officer@a.test', 'Organization overview')
         next(r for r in app.radio if r.label == 'Period').set_value('Last 7 days').run()
         self.assertFalse(app.exception)
-        self.assertEqual(self.table(app)['Sleep']['Contributors'], 5)
+        self.assertEqual(self.table(app)['Sleep']['Contributors'], '5')
 
 
 if __name__ == '__main__':

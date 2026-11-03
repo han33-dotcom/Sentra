@@ -365,9 +365,20 @@ def group_scope(decision):
     return 'team' if decision.is_team else tuple(sorted(decision.contributors))
 
 
+def team_consents():
+    """Current consent rows for the team view, refreshed like organization decisions."""
+    cached=st.session_state.get('audit_team_consents')
+    if cached and time.monotonic()-cached[0]<ACCESS_TTL_SECONDS:
+        return cached[1]
+    _,consents=load_organization_rows(current_access().email)
+    st.session_state['audit_team_consents']=(time.monotonic(),consents)
+    return consents
+
+
 def organization_overview():
     """Group summaries and participation for the signed-in user's scope (#39)."""
-    from .organization import group_summary, participation
+    from .access import K_ANONYMITY
+    from .organization import group_summary, participation, shown_count, team_scope
     principal()
     with st.container(key='page-heading'):
         st.caption('ORGANIZATION')
@@ -376,16 +387,30 @@ def organization_overview():
     reload=st.sidebar.button('Reload overview',icon=':material/refresh:')
     if reload or st.session_state.get('audit_org_scope')!=group_scope(decision):
         with open_reader() as reader:
-            st.session_state['audit_org']={'catalog':reader.group_catalog(),'board':reader.group_board()}
+            if decision.is_team:
+                # The team catalog is the explore pages' catalog; reuse it instead of repeating the query.
+                if reload or st.session_state.get('audit_catalog_scope')!='team':
+                    st.session_state['audit_catalog']=reader.catalog()
+                    st.session_state['audit_catalog_scope']='team'
+                catalog=st.session_state['audit_catalog']
+            else:
+                catalog=reader.group_catalog()
+            st.session_state['audit_org']={'catalog':catalog,'board':reader.group_board()}
         st.session_state['audit_org_scope']=group_scope(decision)
     data=st.session_state['audit_org']
-    people=[p for p in data['board']['people'] if decision.group_contributors([p.get('id')])]
-    catalog=[r for r in data['catalog'] if decision.group_contributors([r['participant_id']])]
-    scope=({r['participant_id'] for r in catalog}|{p['id'] for p in people}) if decision.is_team else set(decision.contributors)
+    if decision.is_team:
+        # Withdrawn or closed consent leaves the team view too; pilot participants have no consent record.
+        enrolled,scope=team_scope({r['participant_id'] for r in data['catalog']}
+                                  |{p.get('id') for p in data['board']['people']},team_consents())
+    else:
+        enrolled=scope=set(decision.contributors)
+    people=[p for p in data['board']['people'] if p.get('id') in scope and decision.group_contributors([p.get('id')])]
+    catalog=[r for r in data['catalog'] if r['participant_id'] in scope and decision.group_contributors([r['participant_id']])]
     today=datetime.now(timezone.utc).astimezone(BEIRUT).date()
     st.caption("Wellness information for health-and-safety conversations, compared with each person's own pattern; "
                'not a medical assessment or diagnosis.')
     counts=participation(scope,catalog,people,today=today)
+    counts['enrolled']=len(enrolled)
     st.subheader('Participation')
     columns=st.columns(4)
     for column,(label,key,help_text) in zip(columns,(
@@ -393,8 +418,13 @@ def organization_overview():
             ('Connected','connected','At least one wearable connection authorized.'),
             ('Recently contributing','recently_contributing',f"Measurements within the last {counts['recent_days']} days."),
             ('Assessable','assessable','A personal baseline exists for the latest published day.'))):
-        column.metric(label,counts[key],help=help_text)
+        # Organization users see small activity counts only as '<k'; they could single out group-only people.
+        value=counts[key] if decision.is_team or key=='enrolled' else shown_count(counts[key])
+        column.metric(label,value,help=help_text)
     st.caption('Each state is counted separately; being connected does not mean recent data arrived.')
+    if decision.is_team and (pilot:=len(scope-enrolled)):
+        st.caption(f'Team view: also includes {pilot} pilot participant(s) with data but no recorded consent. '
+                   'Withdrawn participants are excluded.')
     st.subheader('Group summary')
     through=civil_day(data['board'].get('data_through'))
     if not through:
@@ -404,11 +434,13 @@ def organization_overview():
     end=date.fromisoformat(through)
     rows=group_summary(people,scope,end=end,days=1 if period=='Latest day' else 7)
     st.dataframe([{'Measure':r['label'],
+                   'Device':r['device'] or '',
                    'Group median':f"{r['value']:g} {r['unit']}" if r['status']=='available' else 'Not shown',
-                   'Contributors':r['contributors'],
+                   'Contributors':shown_count(r['contributors']),
                    'Note':r['reason'] or ''} for r in rows],hide_index=True,width='stretch')
-    st.caption(f'Published days through {through}. Each statistic needs at least 5 eligible contributors of its own; '
-               'smaller groups are never shown. Assessment levels appear once the agreed incomplete-assessment rules are released.')
+    st.caption(f'Published days through {through}. Each device is summarized separately, and each statistic needs at '
+               f'least {K_ANONYMITY} eligible contributors of its own; smaller groups are never shown. '
+               'Assessment levels appear once the agreed incomplete-assessment rules are released.')
 
 
 def profiles_page():
