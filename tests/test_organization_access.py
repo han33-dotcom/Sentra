@@ -36,8 +36,9 @@ class OrganizationAccessMigrationTests(unittest.TestCase):
         self.assertEqual(set(tables(self.text)), TABLES)
 
     def test_no_destructive_statements(self):
-        for keyword in ('drop ', 'truncate ', 'delete from', 'alter table audit.', 'update '):
-            self.assertNotIn(keyword, self.lower)
+        destructive = (ast.DropStmt, ast.TruncateStmt, ast.DeleteStmt, ast.UpdateStmt)
+        self.assertFalse([s for s in statements(self.text) if isinstance(s, destructive)])
+        self.assertNotIn('alter table audit.', self.lower)
 
     def test_rls_is_forced_on_every_org_table(self):
         self.assertIn("schemaname='org'", self.text)
@@ -66,14 +67,17 @@ class OrganizationAccessMigrationTests(unittest.TestCase):
 
     def test_consent_history_is_append_only_and_latest_row_wins(self):
         self.assertIn('generated always as identity', self.text)
+        self.assertIn('before update or delete on org.consents', self.text)
+        self.assertIn('before truncate on org.consents', self.text)
         self.assertIn('withdrawn boolean not null default false', self.text)
         self.assertIn('with (security_invoker=true)', self.text)
-        self.assertIn('distinct on (participant_id)', self.text)
-        self.assertIn('order by participant_id,recorded_at desc,consent_id desc', self.text)
+        self.assertIn('distinct on (c.participant_id)', self.text)
+        self.assertIn('order by c.participant_id,c.recorded_at desc,c.consent_id desc', self.text)
 
-    def test_participants_link_to_existing_pseudonyms_only(self):
-        self.assertIn('participant_id text primary key references audit.participants', self.text)
-        self.assertIn('references org.memberships(participant_id,org_id)', self.text)
+    def test_participants_link_to_existing_pseudonyms_and_membership_episodes(self):
+        self.assertIn('participant_id text not null references audit.participants', self.text)
+        self.assertIn('references org.memberships(membership_id,participant_id,org_id)', self.text)
+        self.assertIn('on org.memberships(participant_id) where left_on is null', self.text)
 
     def test_roles_are_limited(self):
         self.assertIn("role in ('officer','reviewer')", self.text)

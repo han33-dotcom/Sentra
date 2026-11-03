@@ -77,10 +77,14 @@ are admin-only until enrollment tooling exists.
 | --- | --- |
 | `org.organizations` | Organization ID (`acme-ltd` style) and display name |
 | `org.org_users` | Lower-case Google sign-in e-mail per organization, role `officer` or `reviewer`, active flag |
-| `org.memberships` | One organization per pseudonymous participant, optional team for k-anonymous group views |
-| `org.consents` | Append-only consent history: version, `sharing` (`group_only` default or `individual`), demonstration consent, withdrawal |
-| `org.current_consent` | Latest consent row per participant (`security_invoker`, so the caller's permissions apply) |
+| `org.memberships` | Membership episodes: participant, organization, optional team for k-anonymous group views, `joined_on`/`left_on`; at most one open episode per participant |
+| `org.consents` | Append-only consent history per episode: version, `sharing` (`group_only` default or `individual`), demonstration consent, withdrawal. Triggers reject `UPDATE`, `DELETE` and `TRUNCATE`, including from the admin path |
+| `org.current_consent` | Latest consent row per participant with `membership_open` (`security_invoker`, so the caller's permissions apply) |
 
 No participant names, contact details, location or routes are stored. A consent
-change or withdrawal adds a row; earlier rows are never updated. Applying this
-migration to the shared database is a separate owner step, after review.
+change or withdrawal adds a row; earlier rows are never updated. Moving to another
+organization closes the old episode (`left_on`) and opens a new one with fresh
+consent; the old episode's participant, organization and dates cannot be rewritten.
+Behaviour tests in `tests/test_organization_access_db.py` run when
+`SENTRA_TEST_DATABASE_URL` points at a throwaway PostgreSQL 15+ server. Applying
+this migration to the shared database is a separate owner step, after review.
