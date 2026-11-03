@@ -40,7 +40,7 @@ physical sensor signals.
 **Derived:** daily features, 28-day personal baselines, provisional wellness
 indicators and k-anonymous group statistics ([processing](processing.md)).
 
-**Never collected, shown or exported:**
+**Never included in wellness records, organization views or exports:**
 - location, GPS routes or maps;
 - provider account identifiers, display names and free-text notes (already removed
   from normalized records by `normalize.IDENTITY_FIELDS`);
@@ -50,6 +50,14 @@ indicators and k-anonymous group statistics ([processing](processing.md)).
 Original provider responses are kept privately and unchanged for audit, and can
 contain identifying fields. Only Sentra operators can open them; organization users
 cannot.
+
+For [self-service enrollment](self-service-enrollment.md), Sentra privately checks
+the provider's stable account identifier to recognize returning participants and
+prevent duplicate or incorrect account linking. Google uses `openid`; WHOOP uses
+`read:profile`. Only a provider-specific keyed hash is retained for this purpose.
+Names and email addresses also returned by WHOOP are discarded immediately.
+Provider passwords remain with the provider. This identity check is separate from
+the wearable dataset and is described on the joining page.
 
 ## Sharing choices
 
