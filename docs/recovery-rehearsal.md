@@ -13,26 +13,43 @@ current usage plus about 8 × the backup's uncompressed table size to fit under 
 database guard. At the last measurement the live database used 310 MB (storage-plan.md), so
 a full rehearsal there would be refused, and it would compete with collection headroom anyway.
 
-Use a **separate, throwaway Supabase Free project** owned by the operator:
+Use a **separate, throwaway Supabase Free project** and a **separate checkout** for it. A
+different `--config` file name in the live checkout is not enough: `load_connection()` and
+`read_shared()` take the database and storage credentials from that checkout's own `.private`
+(`.private/shared/collector.enc` and the admin file), whatever the TOML is called, and they
+refuse a `.private` outside the checkout. Inside the live checkout, every command would
+therefore still target the live project.
 
-1. Create a new Free project. Never reuse or reset the live one.
-2. Point a separate, ignored local configuration at it, and run
-   `sentra shared-bootstrap --egress-baseline-bytes 0` there. This installs the same reviewed
-   migrations 001–005, so the restored rows have identical column types.
-3. Copy the encrypted backup beneath that configuration's `.private/backups/`, together with
-   the same local encryption key (from the OS vault, never by chat or email).
+1. Create a new Free project. Never reuse or reset the live one, and note its project ref
+   (the first part of its `https://<ref>.supabase.co` URL).
+2. Clone the repository into a **different folder**, for example `..\sentra-rehearsal`. Set
+   up its own ignored `config/local.toml` and `.private` for the throwaway project, following
+   [Stage 3](stage-3-storage.md) (admin file, then `shared-bootstrap`). It installs the same
+   reviewed migrations 001–005, so restored rows have identical column types. Nothing is
+   copied from the live `.private` except the backup in step 3.
+3. Copy only the encrypted backup folder into the rehearsal checkout's `.private/backups/`.
+   On the same Windows account, both checkouts read the same local key from the OS vault.
+   Elsewhere, recover the key securely, never by chat or email.
 
 ## Steps
 
 ```powershell
-# live configuration: take the backup and check it offline
+# live checkout: take the backup and check it offline; note project_url in the result
 .venv/Scripts/sentra.exe shared-backup
 .venv/Scripts/sentra.exe shared-backup-verify .private/backups/<id>/manifest.enc
 
-# rehearsal configuration (throwaway project): restore into its empty audit tables
-.venv/Scripts/sentra.exe --config config/rehearsal.toml shared-restore .private/backups/<id>/manifest.enc --empty-audit
-.venv/Scripts/sentra.exe --config config/rehearsal.toml shared-status
+# rehearsal checkout (..\sentra-rehearsal), pointing only at the throwaway project
+.venv/Scripts/sentra.exe shared-bootstrap --egress-baseline-bytes 0
+.venv/Scripts/sentra.exe shared-backup-verify .private/backups/<id>/manifest.enc
+.venv/Scripts/sentra.exe shared-restore .private/backups/<id>/manifest.enc --empty-audit --target-project <throwaway-ref>
+.venv/Scripts/sentra.exe shared-status
 ```
+
+**Identity check before writing:** `--empty-audit` refuses to run unless `--target-project`
+equals the ref of the project the checkout is configured for. In a rehearsal, that ref must
+**differ** from the `project_url` printed by `shared-backup-verify`. If they are equal, stop:
+the rehearsal checkout is pointing at the live project. The empty-table check is a second
+safety net only.
 
 `shared-restore` checks every member before changing anything. Inside one transaction it
 then compares each table's restored row count and order-independent SHA-256 fingerprint
@@ -65,5 +82,5 @@ differs. The original responses are uploaded into the rehearsal project's own
 
 ## Afterwards
 
-Delete the throwaway project and the restored copies once the results are recorded. They
-contain participant data.
+Delete the throwaway project, the rehearsal checkout's `.private` and the restored copies once
+the results are recorded. They contain participant data.

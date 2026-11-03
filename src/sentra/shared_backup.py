@@ -163,20 +163,36 @@ def verify_backup(reader):
     info = reader.info
     if set(info.get('tables',{})) != set(TABLES) or set(info.get('table_fingerprints',{})) != set(TABLES):
         raise SentraError('Backup table inventory incomplete.')
-    counts = {}
+    objects = {location:(digest,size) for location,(digest,size) in info.get('objects',{}).items()}
+    raw = {'raw-' + hashlib.sha256(location.encode()).hexdigest():location for location in objects}
+    # Every declared member must be a table chunk or the original of a listed object, and every listed
+    # original must be declared; nothing is skipped, so "members" below were all read and authenticated.
+    chunk = re.compile('(' + '|'.join(TABLES) + r')-\d{5}')
+    if any(not chunk.fullmatch(name) and name not in raw for name in info['files']) or not set(raw) <= set(info['files']):
+        raise SentraError('Backup member inventory differs from its tables and originals.')
+    counts, referenced = {}, {}
     for table in TABLES:
-        rows = [json.loads(line) for member in sorted(info['files']) if member.startswith(table+'-')
-                for line in reader.read(member).splitlines()]
-        if len(rows) != info['tables'][table]:
+        total, fingerprint = 0, 0
+        # One chunk is decoded at a time, so memory stays bounded by the chunk size, not the table.
+        for member in sorted(name for name in info['files'] if name.startswith(table+'-')):
+            for line in reader.read(member).splitlines():
+                row = json.loads(line)
+                total += 1
+                fingerprint = (fingerprint + int(hashlib.sha256(canonical(row).encode()).hexdigest(),16)) % (1 << 256)
+                if table == 'raw_response_manifest':
+                    referenced[row['object_location']] = (row['content_sha256'],row['compressed_bytes'])
+        if total != info['tables'][table]:
             raise SentraError(f'Backup row count differs for {table}.')
-        if row_fingerprint(rows) != info['table_fingerprints'][table]:
+        if f'{fingerprint:064x}' != info['table_fingerprints'][table]:
             raise SentraError(f'Backup row content differs for {table}.')
-        counts[table] = len(rows)
-    for location,(digest,_) in info.get('objects',{}).items():
-        if hashlib.sha256(gzip.decompress(reader.read('raw-' + hashlib.sha256(location.encode()).hexdigest()))).hexdigest() != digest:
+        counts[table] = total
+    if referenced != objects:
+        raise SentraError('Backup originals differ from the response manifest rows they belong to.')
+    for name,location in raw.items():
+        if hashlib.sha256(gzip.decompress(reader.read(name))).hexdigest() != objects[location][0]:
             raise SentraError('Backup original response hash mismatch.')
     return {'status':'verified','created_at':info.get('created_at'),'selection':info.get('selection'),
-            'tables':counts,'originals':len(info.get('objects',{})),'members':len(info['files'])}
+            'project_url':info.get('project_url'),'tables':counts,'originals':len(objects),'members':len(info['files'])}
 
 
 def restore_backup(reader, backend, admin_db, *, empty_audit=False):

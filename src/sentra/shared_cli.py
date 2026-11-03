@@ -2,6 +2,7 @@
 import json
 import gzip
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import psycopg
 import requests
@@ -39,6 +40,11 @@ def add_commands(sub):
     p = sub.add_parser('shared-restore',help='Restore health-only backup into a new isolated private schema')
     p.add_argument('backup',type=Path)
     p.add_argument('--empty-audit',action='store_true',help='Operational restoration only into completely empty initialized audit tables')
+    p.add_argument('--target-project',help='project ref of the configured target; required with --empty-audit')
+
+
+def project_ref(url):
+    return (urlsplit(url).hostname or '').split('.')[0]
 
 
 def expect_denial(code, body, *, kind):
@@ -169,6 +175,9 @@ def run_command(args):
             path = args.backup.resolve()
             if not path.is_relative_to(private/'backups'):
                 raise SentraError('Save the encrypted backup beneath .private/backups before restoring.')
+            if args.empty_audit and args.target_project != project_ref(credentials['url']):
+                # Confirms which project receives the rows before anything is written there.
+                raise SentraError('Name the configured target with --target-project (its project ref) before an --empty-audit restore.')
             db = connect_db(read_admin(private))
             try: result = restore_backup(BackupReader(path,cipher),backend,db,empty_audit=args.empty_audit)
             finally: db.close()
