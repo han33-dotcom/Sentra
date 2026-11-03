@@ -239,10 +239,34 @@ class RefreshTests(unittest.TestCase):
         self.assertEqual((upsert, kind, result['status']), (True, 'application/json', 'published'))
         self.assertEqual({p['id']: p['device'] for p in board['people']}, {'p01': 'Fitbit', 'p02': 'WHOOP'})
         self.assertEqual(board['source_run'], '2026-10-11T00:00:00+00:00')
-        tight = Limits(object_bytes=4_000_000 + 20_000_000 + 1, reserve_bytes=20_000_000)
-        with mock.patch.object(w, 'build', return_value=(objects, {})), mock.patch.object(w, 'publish'):
-            with self.assertRaises(Exception):
-                w.refresh(self.Reader(datetime(2026, 10, 12, tzinfo=UTC)), tight, self.Storage(), now=NOW, log=lambda *_: None)
+        # The single pre-write capacity check covers the board too, not tiers and board separately.
+        self.assertEqual(publish.call_args.kwargs['extra_bytes'], len(data))
+
+    def test_tiers_and_board_that_only_fit_separately_publish_nothing(self):
+        from sentra import wellness_refresh as w
+        from sentra.shared import CapacityStop
+        with tempfile.TemporaryDirectory() as folder:
+            write(folder, sleep_rows())
+            objects = {p.relative_to(folder).as_posix(): p.read_bytes() for p in Path(folder).rglob('*.parquet')}
+        import hashlib
+        tiers = sum(len(b) for b in objects.values())
+        report = len(json.dumps({'prefix': 'slot-a/', 'sha256': {k: hashlib.sha256(v).hexdigest() for k, v in objects.items()}},
+                                indent=2).encode())
+        # Room for the tiers and their report plus 100 bytes, but not for the (larger) board on top.
+        tight = Limits(object_bytes=4_000_000 + 20_000_000 + tiers + report + 100, reserve_bytes=20_000_000)
+        storage = self.Storage()
+        with mock.patch.object(w, 'build', return_value=(objects, {})), self.assertRaises(CapacityStop):
+            w.refresh(self.Reader(datetime(2026, 10, 11, tzinfo=UTC)), tight, storage, now=NOW, log=lambda *_: None)
+        self.assertEqual(storage.posts, {})
+
+    def test_processing_failure_publishes_neither_tiers_nor_board(self):
+        from sentra import wellness_refresh as w
+        storage = self.Storage()
+        with mock.patch.object(w, 'build', return_value=({'measurements.parquet': b'not parquet'}, {})), \
+                mock.patch.object(w, 'publish') as publish, self.assertRaises(Exception):
+            w.refresh(self.Reader(datetime(2026, 10, 11, tzinfo=UTC)), Limits(), storage, now=NOW, log=lambda *_: None)
+        publish.assert_not_called()
+        self.assertEqual(storage.posts, {})
 
     def test_collector_storage_requires_complete_credentials(self):
         from sentra import wellness_refresh as w
