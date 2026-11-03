@@ -39,6 +39,27 @@ class BackupTests(unittest.TestCase):
         self.assertEqual(m.row_fingerprint([a,b]),m.row_fingerprint([b,a]))
         self.assertNotEqual(m.row_fingerprint([a,b]),m.row_fingerprint([a,{**b,'value':9}]))
 
+    def test_offline_verify_checks_counts_fingerprints_and_originals(self):
+        import gzip, hashlib, json
+        m = self.module(); cipher = Fernet(Fernet.generate_key())
+        rows = {t: [{'table': t, 'n': i} for i in range(2)] for t in m.TABLES}
+        original = gzip.compress(b'{"page":1}')
+        location = 'sentra-originals/p01/x.json.gz'
+        with tempfile.TemporaryDirectory() as directory:
+            def backup(changed=None):
+                writer = m.BackupWriter(Path(directory), cipher)
+                for t, items in rows.items():
+                    stored = items if t != changed else items[:1] + [{'table': t, 'n': 99}]
+                    writer.write(f'{t}-00000', ''.join(json.dumps(r, sort_keys=True, separators=(',', ':')) + '\n' for r in stored).encode(), rows=2)
+                writer.write('raw-' + hashlib.sha256(location.encode()).hexdigest(), original)
+                return m.BackupReader(writer.finish({'tables': {t: 2 for t in m.TABLES},
+                    'table_fingerprints': {t: m.row_fingerprint(r) for t, r in rows.items()},
+                    'objects': {location: [hashlib.sha256(b'{"page":1}').hexdigest(), len(original)]}}), cipher)
+            result = m.verify_backup(backup())
+            self.assertEqual((result['status'], result['tables']['measurements'], result['originals']), ('verified', 2, 1))
+            with self.assertRaises(m.SentraError):
+                m.verify_backup(backup(changed='records'))  # same count, altered value
+
     def test_incomplete_inventory_refused_before_cloud_changes(self):
         m=self.module(); cipher=Fernet(Fernet.generate_key())
         with tempfile.TemporaryDirectory() as directory:

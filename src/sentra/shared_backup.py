@@ -156,6 +156,29 @@ def _make_backup(backend, root, cipher, *, participant=None, provider=None, data
         backend.unlock()
 
 
+def verify_backup(reader):
+    """Offline check before any destructive step: every member decrypts and matches its hash, every
+    table has its manifest row count and fingerprint, and every original response matches its digest.
+    Reads only the local encrypted files; no database or storage access."""
+    info = reader.info
+    if set(info.get('tables',{})) != set(TABLES) or set(info.get('table_fingerprints',{})) != set(TABLES):
+        raise SentraError('Backup table inventory incomplete.')
+    counts = {}
+    for table in TABLES:
+        rows = [json.loads(line) for member in sorted(info['files']) if member.startswith(table+'-')
+                for line in reader.read(member).splitlines()]
+        if len(rows) != info['tables'][table]:
+            raise SentraError(f'Backup row count differs for {table}.')
+        if row_fingerprint(rows) != info['table_fingerprints'][table]:
+            raise SentraError(f'Backup row content differs for {table}.')
+        counts[table] = len(rows)
+    for location,(digest,_) in info.get('objects',{}).items():
+        if hashlib.sha256(gzip.decompress(reader.read('raw-' + hashlib.sha256(location.encode()).hexdigest()))).hexdigest() != digest:
+            raise SentraError('Backup original response hash mismatch.')
+    return {'status':'verified','created_at':info.get('created_at'),'selection':info.get('selection'),
+            'tables':counts,'originals':len(info.get('objects',{})),'members':len(info['files'])}
+
+
 def restore_backup(reader, backend, admin_db, *, empty_audit=False):
     # Validate every member before any cloud change. Only a new isolated schema may be created.
     for name in reader.info['files']:

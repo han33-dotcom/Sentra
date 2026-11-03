@@ -11,7 +11,7 @@ from .errors import SentraError
 from .local_store import LocalStore
 from .providers import PROVIDERS
 from .shared_backend import SharedBackend,PrivateStorage,connect_db,BUCKET
-from .shared_backup import make_backup,BackupReader,restore_backup
+from .shared_backup import make_backup,BackupReader,restore_backup,verify_backup
 from .shared_config import read_shared
 from .shared_setup import bootstrap,read_admin,set_budget
 from .shared_sync import sync_store,compare_store
@@ -34,6 +34,8 @@ def add_commands(sub):
     p.add_argument('--participant')
     p.add_argument('--provider',choices=PROVIDERS)
     p.add_argument('--dataset')
+    p = sub.add_parser('shared-backup-verify',help='Offline check of an encrypted backup: hashes, row counts, fingerprints, originals')
+    p.add_argument('backup',type=Path)
     p = sub.add_parser('shared-restore',help='Restore health-only backup into a new isolated private schema')
     p.add_argument('backup',type=Path)
     p.add_argument('--empty-audit',action='store_true',help='Operational restoration only into completely empty initialized audit tables')
@@ -106,6 +108,12 @@ def run_command(args):
         try: set_budget(db,args.egress_baseline_bytes)
         finally: db.close()
         print('Organization egress baseline refreshed; existing reservations retained.')
+        return 0
+    if args.command == 'shared-backup-verify':
+        path = args.backup.resolve()
+        if not path.is_relative_to(private/'backups'):
+            raise SentraError('Keep the encrypted backup beneath .private/backups to verify it.')
+        print(json.dumps(verify_backup(BackupReader(path,cipher)),indent=2))
         return 0
     credentials,limits,private = read_shared(args.config,cipher)
     backend = SharedBackend(credentials,limits)
