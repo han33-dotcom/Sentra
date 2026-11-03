@@ -99,11 +99,34 @@ class PipelineTests(unittest.TestCase):
         self.assertTrue(d.rhr_est.isna().all())
         self.assertFalse(d.flag_long_inactivity_in_shift.any())
 
+    def test_missing_inputs_or_history_never_produce_green(self):
+        d = pd.DataFrame({'subject_id': 'p01', 'date': pd.date_range('2026-10-01', periods=4),
+            'sleep_min': [None, 420.0, 420.0, 300.0], 'rhr': [None, 60.0, 60.0, None], 'rhr_base': [None, None, 60.0, None],
+            'rhr_z': [None, None, 0.0, None], 'daily_hrv_rmssd': [None, 50.0, 50.0, None],
+            'daily_hrv_rmssd_base': [None, 50.0, 50.0, None], 'daily_hrv_rmssd_z': [None, 0.0, 0.0, None],
+            'sustained_hr_max_run': 0, 'longest_still_in_shift': 0})
+        d = pipeline.flags(d)
+        self.assertEqual(d.wellness_level.tolist(), ['insufficient', 'insufficient', 'green', 'amber'])
+        self.assertEqual(d.assessment_state.tolist(), ['insufficient', 'partial', 'complete', 'partial'])
+        self.assertEqual(d.assessment_reasons.iloc[1], 'rhr:baseline_building;sleep_hr:no_reading')
+        self.assertIn('hrv:no_reading', d.assessment_reasons.iloc[3])  # a signal still shows, with its gaps
+
+    def test_insufficient_days_are_not_counted_as_calm_in_the_cohort(self):
+        d = pd.DataFrame({'subject_id': [f'p0{i}' for i in range(1, 7)], 'date': pd.Timestamp('2026-10-03'),
+            'usable_day': True, 'sleep_min': 420.0, 'steps': 100.0, 'hr_mean': 70.0,
+            'wellness_signals': [1, 0, 0, 0, 0, 0], 'wellness_level': ['amber', 'green', 'green', 'green', 'green', 'insufficient'],
+            'flag_short_sleep': False, 'flag_sustained_high_hr': False})
+        c = pipeline.cohort(d)
+        self.assertAlmostEqual(c.pct_wellness_amber_or_red.iloc[0], 0.2)  # 1 of 5 assessed, not 1 of 6
+        self.assertEqual(c.n_pct_wellness_amber_or_red.iloc[0], 5)
+        self.assertEqual(c.n_median_sleep_h.iloc[0], 6)
+
     def test_each_cohort_metric_needs_five_known_contributors(self):
         d = pd.DataFrame({'subject_id': ['p01', 'p02', 'p03', 'p04', 'p05'],
             'date': pd.Timestamp('2026-10-03'), 'usable_day': True,
             'sleep_min': [300.0, None, None, None, None], 'steps': [100.0, None, None, None, None],
             'hr_mean': [160.0, None, None, None, None], 'wellness_signals': [1, 0, 0, 0, 0],
+            'wellness_level': ['amber', 'insufficient', 'insufficient', 'insufficient', 'insufficient'],
             'flag_short_sleep': [True, False, False, False, False],
             'flag_sustained_high_hr': [True, False, False, False, False]})
         c = pipeline.cohort(d)
@@ -112,6 +135,7 @@ class PipelineTests(unittest.TestCase):
         self.assertTrue(c[metrics].isna().all().all())
         self.assertEqual(c.workers.iloc[0], 5)
         d['sleep_min'] = 300.0; d['steps'] = 100.0; d['hr_mean'] = 160.0
+        d['wellness_level'] = ['amber', 'green', 'green', 'green', 'green']
         c = pipeline.cohort(d)
         self.assertEqual(c.median_sleep_h.iloc[0], 5.0)
         self.assertEqual(c.median_steps.iloc[0], 100.0)

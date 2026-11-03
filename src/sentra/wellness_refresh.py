@@ -21,7 +21,7 @@ from .errors import SentraError
 from .processing.board import payload
 from .processing.job import runtime_config as viewer_config
 from .processing.observations import load
-from .processing.pipeline import run
+from .processing.pipeline import ASSESSMENT_VERSION, run
 from .shared_backend import PrivateStorage, connect_db
 from .tiers import TIER_BUCKET, AuditReader, build, publish
 
@@ -68,12 +68,15 @@ def refresh(reader, limits, storage, *, force=False, now=None, log=print):
     now = now or datetime.now(timezone.utc)
     source = latest_run(reader)
     if not force:
-        previous = previous_board(storage).get('source_run') if source is not None else None
-        if source is None or (previous and datetime.fromisoformat(source) <= datetime.fromisoformat(previous)):
-            log('No changed collection data since the last board; tiers not read or published.')
+        before = previous_board(storage) if source is not None else {}
+        previous = before.get('source_run')
+        # A board built under older assessment rules is rebuilt even without new collection data.
+        current_rules = before.get('assessment_version') == ASSESSMENT_VERSION
+        if source is None or (current_rules and previous and datetime.fromisoformat(source) <= datetime.fromisoformat(previous)):
+            log('No changed collection data or rules since the last board; tiers not read or published.')
             return {'status': 'skipped', 'source_run': source}
     objects, report = build(reader, limits, now=now)
-    publish(objects, report, storage, reader, limits)
+    # Process before publishing anything: a processing failure leaves both tiers and board unchanged.
     with tempfile.TemporaryDirectory(prefix='sentra-wellness-') as folder:
         for key, data in objects.items():
             path = Path(folder) / key
@@ -86,7 +89,8 @@ def refresh(reader, limits, storage, *, force=False, now=None, log=print):
     body = json.dumps(board, separators=(',', ':')).encode()
     if len(body) > MAX_BOARD_BYTES:
         raise SentraError('Board payload exceeds 5 MB; narrow the history before publishing.')
-    limits.check(reader.usage(), object_add=len(body))
+    # One capacity check before any write covers the tiers, their report and the board together.
+    publish(objects, report, storage, reader, limits, extra_bytes=len(body))
     code, _ = storage.request('POST', BOARD_KEY, data=body, maximum=65_536, upsert=True, content_type='application/json')
     if code not in (200, 201):
         raise SentraError(f'Board upload failed (HTTP {code}); tiers were published, board unchanged.')
