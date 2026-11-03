@@ -18,6 +18,7 @@ class OrganizationAccessDatabaseTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         import psycopg
+        import psycopg.rows
         from psycopg.conninfo import make_conninfo
         cls.psycopg = psycopg
         cls.name = 'sentra_test_' + uuid4().hex[:12]
@@ -88,6 +89,25 @@ class OrganizationAccessDatabaseTests(unittest.TestCase):
         self.assertTrue(self.rejected("update org.memberships set left_on=null where membership_id=%s", (a,)))
         self.assertTrue(self.rejected('insert into org.consents(membership_id,participant_id,org_id,consent_version) '
                                       "values (%s,'p901','org-b','1.0')", (a,)))  # consent must match its episode
+
+    def test_access_decisions_from_rows_the_viewer_actually_reads(self):
+        from sentra.access import resolve
+        self.db.execute("insert into audit.participants values ('p903'),('p904')")
+        self.db.execute("insert into org.org_users(org_id,email,role) values ('org-b','officer@b.test','officer')")
+        shown, hidden = self.join('p903', 'org-b'), self.join('p904', 'org-b')
+        self.consent(shown, 'p903', 'org-b', 'individual')
+        self.consent(hidden, 'p904', 'org-b', 'individual', at='2026-11-01')
+        self.consent(hidden, 'p904', 'org-b', withdrawn=True, at='2026-11-02')
+        with self.db.transaction():
+            self.db.execute('set local role sentra_viewer')
+            cursor = self.db.cursor(row_factory=self.psycopg.rows.dict_row)
+            users = cursor.execute('select org_id,email,role,active from org.org_users').fetchall()
+            consents = cursor.execute('select participant_id,org_id,sharing,withdrawn,membership_open '
+                                      'from org.current_consent').fetchall()
+        access = resolve('officer@b.test', team_emails=[], org_users=users, consents=consents)
+        self.assertTrue(access.can_view_individual('p903'))
+        self.assertFalse(access.can_view_individual('p904'))
+        self.assertEqual(access.group_contributors(['p903', 'p904']), {'p903'})
 
     def test_viewer_reads_only_and_other_roles_see_nothing(self):
         for statement in ("insert into org.organizations values ('evil','Evil')",
