@@ -99,7 +99,8 @@ class DenseDatasetTests(unittest.TestCase):
         from pglast import parse_sql
         text = Path('sql/009_compact_series.sql').read_text(encoding='utf-8')
         self.assertGreaterEqual(len(parse_sql(text)), 10)
-        self.assertNotIn('delete', text.lower().replace('select, insert, update, delete', ''))
+        for statement in ('delete from', 'truncate', 'drop ', 'alter table audit.measurements'):
+            self.assertNotIn(statement, text.lower())
         self.assertNotIn('delete from audit.measurements', Path(compaction.__file__).read_text(encoding='utf-8'))
 
     def test_only_dense_datasets_qualify(self):
