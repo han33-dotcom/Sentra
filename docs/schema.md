@@ -94,7 +94,10 @@ signed-in e-mail. Team operators on the viewer allowlist keep operator access. A
 organization user sees only their own organization: individual details need a current,
 non-withdrawn `individual` consent in an open episode, and group statistics count
 only current, non-withdrawn consents in open episodes, published with at least
-`cohort_k_anonymity` contributors. The viewer and API don't call it yet.
+`cohort_k_anonymity` contributors. The viewer enforces it at sign-in, on every
+participant read and on the wellness board; source fields, original responses and
+downloads stay team-only. The read API remains a team operator credential (see
+[read API](read-api.md)).
 
 ## Self-service enrollment (`sql/008_self_service_enrollment.sql`, not yet applied)
 
