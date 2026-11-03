@@ -69,15 +69,60 @@ class ViewerAccessTests(unittest.TestCase):
             reads.catalog.assert_not_called(); reads.board.assert_not_called()
             self.assertNotIn('audit_access', app.session_state)
 
-    def test_withdrawal_takes_effect_once_the_cache_expires(self):
+    def test_withdrawal_hides_the_participant_once_the_cache_expires(self):
         from sentra import viewer_app
-        patches, load, _ = self.run_as('officer@a.test', [(USERS, consents()), (USERS, consents(withdrawn=True))])
+        state = {'withdrawn': False}
+        patches, load, _ = self.run_as('officer@a.test', (USERS, consents()))
+        load.side_effect = lambda email: (USERS, consents(withdrawn=state['withdrawn']))
         with patches[0], patches[1], patches[2], patch.object(viewer_app, 'ACCESS_TTL_SECONDS', 0):
             app = self.app(); app.run()
-            self.assertEqual(app.session_state['audit_access'][2].individuals, {'p99'})
+            self.assertFalse(app.error)
+            self.assertEqual(app.selectbox[0].options, ['p99'])
+            state['withdrawn'] = True
             app.run()
-            self.assertEqual(load.call_count, 2)
-            self.assertEqual(app.session_state['audit_access'][2].individuals, frozenset())
+            self.assertFalse(app.exception)
+            self.assertTrue(any('No participant has shared' in i.value for i in app.info))
+            self.assertEqual(len(app.selectbox), 0)
+
+    def test_officer_sees_only_permitted_people_and_no_operator_tools(self):
+        class TwoPeople(FakeReader):
+            def catalog(self):
+                return super().catalog() + [{'participant_id': 'p98', 'provider': 'whoop', 'dataset': 'sleep'}]
+        from sentra import viewer_app
+        from sentra.viewer_reader import ViewerReader
+        reads = Mock(wraps=TwoPeople())
+        patches, load, _ = self.run_as('officer@a.test', (USERS, consents()), reads)
+        with patches[0], patches[1], patches[2]:
+            app = self.app(); app.run()
+            self.assertFalse(app.exception); self.assertFalse(app.error)
+            self.assertEqual(app.selectbox[0].options, ['p99'])
+            labels = [b.label for b in app.button]
+            self.assertNotIn('Load audit details', labels)
+            self.assertNotIn('Prepare readable CSV', labels)
+        # The reader itself refuses a participant outside the decision, even if asked directly.
+        from sentra.shared import Limits
+        denied = ViewerReader({}, Limits(), lambda: 'officer@a.test', db=Mock(), budget_db=Mock(),
+                              can_view=lambda p: p == 'p99')
+        from datetime import date
+        from sentra.viewer_data import Selection
+        from sentra.errors import SentraError
+        with self.assertRaisesRegex(SentraError, 'outside your permitted access'):
+            denied.measurements(Selection('p98', 'whoop', 'sleep', date(2026, 10, 7), date(2026, 10, 8)))
+
+    def test_officer_board_contains_only_permitted_people(self):
+        class Board(FakeReader):
+            def board(self):
+                return {'people': [{'id': 'p98', 'name': 'p98', 'device': 'WHOOP', 'days': []},
+                                   {'id': 'p99', 'name': 'p99', 'device': 'WHOOP', 'days': []}],
+                        'data_through': '2026-10-07', 'built_at': '2026-11-01T23:30:00Z'}
+        patches, load, _ = self.run_as('officer@a.test', (USERS, consents()), Mock(wraps=Board()))
+        with patches[0], patches[1], patches[2]:
+            app = self.app(); app.run()
+            app.radio[0].set_value('Wellness board').run()
+            self.assertFalse(app.exception); self.assertFalse(app.error)
+            html = ''.join(str(e.proto) for e in app.get('iframe'))
+            self.assertIn('p99', html)
+            self.assertNotIn('p98', html)
 
 
 if __name__ == '__main__':

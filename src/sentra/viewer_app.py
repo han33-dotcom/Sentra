@@ -96,7 +96,8 @@ def open_reader():
     principal()
     with tempfile.TemporaryDirectory(prefix='sentra-viewer-') as folder:
         credentials,limits,_=runtime_settings(st.secrets,folder)
-        reader=ViewerReader(credentials,limits,principal)
+        decision=current_access()
+        reader=ViewerReader(credentials,limits,principal,can_view=decision.can_view_individual)
         try: yield reader
         finally: reader.close()
 
@@ -234,8 +235,10 @@ def wellness_board():
     if reload or 'audit_board' not in st.session_state:
         with open_reader() as reader:
             st.session_state['audit_board']=reader.board()
-    board=st.session_state['audit_board']
-    principal()
+    decision=current_access()
+    # Re-filter the cached board so a withdrawal applies without a manual reload.
+    board={**st.session_state['audit_board'],'people':[p for p in st.session_state['audit_board']['people']
+                                                         if decision.can_view_individual(p.get('id'))]}
     st.caption("Wellness indicators against each person's own recent pattern; not a medical assessment. "
                f'Thresholds: {board.get("thresholds_status") or "v0 — pending medical expert sign-off"}.')
     latest=civil_day(board.get('data_through'))
@@ -340,6 +343,8 @@ def readable_view(selection,result,name):
         if civil:st.caption('Latest selected vendor civil day: '+civil)
         st.caption('Dates and physical timestamps use Asia/Beirut. Sleep uses its wake date; workouts use their start date. Vendor civil dates remain calendar dates. Scores from different providers have different definitions.')
         st.caption('Readable CSV includes exact source values, units, state and references for the selected participant and dates. Detailed field CSV and unchanged original responses are in Audit details.')
+    if not current_access().is_team:
+        return  # Organization sharing and downloads belong to permitted reports (#42).
     if st.button('Prepare readable CSV',icon=':material/download:'):
         principal();st.session_state['audit_readable_csv']=curated_csv(curated['export'])
     if st.session_state.get('audit_readable_csv') is not None:
@@ -382,9 +387,14 @@ def main():
         if 'audit_catalog' not in st.session_state:
             with open_reader() as reader:
                 st.session_state['audit_catalog']=reader.catalog()
-        catalog=st.session_state['audit_catalog']
+        decision=current_access()
+        # Re-filter cached rows so consent changes apply without a manual refresh.
+        catalog=[r for r in st.session_state['audit_catalog'] if decision.can_view_individual(r['participant_id'])]
+        if st.session_state.get('audit_participant') and not decision.can_view_individual(st.session_state['audit_participant']):
+            clear_selection_state()
         if not catalog:
-            st.info('No collected datasets are available yet.')
+            st.info('No collected datasets are available yet.' if current_access().is_team else
+                    'No participant has shared individual details with your organization yet.')
             st.stop()
         participants=sorted({r['participant_id'] for r in catalog})
         remembered=st.session_state.get('audit_participant')
@@ -484,6 +494,8 @@ def main():
             with st.container(border=True):
                 st.subheader('Start with your selected days')
                 st.caption('Choose a participant, provider and dates, then load their returned data. Changing filters clears results and prepared downloads.')
+        if not current_access().is_team:
+            st.stop()  # Source fields and original responses stay with Sentra operators.
         with st.expander('Audit details · source fields, exact values and original responses'):
             st.caption('These details use the sidebar audit dataset, metric and text filters. Full record context remains available for the overview dates.')
             if overview is not None:

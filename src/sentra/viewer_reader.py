@@ -62,8 +62,13 @@ def check_result_size(count, size):
 
 
 class ViewerReader:
-    def __init__(self, credentials, limits, principal, *, db=None, budget_db=None):
+    # Per-participant decision from sentra.access; the default keeps team-only callers unchanged.
+    can_view = staticmethod(lambda participant: True)
+
+    def __init__(self, credentials, limits, principal, *, db=None, budget_db=None, can_view=None):
         self.credentials,self.limits,self.principal = credentials,limits,principal
+        if can_view is not None:
+            self.can_view = can_view
         if db is None:
             principal()
         self.db = db if db is not None else connect_db(credentials)
@@ -86,6 +91,11 @@ class ViewerReader:
             self.budget_db.execute('select public.sentra_reserve_viewer_egress(%s,%s)',(amount,self.limits.monthly_egress_bytes))
         except psycopg.Error:
             raise CapacityStop('Viewer egress allowance is unavailable, stale or exhausted. Ask the operator to verify usage and refresh the baseline.') from None
+
+    def _permitted(self, selection):
+        self.principal()
+        if not self.can_view(selection.participant):
+            raise SentraError('This participant is outside your permitted access.')
 
     def _rows(self, query, values=(), *, allowance=262_144):
         self.principal()
@@ -110,16 +120,17 @@ class ViewerReader:
 
     @safe_database
     def catalog(self):
-        return self._rows(f'''select s.participant_id,s.provider,s.dataset,s.authorization_status,
+        rows=self._rows(f'''select s.participant_id,s.provider,s.dataset,s.authorization_status,
           s.last_success_at,count(m.metric) measurement_rows,
           max(m.measured_at) latest_point_time,max(m.interval_end) latest_interval_end,
           max(m.interval_start) latest_interval_start,max(({CIVIL})) latest_civil_day
           from audit.connection_state s left join audit.measurements m
           using(participant_id,provider,dataset) group by 1,2,3,4,5 order by 1,2,3''')
+        return [r for r in rows if self.can_view(r['participant_id'])]
 
     @safe_database
     def metrics(self, selection):
-        self.principal()
+        self._permitted(selection)
         # Discover metric names for the dataset; at most 2,000 scalar definitions.
         rows=self._rows('''select distinct metric,unit,value_kind from audit.measurements
            where participant_id=%s and provider=%s and dataset=%s order by 1,2,3 limit 2001''',
@@ -139,7 +150,7 @@ class ViewerReader:
 
     @safe_database
     def measurements(self, selection):
-        self.principal()
+        self._permitted(selection)
         where,values=selection_where(selection)
         self.reserve(65_536)
         # A single snapshot ensures the size check and retrieval cover the same rows.
@@ -160,7 +171,7 @@ class ViewerReader:
     @safe_database
     def records(self, selection):
         """Full existing context once per record, bounded before payload transfer."""
-        self.principal()
+        self._permitted(selection)
         where,values=selection_where(selection)
         predicate=f'''exists(select 1 from audit.measurements m where
           (m.participant_id,m.provider,m.dataset,m.record_key)=
@@ -181,7 +192,7 @@ class ViewerReader:
     @safe_database
     def recoveries(self,selection,records):
         """WHOOP recovery association uses returned sleep IDs, never a date guess."""
-        self.principal()
+        self._permitted(selection)
         if selection.provider!='whoop':return []
         ids=sorted({r['record_key'] for r in records if r['dataset']=='sleep' and
                     r['participant_id']==selection.participant and r['provider']=='whoop'})
@@ -192,7 +203,7 @@ class ViewerReader:
 
     @safe_database
     def sessions(self, selection, rows):
-        self.principal()
+        self._permitted(selection)
         keys=sorted({r['record_key'] for r in rows})
         return self._rows('''select * from audit.sessions where participant_id=%s and provider=%s
            and dataset=%s and record_key=any(%s) order by started_at,record_key''',
@@ -200,7 +211,7 @@ class ViewerReader:
 
     @safe_database
     def manifests(self, selection, rows):
-        self.principal()
+        self._permitted(selection)
         ids=sorted({r['source_response_id'] for r in rows})
         sources=self._rows('''select response_id,participant_id,provider,dataset,endpoint,requested_range,
           requested_resolution,collected_at,content_sha256,compressed_bytes from audit.raw_response_manifest
@@ -211,7 +222,7 @@ class ViewerReader:
 
     @safe_database
     def status(self, selection):
-        self.principal()
+        self._permitted(selection)
         states=self._rows('''select authorization_status,last_success_at,covered_intervals,updated_at
           from audit.connection_state where participant_id=%s and provider=%s and dataset=%s''',
           (selection.participant,selection.provider,selection.dataset),allowance=1_000_000)
@@ -237,11 +248,13 @@ class ViewerReader:
         except ValueError: raise SentraError('Wellness board is malformed; ask the operator to rerun the refresh.') from None
         if not isinstance(board,dict) or not isinstance(board.get('people'),list):
             raise SentraError('Wellness board is malformed; ask the operator to rerun the refresh.')
+        # Only participants this user may see individually remain on the board.
+        board['people']=[p for p in board['people'] if isinstance(p,dict) and self.can_view(p.get('id'))]
         return board
 
     @safe_database
     def original(self, response_id, selection):
-        self.principal()
+        self._permitted(selection)
         if not re.fullmatch('[a-f0-9]{64}',response_id):
             raise SentraError('Invalid original-response identity.')
         # Re-evaluate the active selection; a forged/stale ID cannot escape its scope.
