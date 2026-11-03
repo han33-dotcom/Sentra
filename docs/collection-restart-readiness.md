@@ -5,8 +5,8 @@ Task: [#44](https://github.com/han33-dotcom/Sentra/issues/44). Owner:
 ledger, separate from October's historical acceptance in the stage guides.
 
 **November 3, 2026 decision: blocked; collection remains paused.** Stored
-authorization needs attention, current platform/dashboard evidence and dependent
-team evidence are incomplete, and forward/catch-up windows have not been agreed.
+authorization needs attention, provider-dashboard and dependent team evidence
+are incomplete, and forward/catch-up windows have not been agreed.
 Neither this document nor a successful inspection authorizes collection.
 
 ## Repeatable inspection
@@ -60,9 +60,29 @@ Bounded inspection at approximately **16:06 UTC / 18:06 Asia/Beirut**:
 | Stored authorization | Reconnect/refresh work remains; detailed results retained encrypted privately | No provider token request or health request made; no live renewal demonstrated |
 | Growth evidence | Existing `growth_report()` executed; result encrypted privately in `.private/readiness/growth.enc` | Historical requested-day averages include gaps and are not a five-participant capacity forecast |
 
+Signed-in dashboards subsequently checked at approximately **16:12–16:16 UTC /
+18:12–18:16 Asia/Beirut**:
+
+| Dashboard | Observed result | Interpretation |
+| --- | --- | --- |
+| GitHub billing overview | GitHub Free; Actions billable usage $0; included compute $0 used / $12 included; Actions storage 0 GB / 0.5 GB | Current UI uses a monetary compute allowance; do not substitute the stage guide's historical runner-minute presentation |
+| GitHub budgets | Account-wide Actions $0 budget; status **Usage blocked** | Spending is stopped at the budget; no budget, subscription or payment setting changed |
+| Supabase billing | **Free Plan**, **Spend cap is enabled** | Organization remains limited by included usage |
+| Supabase organization usage | Cycle **October 8–November 8, 2026**; no quota exceeded; database **0.325 / 0.5 GB**; uncached egress **0.885 / 5 GB**; Storage **0.002 / 1 GB** | Rounded dashboard values; usage can lag up to an hour. This billing cycle differs from the collector's UTC-month reservation ledger |
+
+The dashboard's rounded database figure is larger than the direct SQL usage
+snapshot above. Keep both measurements and ask #50 to reconcile their timing and
+accounting scope; plan conservatively against the larger figure (about **55 MB**
+below the existing 380 MB import stop), rather than promising 69.7 MB of usable
+growth. The dashboard's object figure also differs from the collector's source
+manifest accounting. Neither difference authorizes deleting history or changing
+limits. Preserve the current egress baseline and reservations; no baseline was
+rewritten to align the two different periods. Sanitized operator observations
+are retained encrypted in `.private/readiness/operator-metadata.enc`.
+
 The October database/egress figures in the stage guides are historical. Do not
-substitute them for this observation or interpret the November monthly egress
-figure as an October comparison. No egress baseline/reservations were reset.
+substitute them for this observation or interpret the November UTC-month ledger
+as the platform's billing-period meter. No egress baseline/reservations were reset.
 
 The current [storage plan](storage-plan.md) keeps daily collection paused until
 its verified compaction/approval gate is satisfied. Current headroom alone does
@@ -74,6 +94,10 @@ without duplicating or performing its destructive steps under #44.
 
 Primary vendor documentation checked November 3, 2026. Published defaults are
 planning inputs; record the actual configured client/project limits privately.
+The signed-in Google Cloud project opened, but its Audience page returned
+**Failed to load**; current audience/publication/test-user settings could not be
+read. WHOOP's developer portal redirected to sign-in. No provider setting or
+participant authorization was changed in either attempt.
 
 - **Google Health:** the operator configuration says `testing`. Google's
   [refresh-token rules](https://developers.google.com/identity/protocols/oauth2#expiration)
@@ -106,7 +130,9 @@ planning inputs; record the actual configured client/project limits privately.
 For legacy cloud-owned connections, reconnect only through the affected
 `cloud-connect PROVIDER --reauthorize` path in the operating guide. For #28's
 enrolled connections, use its reviewed, deployed participant account/reconnect
-flow. Do not silently relink identities, copy credentials between participants,
+flow. PR #52 merged into `develop` during this work and was integrated into this
+branch before final checks. That merge is not a hosted deployment. Do not
+silently relink identities, copy credentials between participants,
 or make enrollment enable collection. #28's deployment/provider prerequisites
 remain separate from the synthetic implementation evidence in PR #52.
 
@@ -140,11 +166,12 @@ in this proposal have been approved or executed by this readiness work.
 
 ## Outstanding restart gates
 
-- [ ] Fresh signed-in Supabase Free/organization database, objects and uncached
-  egress check; verify baseline freshness at least weekly and at each new UTC
-  month. Preserve reservations, thresholds and next-batch estimates.
-- [ ] Fresh account-wide GitHub Actions allowance and **$0 budget / Stop usage:
-  Yes** check; a repository variable alone is insufficient.
+- [x] Fresh signed-in Supabase Free/organization database, objects and uncached
+  egress check; current bounded budget reservations permitted. Reverify at least
+  weekly, each new UTC month and before operation if stale. Preserve reservations,
+  thresholds and next-batch estimates; reconcile dashboard accounting under #50.
+- [x] Fresh account-wide GitHub Free/Actions allowance and **$0 budget / Usage
+  blocked** check. A repository variable alone was not used as this evidence.
 - [ ] Actual provider dashboard quotas, test-user/tier availability, scope and
   callback settings checked; affected authorization reconnected/renewed with
   consent and private evidence. Agree the Google Testing reconnection approach.
@@ -160,3 +187,27 @@ in this proposal have been approved or executed by this readiness work.
 
 Record any future enabling time and first successful approved run separately in
 #47's private evidence. Never mark #44 Done based solely on this report or its PR.
+
+## Implementation validation
+
+After integrating PR #52 from current `develop`:
+
+- `.venv/Scripts/python.exe -m pytest -ra`: **259 passed, 25 skipped**. Skips
+  comprise five existing live checks, four opt-in organization-database checks
+  and sixteen isolated enrollment-PostgreSQL checks. One existing Starlette/httpx
+  deprecation warning remains. No live-test opt-in was enabled.
+- Nineteen synthetic readiness cases cover expiry/Testing deadlines, pending and
+  withdrawn connections, missing scopes, invalid metadata, identity mismatch,
+  stale budget/capacity stops, paused controls, bounded inspection, aggregate
+  output and encrypted private evidence without HTTP or credential mutation.
+- `python scripts/check_no_data.py`, `node --test tests/test_board_chart.cjs`
+  (three passed), `python -m pip check` and `git diff --check`: passed using the
+  prepared environment.
+- Final `cloud-readiness` run at **16:18 UTC / 18:18 Asia/Beirut** returned
+  **blocked** (expected exit 1), SQL paused, zero provider requests and unchanged
+  database/object usage. Its conservative egress snapshot was 1,070,964,454 bytes
+  before reserving metadata allowance. Provider status details remain encrypted.
+
+Remote CI and independent human review are separate evidence. These checks do
+not exercise live refresh/OAuth, a collection run, a hosted deployment, five
+participants, backup/restore, compaction or an approved restart.

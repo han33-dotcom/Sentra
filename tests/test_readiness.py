@@ -79,10 +79,13 @@ def test_invalid_or_incomplete_credentials_do_not_pass(changes):
     assert credential_check(value['connection'], value['token'], 'active', NOW)['status'] not in ('access_current', 'refresh_needed')
 
 
-@pytest.mark.parametrize('status', ['refresh_pending', 'handoff_pending', 'reconnect_pending', 'withdrawn'])
-def test_pending_or_withdrawn_connection_requires_attention(status):
+@pytest.mark.parametrize('status,expected', [
+    ('refresh_pending', 'reconnect_required'), ('handoff_pending', 'reconnect_required'),
+    ('reconnect_pending', 'reconnect_required'), ('withdrawn', 'participation_withdrawn'),
+])
+def test_pending_or_withdrawn_connection_requires_attention(status, expected):
     value = envelope(expires_at=NOW.timestamp() + 3600)
-    assert credential_check(value['connection'], value['token'], status, NOW)['status'] == 'reconnect_required'
+    assert credential_check(value['connection'], value['token'], status, NOW)['status'] == expected
 
 
 def test_inspection_is_bounded_and_never_fetches_or_rotates_credentials():

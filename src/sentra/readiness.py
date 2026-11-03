@@ -26,6 +26,8 @@ def _timestamp(value):
 def credential_check(connection, token, refresh_status, now):
     """Only return allowlisted metadata, never token/client values or provider errors."""
     result = {'status': 'reconnect_required', 'live_authorization': 'unverified'}
+    if refresh_status == 'withdrawn':
+        return {**result, 'status': 'participation_withdrawn'}
     if refresh_status != 'active' or token.get('reconnect_required'):
         return result
     if connection.get('agreed') is not True:
