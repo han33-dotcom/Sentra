@@ -21,7 +21,12 @@ class FakeUser:
 
 class FakeReader:
     limits=Limits()
-    def catalog(self): return [{'participant_id':'p99','provider':'whoop','dataset':'sleep'}]
+    def catalog(self):
+        return [{'participant_id':'p99','provider':'whoop','dataset':'sleep',
+                 'latest_interval_end':datetime(2026,10,7,5,tzinfo=timezone.utc)}]
+    def board(self):
+        return {'people':[], 'data_through':'2026-10-07',
+                'built_at':'2026-11-01T23:30:00Z'}
     def metrics(self,selection):
         return [{'metric':'/synthetic','unit':'beats/min','value_kind':'vendor_summary'}]
     def records(self,selection):
@@ -53,6 +58,103 @@ class FakeReader:
 
 
 class ViewerAppTests(unittest.TestCase):
+    def test_historical_default_manual_dates_and_board_navigation(self):
+        from sentra import viewer_app
+        @contextmanager
+        def reader():yield FakeReader()
+        with patch.object(viewer_app.st,'user',FakeUser()),patch.object(viewer_app,'open_reader',reader):
+            app=self.app();app.secrets['viewer']={'allowed_emails':['team@example.test']}
+            app.run()
+            self.assertFalse(app.exception);self.assertFalse(app.error)
+            self.assertEqual(app.date_input[0].value,(date(2026,10,1),date(2026,10,7)))
+            manual=(date(2026,10,3),date(2026,10,5))
+            app.date_input[0].set_value(manual).run()
+            app.radio[0].set_value('Sleep').run()
+            self.assertEqual(app.date_input[0].value,manual)
+            app.radio[0].set_value('Wellness board').run()
+            self.assertFalse(app.exception);self.assertFalse(app.error)
+            self.assertTrue(any('Latest measurement day: 2026-10-07' in c.value for c in app.caption))
+            self.assertTrue(any('Board published: 2026-11-02' in c.value for c in app.caption))
+            app.radio[0].set_value('Sleep').run()
+            self.assertEqual(app.date_input[0].value,manual)
+            next(b for b in app.button if b.label=='Latest available week').click().run()
+            self.assertEqual(app.date_input[0].value,(date(2026,10,1),date(2026,10,7)))
+            self.assertFalse(app.exception);self.assertFalse(app.error)
+
+    def test_sign_out_and_expiry_clear_board_and_prepared_downloads(self):
+        from sentra import viewer_app
+        for sign_out in (True,False):
+            user=FakeUser();read=Mock(wraps=FakeReader())
+            @contextmanager
+            def reader():yield read
+            with self.subTest(sign_out=sign_out),patch.object(viewer_app.st,'user',user),\
+                    patch.object(viewer_app,'open_reader',reader),patch.object(viewer_app.st,'logout') as logout:
+                app=self.app();app.secrets['viewer']={'allowed_emails':['team@example.test']}
+                app.run()
+                next(b for b in app.button if b.label=='Load selected data').click().run()
+                next(b for b in app.button if b.label=='Prepare readable CSV').click().run()
+                app.radio[0].set_value('Wellness board').run()
+                self.assertIn('audit_board',app.session_state)
+                self.assertIn('audit_readable_csv',app.session_state)
+                read.reset_mock()
+                if sign_out:
+                    next(b for b in app.button if b.label=='Sign out').click().run()
+                    logout.assert_called_once()
+                else:
+                    user.claims['exp']=time.time()-1
+                    app.run()
+                self.assertFalse(app.exception)
+                self.assertNotIn('audit_board',app.session_state)
+                self.assertNotIn('audit_readable_csv',app.session_state)
+                self.assertEqual(len(app.get('iframe')),0)
+                read.board.assert_not_called();read.catalog.assert_not_called()
+
+    def test_dates_follow_participant_and_survive_hidden_filters(self):
+        from sentra import viewer_app
+        class TwoPeople(FakeReader):
+            def catalog(self):
+                return super().catalog()+[{'participant_id':'p98','provider':'google_health',
+                    'dataset':'daily_steps','latest_civil_day':'2026-09-30'}]
+        @contextmanager
+        def reader():yield TwoPeople()
+        with patch.object(viewer_app.st,'user',FakeUser()),patch.object(viewer_app,'open_reader',reader):
+            app=self.app();app.secrets['viewer']={'allowed_emails':['team@example.test']}
+            app.run()
+            self.assertEqual(app.date_input[0].value,(date(2026,9,24),date(2026,9,30)))
+            next(s for s in app.selectbox if s.label=='Participant ID').set_value('p99').run()
+            self.assertEqual(app.date_input[0].value,(date(2026,10,1),date(2026,10,7)))
+            app.date_input[0].set_value((date(2026,10,3),date(2026,10,5))).run()
+            app.radio[0].set_value('Wellness board').run()
+            app.radio[0].set_value('Sleep').run()
+            self.assertEqual(next(s for s in app.selectbox if s.label=='Participant ID').value,'p99')
+            self.assertEqual(app.date_input[0].value,(date(2026,10,3),date(2026,10,5)))
+            next(s for s in app.selectbox if s.label=='Participant ID').set_value('p98').run()
+            self.assertEqual(app.date_input[0].value,(date(2026,9,24),date(2026,9,30)))
+            self.assertFalse(app.exception);self.assertFalse(app.error)
+
+    def test_missing_board_and_read_failure_are_explicit_without_private_output(self):
+        from sentra import viewer_app
+        from sentra.shared import CapacityStop
+        for failed in (False,True):
+            class MissingBoard(FakeReader):
+                def board(self):
+                    if failed:raise CapacityStop('Viewer egress allowance is unavailable, stale or exhausted.')
+                    return {'people':[],'data_through':None}
+            @contextmanager
+            def reader():yield MissingBoard()
+            with self.subTest(failed=failed),patch.object(viewer_app.st,'user',FakeUser()),\
+                    patch.object(viewer_app,'open_reader',reader):
+                app=self.app();app.secrets['viewer']={'allowed_emails':['team@example.test']}
+                app.run();app.radio[0].set_value('Wellness board').run()
+                self.assertFalse(app.exception)
+                if failed:
+                    self.assertTrue(any('egress allowance' in e.value for e in app.error))
+                    self.assertNotIn('audit_board',app.session_state)
+                    self.assertEqual(len(app.get('iframe')),0)
+                else:
+                    self.assertTrue(any('Measurement dates are unavailable' in e.value for e in app.info))
+                    self.assertTrue(any('Board published: Not supplied' in c.value for c in app.caption))
+
     def test_readable_chart_keeps_missing_dates_empty(self):
         from datetime import date
         from sentra.viewer_app import readable_chart
