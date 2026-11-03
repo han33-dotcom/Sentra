@@ -10,7 +10,7 @@ import streamlit.components.v1 as components
 
 from .errors import SentraError
 from .viewer_config import emails, runtime_settings
-from .viewer_data import BEIRUT, Selection, authorize, inline_download, measurement_csv, sampling_summary, civil_day, latest_timing
+from .viewer_data import BEIRUT, Selection, authorize, inline_download, measurement_csv, sampling_summary, civil_day, latest_timing, latest_available_day
 from .viewer_reader import ViewerReader
 from .curated import curate, curated_csv, record_day, stamp
 from .metric_dictionary import METRICS
@@ -37,6 +37,30 @@ def clear_selection_state():
     for key in list(st.session_state):
         if key in ('audit_result','audit_overview','audit_readable_csv','audit_csv','audit_original','audit_original_id','audit_selection') or key.startswith(('audit_chart_choice_','audit_plot_')):
             del st.session_state[key]
+
+
+def choose_dates(dates):
+    st.session_state['audit_date_range']=dates
+    st.session_state['audit_dates']=dates
+    clear_selection_state()
+
+
+def remember_dates():
+    # Widget state is removed by Streamlit while the board page hides the filters.
+    st.session_state['audit_date_range']=st.session_state['audit_dates']
+    clear_selection_state()
+
+
+def measurement_freshness(latest, *, today=None):
+    today=today or datetime.now(timezone.utc).astimezone(BEIRUT).date()
+    st.caption('Latest measurement day: '+(latest.isoformat() if latest else 'Not supplied'))
+    if latest and latest<today:
+        st.info(f'The latest available measurements are {(today-latest).days} calendar days old. '
+                "These are historical records; today's coverage is not established.")
+    elif latest and latest>today:
+        st.warning('The latest measurement date is in the future. Ask the operator to check the source dates.')
+    elif latest is None:
+        st.info('Measurement dates are unavailable. A successful collection or recent publication does not establish recent measurements.')
 
 
 @contextmanager
@@ -185,8 +209,12 @@ def wellness_board():
     board=st.session_state['audit_board']
     principal()
     st.caption("Wellness indicators against each person's own recent pattern; not a medical assessment. "
-               f'Thresholds: {board.get("thresholds_status") or "v0 — pending medical expert sign-off"}. '
-               f'Refreshed {str(board.get("built_at") or "not yet")[:16].replace("T"," ")} UTC.')
+               f'Thresholds: {board.get("thresholds_status") or "v0 — pending medical expert sign-off"}.')
+    latest=civil_day(board.get('data_through'))
+    measurement_freshness(date.fromisoformat(latest) if latest else None)
+    published=stamp(board.get('built_at'))
+    st.caption('Board published: '+(published.isoformat()+' · Asia/Beirut' if published else 'Not supplied')+
+               '. Publication time is separate from measurement dates. Reloading checks the published board.')
     components.html(render(board),height=2300,scrolling=True)
 
 
@@ -260,6 +288,7 @@ def readable_view(selection,result,name):
                 'Last successful collection':item.get('last_success_at'),
                 'Latest measurement point':item.get('latest_point_time'),
                 'Latest interval end':item.get('latest_interval_end'),
+                'Latest vendor civil day':item.get('latest_civil_day'),
                 'Returned fields':item.get('measurement_rows')})
         st.dataframe(display_table(evidence),hide_index=True,width='stretch')
         st.caption('Successful collection means requested pages were stored, not complete wearable measurements. Not returned, explicit null, unscored, provisional and fetch failure are separate states. No rows alone proves neither unsupported nor zero activity.')
@@ -325,12 +354,33 @@ def main():
         if not catalog:
             st.info('No collected datasets are available yet.')
             st.stop()
-        participant=st.sidebar.selectbox('Participant ID',sorted({r['participant_id'] for r in catalog}))
-        provider=st.sidebar.selectbox('Provider',sorted({r['provider'] for r in catalog if r['participant_id']==participant}),
+        participants=sorted({r['participant_id'] for r in catalog})
+        remembered=st.session_state.get('audit_participant')
+        participant=st.sidebar.selectbox('Participant ID',participants,
+            index=participants.index(remembered) if remembered in participants else 0)
+        st.session_state['audit_participant']=participant
+        providers=sorted({r['provider'] for r in catalog if r['participant_id']==participant})
+        remembered=st.session_state.get('audit_provider')
+        provider=st.sidebar.selectbox('Provider',providers,
+            index=providers.index(remembered) if remembered in providers else 0,
             format_func=lambda p:{'google_health':'Google Health / Fitbit','whoop':'WHOOP'}.get(p,p))
+        st.session_state['audit_provider']=provider
         datasets=sorted({r['dataset'] for r in catalog if r['participant_id']==participant and r['provider']==provider})
         today=datetime.now(timezone.utc).astimezone(BEIRUT).date()
-        dates=st.sidebar.date_input('Dates in Asia/Beirut',value=(today-timedelta(days=6),today))
+        latest=latest_available_day(catalog,participant,provider)
+        end=min(latest,today) if latest else today
+        latest_week=(end-timedelta(days=6),end)
+        if st.session_state.get('audit_date_scope')!=(participant,provider):
+            st.session_state['audit_date_scope']=(participant,provider)
+            st.session_state['audit_date_range']=latest_week
+            st.session_state.pop('audit_dates',None)
+        if 'audit_dates' not in st.session_state:
+            st.session_state['audit_dates']=st.session_state['audit_date_range']
+        st.sidebar.button('Latest available week',disabled=latest is None,
+            on_click=choose_dates,args=(latest_week,))
+        st.sidebar.button('Last 7 calendar days',on_click=choose_dates,
+            args=((today-timedelta(days=6),today),))
+        dates=st.sidebar.date_input('Dates in Asia/Beirut',key='audit_dates',on_change=remember_dates)
         st.sidebar.caption('Up to 31 days · final date included')
         if st.sidebar.button('Refresh catalog and clear results',icon=':material/refresh:'):
             clear_private_state()
@@ -392,6 +442,9 @@ def main():
                 st.session_state['audit_overview']={'curated':curate(records,selection.start,selection.end),
                     'records':records,'availability':availability,'connections':[r for r in catalog if
                     r['participant_id']==participant and r['provider']==provider]}
+        measurement_freshness(latest_available_day(st.session_state['audit_catalog'],participant,provider),today=today)
+        st.caption('Dates reflect the available catalog, refreshed when data is loaded or the catalog is refreshed. '
+                   'Collection success does not establish complete measurement coverage.')
         overview=st.session_state.get('audit_overview')
         if overview is not None:
             principal();readable_view(selection,overview,page)

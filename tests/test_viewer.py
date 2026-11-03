@@ -12,6 +12,25 @@ from sentra.errors import SentraError
 
 
 class ViewerContracts(unittest.TestCase):
+    def test_latest_available_day_uses_measurements_not_collection_or_other_people(self):
+        m=self.module()
+        rows=[{'participant_id':'p99','provider':'whoop','dataset':'sleep',
+               'latest_interval_end':datetime(2026,10,24,22,30,tzinfo=timezone.utc),
+               'last_success_at':datetime(2026,11,1,tzinfo=timezone.utc)},
+              {'participant_id':'p99','provider':'whoop','dataset':'workout',
+               'latest_interval_start':datetime(2026,10,23,20,tzinfo=timezone.utc),
+               'latest_interval_end':datetime(2026,10,28,tzinfo=timezone.utc)},
+              {'participant_id':'p98','provider':'whoop','dataset':'sleep',
+               'latest_civil_day':'2026-11-02'},
+              {'participant_id':'p99','provider':'google_health','dataset':'daily_steps',
+               'latest_civil_day':'2026-11-01'}]
+        # 22:30 UTC is October 25 in Beirut, before the repeated DST hour ends.
+        self.assertEqual(m.latest_available_day(rows,'p99','whoop'),date(2026,10,25))
+        rows[0]['latest_civil_day']='2026-10-26'
+        self.assertEqual(m.latest_available_day(rows,'p99','whoop'),date(2026,10,26))
+        self.assertIsNone(m.latest_available_day([{'participant_id':'p99','provider':'whoop',
+            'dataset':'sleep','last_success_at':datetime.now(timezone.utc)}],'p99','whoop'))
+
     def module(self):
         try:
             from sentra import viewer_data
