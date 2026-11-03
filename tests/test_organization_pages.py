@@ -142,6 +142,17 @@ class OrganizationPageTests(unittest.TestCase):
         self.assertFalse(app.exception)
         self.assertEqual(OrgReader.catalog_calls, 1)  # one catalog query for both pages
 
+    def test_team_withdrawal_is_applied_on_the_next_render(self):
+        from sentra import viewer_app
+        app = self.open('team@example.test', 'Organization overview')
+        self.assertEqual({m.label: m.value for m in app.metric}['Enrolled'], '6')
+        withdrawn = [{**c, 'withdrawn': True} if c['participant_id'] == 'p96' else c for c in CONSENTS]
+        viewer_app.load_organization_rows.return_value = (USERS, withdrawn)
+        app.run()
+        self.assertFalse(app.exception)
+        self.assertEqual({m.label: m.value for m in app.metric}['Enrolled'], '5')
+        self.assertEqual(self.table(app)['Sleep']['Contributors'], '5')
+
     def test_period_switch_and_empty_board_are_explicit(self):
         app = self.open('officer@a.test', 'Organization overview')
         next(r for r in app.radio if r.label == 'Period').set_value('Last 7 days').run()

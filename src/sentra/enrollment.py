@@ -153,23 +153,29 @@ class ProviderLogin:
 
 
 def main(argv=None):
-    """Private operator utility: create a bounded invitation; never a public admin API."""
+    """Private operator invitations and bounded counts; never a public admin API."""
     import argparse
     from .enrollment_store import open_store
-    parser = argparse.ArgumentParser(description='Create a private Sentra participant invitation')
+    parser = argparse.ArgumentParser(description='Manage private Sentra invitations and participation counts')
     parser.add_argument('--organization', required=True)
     parser.add_argument('--seats', type=int, default=5, choices=range(1, 101))
     parser.add_argument('--days', type=int, default=7, choices=range(1, 31))
+    parser.add_argument('--summary', action='store_true', help='Read private aggregate participation counts; create no invitation')
     args = parser.parse_args(argv)
     try:
         settings = EnrollmentSettings.from_env()
+        if args.summary:
+            with open_store(settings) as store:
+                result = store.summary(args.organization)
+            print(json.dumps(result))
+            return 0
         invite = secrets.token_urlsafe(32)
         with open_store(settings) as store:
             store.invite(digest(invite), args.organization, args.seats, args.days)
         print(f'{settings.origin}/join#invite={invite}')
         return 0
     except Exception:
-        print('Invitation could not be created. Check private enrollment configuration and organization.')
+        print('Enrollment operation unavailable. Check private configuration and organization.')
         return 1
 
 

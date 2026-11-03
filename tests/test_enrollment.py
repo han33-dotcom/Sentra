@@ -1,8 +1,9 @@
 """Synthetic enrollment protocol tests. No live provider requests or secrets."""
-from contextlib import contextmanager
+from contextlib import contextmanager, redirect_stdout
 import base64
 import hashlib
 import importlib.util
+from io import StringIO
 import json
 from pathlib import Path
 import time
@@ -30,6 +31,29 @@ def settings(**kwargs):
 
 
 class EnrollmentProtocolTests(unittest.TestCase):
+    def test_summary_cli_reads_counts_without_creating_an_invitation(self):
+        from sentra.enrollment import main
+        store = MagicMock()
+        store.summary.return_value = {'enrolled': 1, 'assessable': None, 'assessment_unknown': 1}
+        output = StringIO()
+        with patch('sentra.enrollment.EnrollmentSettings.from_env', return_value=settings()), \
+                patch('sentra.enrollment_store.open_store') as opened, redirect_stdout(output):
+            opened.return_value.__enter__.return_value = store
+            self.assertEqual(main(['--organization', 'synthetic-pilot', '--summary']), 0)
+        self.assertEqual(json.loads(output.getvalue())['assessment_unknown'], 1)
+        store.summary.assert_called_once_with('synthetic-pilot')
+        store.invite.assert_not_called()
+
+    def test_summary_stops_before_reading_credentials_when_organization_exceeds_pilot_bound(self):
+        from sentra.enrollment_store import EnrollmentStore
+        db = MagicMock()
+        db.execute.return_value.fetchall.return_value = [('p100',)] * 101
+        store = EnrollmentStore(db, settings())
+        with patch.object(store, '_participation') as detail, self.assertRaises(EnrollmentError):
+            store.summary('synthetic-pilot')
+        detail.assert_not_called()
+        db.execute.assert_called_once()
+
     def test_origin_and_keys_fail_closed(self):
         for origin in ('http://example.com', 'https://example.com/path', 'https://user@example.com', 'https://example.com?next=x'):
             with self.subTest(origin=origin), self.assertRaises(ValueError):
