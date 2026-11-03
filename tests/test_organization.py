@@ -3,6 +3,7 @@ from datetime import date, datetime, timezone
 import unittest
 
 from sentra.organization import group_summary, participation, profile, shown_count, team_scope
+from sentra.processing.pipeline import ASSESSMENT_VERSION
 
 END = date(2026, 11, 3)
 
@@ -73,11 +74,31 @@ class ParticipationTests(unittest.TestCase):
             {'participant_id': 'p77', 'provider': 'whoop', 'dataset': 'sleep', 'authorization_status': 'authorized',
              'latest_interval_end': datetime(2026, 11, 3, 5, tzinfo=timezone.utc)},  # outside scope
         ]
-        people = [{'id': 'p90', 'days': [{'d': '2026-11-02', 'rhr': 55, 'rhr_b': 54}]},
+        people = [{'id': 'p90', 'days': [{'d': '2026-11-02', 'rhr': 55, 'rhr_b': 54, 'lvl': 'green'}]},
                   {'id': 'p91', 'days': [{'d': '2026-10-20', 'rhr': 60}]}]
-        counts = participation({'p90', 'p91', 'p92', 'p93'}, catalog, people, today=END)
+        counts = participation({'p90', 'p91', 'p92', 'p93'}, catalog, people, today=END,
+                               assessment_version=ASSESSMENT_VERSION)
         self.assertEqual(counts, {'enrolled': 4, 'connected': 2, 'recently_contributing': 2, 'assessable': 1,
                                   'recent_days': 3})
+
+    def test_assessable_requires_a_recent_complete_current_version_day(self):
+        people = [
+            person('p90', lvl='green'),
+            person('p91', lvl='amber', a='partial', rhr_b=54),
+            person('p92', lvl='red', a='partial'),
+            person('p93', lvl=None, a='insufficient', steps_b=6000),
+            {'id': 'p94', 'days': [{'d': '2026-10-20', 'lvl': 'green', 'rhr_b': 54}]},
+            {'id': 'p95', 'days': [{'d': '2026-11-04', 'lvl': 'green'}]},
+            {'id': 'p96', 'days': [{'d': '2026-10-31', 'lvl': 'red'}]},
+            {'id': 'p97', 'days': [{'d': '2026-11-03', 'a': 'partial', 'lvl': 'amber'},
+                                 {'d': '2026-11-02', 'lvl': 'green'}]},  # latest day is incomplete
+            person('p98', lvl='green'),  # outside scope
+        ]
+        scope = {f'p9{i}' for i in range(8)}
+        result = lambda version: participation(scope, [], people, today=END, assessment_version=version)
+        self.assertEqual(result(ASSESSMENT_VERSION)['assessable'], 2)
+        for version in (None, 'old-version'):
+            self.assertEqual(result(version)['assessable'], 0)
 
 
 class TeamScopeTests(unittest.TestCase):

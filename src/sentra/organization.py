@@ -9,13 +9,14 @@ Callers pass only participants the signed-in user may count (group statistics) o
   Each statistic is published only with at least `cohort_k_anonymity` contributors of its own;
   otherwise it is suppressed and its exact count is not reported. Missing values are never filled.
 - Participation counts states separately; one state does not imply the next.
-- Assessment levels are not interpreted here: the board's day level is not reliable for missing data
-  until the incomplete-assessment contract (#45) lands, so profiles show values and baselines only.
+- Assessment availability consumes the versioned board contract (#45): only a recent complete
+  day counts as assessable. Profiles show values and baselines.
 """
 from datetime import date, timedelta
 from statistics import median
 
 from .access import K_ANONYMITY, SHARING, publishable
+from .processing.pipeline import ASSESSMENT_VERSION
 from .viewer_data import latest_available_day
 
 # board key, label, unit, decimals
@@ -90,7 +91,7 @@ def group_summary(people, contributors, *, end, days=1, k=K_ANONYMITY):
     return result
 
 
-def participation(scope, catalog, people, *, today, recent_days=RECENT_DAYS):
+def participation(scope, catalog, people, *, today, recent_days=RECENT_DAYS, assessment_version=None):
     """Counts for the participants in scope: enrolled, connected, recently contributing, assessable."""
     scope = {p for p in scope if isinstance(p, str)}
     rows = [r for r in catalog if r.get('participant_id') in scope]
@@ -101,8 +102,17 @@ def participation(scope, catalog, people, *, today, recent_days=RECENT_DAYS):
                       if (day := latest_available_day(rows, pid, provider))), default=None)
         if latest and today - timedelta(days=recent_days) <= latest <= today:
             recent.add(pid)
-    assessable = {p['id'] for p in people if isinstance(p, dict) and p.get('id') in scope and _days(p)
-                  and any(_number(_days(p)[-1].get(b)) for b in BASELINES.values())}
+    assessable = set()
+    # Legacy boards can contain misleading green days. Require the current producer contract,
+    # then consume its completeness state rather than deriving assessment from baselines.
+    if assessment_version == ASSESSMENT_VERSION:
+        for person in people:
+            if not isinstance(person, dict) or person.get('id') not in scope:
+                continue
+            latest = max(_days(person), key=lambda d: d['d'], default=None)
+            if (latest and today - timedelta(days=recent_days) <= _day(latest['d']) <= today
+                    and latest.get('a') is None and latest.get('lvl') in ('green', 'amber', 'red')):
+                assessable.add(person['id'])
     return {'enrolled': len(scope), 'connected': len(connected), 'recently_contributing': len(recent),
             'assessable': len(assessable), 'recent_days': recent_days}
 

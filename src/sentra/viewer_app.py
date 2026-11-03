@@ -409,7 +409,8 @@ def organization_overview():
     today=datetime.now(timezone.utc).astimezone(BEIRUT).date()
     st.caption("Wellness information for health-and-safety conversations, compared with each person's own pattern; "
                'not a medical assessment or diagnosis.')
-    counts=participation(scope,catalog,people,today=today)
+    counts=participation(scope,catalog,people,today=today,
+                         assessment_version=data['board'].get('assessment_version'))
     counts['enrolled']=len(enrolled)
     st.subheader('Participation')
     columns=st.columns(4)
@@ -417,7 +418,7 @@ def organization_overview():
             ('Enrolled','enrolled','Current consent in an open membership.'),
             ('Connected','connected','At least one wearable connection authorized.'),
             ('Recently contributing','recently_contributing',f"Measurements within the last {counts['recent_days']} days."),
-            ('Assessable','assessable','A personal baseline exists for the latest published day.'))):
+            ('Assessable','assessable',f"A complete assessment on the latest published day within the last {counts['recent_days']} days."))):
         # Organization users see small activity counts only as '<k'; they could single out group-only people.
         value=counts[key] if decision.is_team or key=='enrolled' else shown_count(counts[key])
         column.metric(label,value,help=help_text)
@@ -440,7 +441,7 @@ def organization_overview():
                    'Note':r['reason'] or ''} for r in rows],hide_index=True,width='stretch')
     st.caption(f'Published days through {through}. Each device is summarized separately, and each statistic needs at '
                f'least {K_ANONYMITY} eligible contributors of its own; smaller groups are never shown. '
-               'Assessment levels appear once the agreed incomplete-assessment rules are released.')
+               'Assessable counts use complete, recent assessments from the current board contract.')
 
 
 def profiles_page():

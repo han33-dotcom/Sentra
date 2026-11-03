@@ -28,11 +28,14 @@ Counted separately. One state never implies the next.
 | Enrolled | Current consent in an open membership episode |
 | Connected | At least one wearable connection with `authorization_status = authorized` |
 | Recently contributing | Latest measurement day within the last 3 days (measurement dates, not collection success) |
-| Assessable | The latest published day has at least one personal baseline (sleep, resting HR, HRV or steps) |
+| Assessable | The latest published day is within the last 3 days and has a complete assessment under the current versioned board contract (`a` absent and `lvl` green/amber/red) |
 
 The 3-day window is a proposal for team agreement. Organization users see connected, recently
 contributing and assessable counts below 5 only as "<5", so a group-only person's activity on a
 given day cannot be singled out.
+Partial amber/red, insufficient, stale, future and legacy unversioned days do not count as
+assessable. This consumes the [indicator contract](indicator-contract.md), rather than
+inferring completeness from a baseline.
 
 ## Group summary
 
@@ -47,6 +50,10 @@ For the latest published day or the last 7 published days ending there:
 - The threshold is `cohort_k_anonymity` in `processing/thresholds.json`, the same value the
   processing pipeline's cohort statistics use.
 
+These organization- and device-scoped period medians are computed from the board's displayed
+precision. They are distinct from the pipeline's global daily cohort output; using a global
+cohort here would include people outside the officer's permitted organization.
+
 Measures: sleep (minutes), resting heart rate (bpm), heart rate variability (ms), steps,
 and WHOOP recovery (%). With today's two participants, every real group statistic is
 correctly hidden.
@@ -60,10 +67,8 @@ personal baseline yet" are explicit.
 
 ## Limitations
 
-- Assessment levels (green/amber/red) are **not shown yet**. The board's day level can look
-  reassuring when inputs are missing until the incomplete-assessment contract (#45, #49)
-  is released. These pages will then show its states and reasons instead, and "Assessable" will
-  use the same complete-assessment definition as processing and the API.
+- Profiles show measured values and personal baselines; the overview's assessment availability
+  uses the current complete-assessment contract. Detailed rule explanations remain follow-up work.
 - Data comes from the published wellness board, so it is only as current as the latest
   daily refresh. Collection remains paused.
 - Organization users need, privately: migration 007 applied, an `org.org_users` row and
