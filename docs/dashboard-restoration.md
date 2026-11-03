@@ -25,8 +25,41 @@ pointed to that exact commit. This added no new application commit and did not
 publish the restoration feature branch. Rebooting the existing app succeeded:
 the source clone completed and Sentra's sign-in page rendered. The owner's real
 Google identity sign-in then succeeded and rendered the five-page navigation.
-The app reported that the hosted database was unavailable; real-data viewing
-remains unverified until the Supabase project/connection is recovered.
+The app then reported that the hosted database was unavailable. The subsequent
+recovery below resolved that separate infrastructure failure.
+
+## Supabase recovery and hosted verification
+
+On November 3 the signed-in Supabase organization dashboard confirmed the Sentra
+project was paused and the organization remained on Free. The selected project's
+identity was checked against the encrypted viewer configuration before resuming
+it. Supabase completed restoration and reported the project back online.
+
+The current billing cycle (October 8–November 8) showed approximately 0.875 GB of
+uncached egress. November's application budget row was absent, so guarded reads
+would still stop after the database recovered. The existing `set_budget` operator
+function established a conservative **1,000,000,000-byte** November baseline,
+above that entire observed billing-cycle usage. Reservation readback confirmed
+none were reset. This keeps the existing 3.5 GB ceiling and seven-day freshness
+check; operators must continue verifying usage weekly and at each UTC month change.
+
+The resumed database reported approximately 310.31 MB used and 4.04 MB of Storage
+objects. These are dated metadata observations, not current billing meters. SQL
+collection control was independently read back as disabled. No collection was
+enabled, no provider was contacted and no storage migration was applied.
+
+The restricted viewer connection, the new catalog query and the published board
+read succeeded against the restored project. The catalog and board each covered
+the two existing participants. The hosted released app then passed real approved
+Google sign-in and loaded a bounded October 3–9 Google Health selection. Daily
+activity, Sleep, Workouts, Data availability and Wellness board rendered without
+application error alerts. Only counts and pass/fail results were emitted; no
+participant values or real-data screenshots were added to the repository.
+The board rendered two participant cards. Hosted sign-out returned to the sign-in
+page with zero remaining data tables and zero private child frames.
+
+These hosted checks exercised the already-released code. The new date-selection
+and freshness interface still requires review, release and hosted acceptance.
 
 Keep `ETL-pipeline` while the hosted app depends on it. Do not include it in
 merged-work-branch cleanup. Application fixes still go through reviewed PRs into
@@ -93,11 +126,11 @@ unapproved/expired identities and sign-out clearing board/prepared-download stat
 - A localhost browser using only synthetic identities/records rendered the
   historical default, Sleep view, charts and board freshness. Desktop and
   390-by-844 screenshots were visually inspected and remain local.
-- Hosted startup and real approved-account OIDC passed for the already-released
-  code. Authenticated real-data viewing remains blocked by the database connection.
+- Hosted startup, real approved-account OIDC and the five-page real-data walkthrough
+  passed for the already-released code after Supabase recovery.
 
-CI results are recorded with the implementation PR. Hosted authenticated data
-access and the actual egress baseline require separate verification; the
-historical dataset's presence is not evidence of current coverage. Collection
-controls were not enabled and no provider requests, migrations or threshold
-changes were made during dashboard restoration.
+CI results are recorded with the implementation PR. The historical dataset's
+presence is not evidence of current coverage. Collection controls were not enabled
+and no provider requests, migrations or threshold changes were made during
+dashboard restoration. Post-release acceptance of the new interface and an actual
+hosted download comparison remain separate from the verification recorded here.
