@@ -96,15 +96,30 @@ never a green pill.
 | --- | --- | --- |
 | `sleep_min` | vendor minutes asleep; stage timeline as fallback | light + slow-wave + REM, only when all three exist |
 | `rhr` | vendor daily resting HR; else Sentra estimate from still, awake minutes | recovery resting HR (measured during sleep) |
-| `daily_hrv_rmssd` | nightly average RMSSD during sleep | RMSSD from the last slow-wave sleep period |
+| `daily_hrv_rmssd` | RMSSD over the main sleep (needs ≥ 3 h of sleep, per Google's API docs) | RMSSD during sleep; WHOOP describes it as the last slow-wave period, but publishes no formal specification |
 | `sleep_hr` | mean minute HR while asleep | not available (no stage timeline) |
 
 The same name does not mean the same measurement across devices, so baselines are always
 personal and never compared across people or devices.
 
-## Known assumptions awaiting expert review
+## Evidence summary and items for expert review
 
-- Default age 30 when age is unknown, and the `180 − age` formula.
-- The 08:00–18:00 shift window.
-- 6-hour sleep cut-off, z = 2 cut-off, 7-of-28 minimum history and `MIN_SCALE` floors.
-- RMSSD is used on its natural scale; much of the literature uses ln(RMSSD).
+From [medical-evidence.md](medical-evidence.md) (section numbers in brackets). None of these
+change a threshold here; each needs the expert's decision first.
+
+| Rule | Evidence | Open question for the expert |
+| --- | --- | --- |
+| Short sleep < 6 h [1] | Supported; lenient against the ≥ 7 h adult consensus | add a "below 7 h" band, or flag repeated short nights |
+| Baseline method [2] | Median/MAD and personal baselines supported | z = 2 is lenient (2.5 is commonly recommended); 28-day / 7-day choices have no direct source; require two consecutive days? |
+| Resting HR up [3] | Partly supported (research and population studies) | normal week-to-week swings are common; keep wellness wording |
+| Sleeping HR up [4] | Supported | overlaps with resting HR on Fitbit? |
+| HRV down [5] | Concept supported | use ln(RMSSD) and 7-day trends |
+| Sustained high HR [6] | **Weakly supported**: `180 − age` is a non-peer-reviewed training formula | replace with a stated share of age-predicted maximum (208 − 0.7 × age) and drop the default age |
+| Long inactivity [7] | Partly supported; studies break sitting every 20–30 min | 30–60 min instead of 90 |
+| Valid wear day [8], MET bands [10] | Supported research conventions | align sedentary to ≤ 1.5 METs |
+| HR range [9] | Engineering plausibility filter, not a medical value | — |
+| Group size k = 5 [11] | Privacy policy choice | stricter k (e.g. 10) in the privacy review |
+| Devices [12] | Consumer wearables have known error | baselines stay per person and per device |
+| Missing data [13] | No direct guideline | the "never green when missing" rule here is a design principle |
+
+Other assumptions: the 08:00–18:00 shift window and the `MIN_SCALE` floors.
