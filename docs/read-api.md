@@ -14,6 +14,11 @@ GitHub Actions collector -> Supabase audit tables --(operator: sentra tiers-buil
 All `/api/v1` routes need `X-API-Key: <SENTRA_API_KEY>` (at least 32 characters, compared in
 constant time). Only `GET` routes exist.
 
+The key is a single **team operator** credential, not an organization identity: the API returns
+every pseudonymous participant and never applies organization or sharing boundaries
+(`sentra.access`). Never give the key to organization users; they use the signed-in viewer,
+which enforces their organization, sharing choices and withdrawal.
+
 | Route | Returns |
 | --- | --- |
 | `GET /health` | Liveness and which processed files exist; no rows, no auth |
