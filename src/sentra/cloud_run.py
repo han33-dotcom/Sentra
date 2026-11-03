@@ -57,10 +57,38 @@ def runtime_config(folder):
         validate_credentials(credentials,Path(folder))
         if credentials['db']['user'].split('.')[0]!='sentra_collector': raise ValueError
         participants=config['participants']
-        if not participants or any(p not in ('google_health','whoop') or not re.fullmatch(r'p[0-9]{2,4}',pid) for p,pid in participants.items()): raise ValueError
-        if len(set(participants.values()))!=len(participants): raise ValueError
+        configured_connections(participants)
         return credentials,Limits(**config['limits']),participants,cipher
     except Exception: raise SentraError('Cloud secrets/configuration missing or invalid; no provider request made.') from None
+
+
+def configured_connections(participants):
+    if not isinstance(participants,dict) or not participants:
+        raise SentraError('No participants configured.')
+    pairs=[]
+    for provider, value in participants.items():
+        values=[value] if isinstance(value,str) else value
+        if (provider not in ('google_health','whoop') or not isinstance(values,list) or not values
+                or any(not isinstance(pid,str) or not re.fullmatch(r'p[0-9]{2,4}',pid) for pid in values)):
+            raise SentraError('Invalid participant directory.')
+        pairs.extend((pid,provider) for pid in values)
+    if len(pairs)>100 or len(set(pairs))!=len(pairs):
+        raise SentraError('Participant directory exceeds bounds or contains duplicates.')
+    return pairs
+
+
+def connection_targets(credentials,limits,participants):
+    pairs=configured_connections(participants)
+    config=json.loads(os.environ.get('SENTRA_COLLECTOR_CONFIG','{}'))
+    if config.get('include_enrolled') is True:
+        backend=SharedBackend(credentials,limits)
+        try:
+            backend.guard()
+            pairs.extend(backend.db.execute('select * from collector_private.enrolled_connections()').fetchall())
+        finally: backend.close()
+    pairs=list(dict.fromkeys(pairs))
+    if len(pairs)>100: raise SentraError('Participant directory exceeds the approved runtime bound.')
+    return pairs
 
 
 def attempt_run_id(execution):
@@ -91,7 +119,7 @@ def run_provider(credentials,limits,pid,provider,cipher,args,execution):
         details['outcomes']['failed']+=len(failures)
         vault=CloudTokenVault(TokenRepository(backend.db),pid,provider,cipher)
         c=vault.connection()
-        client=ReadClient(lambda refresh=False:access_token(c,vault,force_refresh=refresh))
+        client=ReadClient(lambda refresh=False:access_token(c,vault,force_refresh=refresh),guard=vault.ensure_active)
         deadline=time.monotonic()+15*60
         for job in jobs:
             try:
@@ -134,17 +162,27 @@ def main(argv=None):
     parser=argparse.ArgumentParser(description='Private hosted wearable collection')
     parser.add_argument('--mode',choices=('daily','initial','recovery'),default='daily')
     parser.add_argument('--provider',choices=('all','google_health','whoop'),default='all')
+    parser.add_argument('--participant',help='Limit collection to one pseudonymous participant')
     parser.add_argument('--start',type=date.fromisoformat); parser.add_argument('--end',type=date.fromisoformat)
     parser.add_argument('--dataset')
     args=parser.parse_args(argv)
     try:
         with tempfile.TemporaryDirectory(prefix='sentra-cloud-') as folder:
             credentials,limits,participants,cipher=runtime_config(folder)
-            providers=list(participants) if args.provider=='all' else [args.provider]
-            if any(p not in participants for p in providers): raise SentraError('Requested participant is not configured.')
+            pairs=connection_targets(credentials,limits,participants)
+            if args.provider!='all': pairs=[(pid,p) for pid,p in pairs if p==args.provider]
+            if args.participant:
+                if not re.fullmatch(r'p[0-9]{2,4}',args.participant): raise SentraError('Invalid participant.')
+                pairs=[(pid,p) for pid,p in pairs if pid==args.participant]
+            if not pairs: raise SentraError('Requested participant/provider is not configured.')
+            if args.mode!='daily' and len(pairs)>2 and not args.participant:
+                raise SentraError('Select one participant for a manual import when the pilot has grown.')
             execution='github-'+os.environ['GITHUB_RUN_ID'] if os.environ.get('GITHUB_RUN_ID') else str(uuid4())
             # The same run ID skips already-complete jobs on retries; another run rechecks content.
-            results=independent_providers(providers,lambda p:run_provider(credentials,limits,participants[p],p,cipher,args,execution))
+            results=[]
+            for pid,provider in pairs:
+                for result in independent_providers([provider],lambda p:run_provider(credentials,limits,pid,p,cipher,args,execution)):
+                    results.append({'participant_id':pid,**result})
             print(json.dumps(results),flush=True)
             return int(any(r['status'] not in ('succeeded','paused') for r in results))
     except Exception as e:
