@@ -17,6 +17,7 @@ Tasks belong in [GitHub Issues](https://github.com/han33-dotcom/Sentra/issues); 
 - [processing](processing.md)
 - [read api](read-api.md)
 - [schema](schema.md)
+- [self-service enrollment](self-service-enrollment.md)
 - [stage 0 feasibility](stage-0-feasibility.md)
 - [stage 1 setup](stage-1-setup.md)
 - [stage 2 collection](stage-2-collection.md)

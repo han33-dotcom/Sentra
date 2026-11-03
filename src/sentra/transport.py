@@ -18,8 +18,9 @@ class FetchError(SentraError):
 
 
 class ReadClient:
-    def __init__(self, token, *, pause=time.sleep, pace=0.65, max_bytes=16 * 1024 * 1024):
+    def __init__(self, token, *, pause=time.sleep, pace=0.65, max_bytes=16 * 1024 * 1024, guard=lambda: None):
         self.token = token
+        self.guard = guard
         self.pause = pause
         self.pace = pace
         self.max_bytes = max_bytes
@@ -35,6 +36,7 @@ class ReadClient:
                 self.pause(delay)
             self.last_request = time.monotonic()
             try:
+                self.guard()  # A withdrawn connection cannot reuse a token during retries.
                 with requests.request(request['method'], request['url'],
                                       headers={'Authorization': 'Bearer ' + access},
                                       params=request.get('params'), json=request.get('json'),

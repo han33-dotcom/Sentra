@@ -95,3 +95,27 @@ organization user sees only their own organization: individual details need a cu
 non-withdrawn `individual` consent in an open episode, and group statistics count
 only current, non-withdrawn consents in open episodes, published with at least
 `cohort_k_anonymity` contributors. The viewer and API don't call it yet.
+
+## Self-service enrollment (`sql/008_self_service_enrollment.sql`, not yet applied)
+
+After 007, a dedicated `sentra_enrollment` role can append consent and create/close
+membership episodes, allocate pseudonyms and store encrypted provider credentials.
+The existing viewer/API remain read-only. This role has no access to wearable
+measurement/record tables, collector controls or organization-user accounts.
+
+Private tables hold bounded invitations, encrypted expiring sessions, keyed hashes
+of provider identities and short-lived hashed request-rate buckets. RLS is forced;
+`anon`, `authenticated` and `sentra_viewer` cannot access them. No names, email
+addresses or provider account IDs are retained. Consent remains append-only.
+
+`enrollment_private.participation_status(pid)` returns only latest received time,
+latest usable measurement day, collection pause state and explicit unavailable
+assessment status. Only the trusted enrollment backend may call it.
+`collector_private.enrolled_connections()` returns at most 101 pseudonymous
+participant/provider pairs to the collector; runtime refuses more than 100. It
+excludes withdrawn or closed episodes. Withdrawal marks credentials `withdrawn`
+transactionally, preventing subsequent provider requests without deleting history.
+Collection discovery is opt-in and does not change existing activation controls.
+
+See [self-service enrollment](self-service-enrollment.md) for configuration,
+deployment, participant behavior and the isolated PostgreSQL verification fixture.

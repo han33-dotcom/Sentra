@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Join Sentra</title>
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/assets/join.css">
+  <script src="/assets/join.js" defer></script>
+</head>
+<body>
+  <header class="topbar"><a class="wordmark" href="/join" aria-label="Sentra home"><span class="mark" aria-hidden="true">s</span>sentra<span class="dot">.</span></a><span class="private">Your participation. Your choice.</span></header>
+  <main>
+    <section class="intro">
+      <p class="eyebrow">WEARABLE WELLNESS PILOT</p>
+      <h1 id="heading">A few taps. <br>A clearer picture.</h1>
+      <p id="subtitle" class="lede">Connect the wearable you already use. Choose what to share. Stay in control.</p>
+      <ol class="steps" aria-label="Joining steps"><li>Choose your sharing</li><li>Connect your wearable</li><li>You’re ready</li></ol>
+      <p class="wellness">Sentra shows wellness patterns, not medical diagnoses.</p>
+    </section>
+    <section class="card" aria-labelledby="card-heading">
+      <div id="loading" role="status">Preparing your participation…</div>
+      <div id="error" role="alert" tabindex="-1" hidden></div>
+      <div id="notice" role="status" hidden></div>
+      <noscript><p>Turn on JavaScript to choose your sharing and connect your wearable securely.</p></noscript>
+      <div id="form-content" hidden>
+        <p class="eyebrow" id="organization"></p>
+        <h2 id="card-heading">Join on your terms</h2>
+        <div id="account-summary" hidden>
+          <div class="status-grid"><div><span class="label">PARTICIPATION</span><strong id="participation"></strong></div><div><span class="label">DEVICE CONNECTION</span><strong id="connection"></strong></div><div><span class="label">RECENT DATA</span><strong id="data-status"></strong></div><div><span class="label">ASSESSMENT</span><strong>Not yet available</strong></div></div>
+          <p id="data-detail" class="muted"></p>
+        </div>
+        <div id="choice-fields">
+          <p class="description">Share sleep, activity, heart-rate and recovery information from your wearable with <strong id="recipient">your organization</strong>. Detailed readings are kept privately by the Sentra team.</p>
+          <details><summary>What information is included?</summary><p>Depending on your device: steps, activity and workouts, sleep and stages, heart rate (including detailed API readings), resting heart rate, heart-rate variability, breathing rate, blood oxygen, temperature and provider recovery scores. Sentra calculates personal comparisons and provisional wellness indicators.</p><p>Sentra does not request your location, GPS routes, contacts or messages. Your provider account identifier is checked privately to recognize your connection; names and email addresses returned by that check are discarded. Your provider password stays with the provider.</p></details>
+          <form id="sharing-form">
+            <fieldset><legend>Who can see your information?</legend>
+              <label class="option"><input type="radio" name="sharing" value="group_only" checked><span><strong>Group summaries only</strong><small>No individual profile for organization users. Each group statistic needs at least five eligible contributors.</small></span></label>
+              <label class="option"><input type="radio" name="sharing" value="individual"><span><strong>Group summaries + my profile</strong><small>Authorized people in your organization can also see your pseudonymous profile, trends and related follow-ups.</small></span></label>
+            </fieldset>
+            <label class="check"><input id="demonstration" type="checkbox"><span>Allow my pseudonymous data in internal project demonstrations.<small>Optional. No real-data screenshots in public material.</small></span></label>
+            <label class="check agreement"><input id="accepted" type="checkbox"><span>I agree to participate with these sharing choices.<small>I can change my choices or withdraw. Stored data follows the agreed retention policy; earlier shared reports cannot be recalled. Consent version <span id="consent-version"></span>.</small></span></label>
+            <button id="save" type="submit" class="primary" hidden>Save my choices</button>
+          </form>
+        </div>
+        <div id="providers" class="provider-section">
+          <p id="connect-label" class="connect-label">Connect your wearable</p>
+          <button class="provider" type="button" data-provider="google_health"><span class="provider-symbol" aria-hidden="true">F</span><span>Connect Fitbit<small>Continue with Google Health</small></span><span class="arrow" aria-hidden="true">↗</span></button>
+          <button class="provider" type="button" data-provider="whoop"><span class="provider-symbol whoop" aria-hidden="true">W</span><span>Connect WHOOP<small>Continue with your WHOOP account</small></span><span class="arrow" aria-hidden="true">↗</span></button>
+          <p class="muted fineprint">You’ll sign in on your provider’s page and return here. No new Sentra password.</p>
+        </div>
+        <div id="account-actions" hidden><button id="withdraw" type="button" class="text-button danger">Withdraw from participation</button><button id="logout" type="button" class="text-button">Sign out</button></div>
+        <div id="withdraw-confirm" hidden><p>Stop sharing and collection for this participation? Stored information follows the retention policy. You can also revoke Sentra access in your wearable account.</p><button id="confirm-withdraw" type="button" class="primary danger-fill">Yes, withdraw</button><button id="cancel-withdraw" type="button" class="text-button">Keep participating</button></div>
+        <p id="return-note" class="muted fineprint">Already joined? Open this page and connect the same wearable account to manage your participation.</p>
+      </div>
+    </section>
+  </main>
+  <footer>Sentra · Wearable insights, with you in control.</footer>
+</body>
+</html>
