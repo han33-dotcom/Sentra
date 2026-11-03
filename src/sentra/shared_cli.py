@@ -11,7 +11,7 @@ from .errors import SentraError
 from .local_store import LocalStore
 from .providers import PROVIDERS
 from .shared_backend import SharedBackend,PrivateStorage,connect_db,BUCKET
-from . import compaction
+from . import capacity, compaction
 from .shared_backup import make_backup,BackupReader,restore_backup
 from .shared_config import read_shared
 from .shared_setup import bootstrap,read_admin,set_budget
@@ -26,6 +26,8 @@ def add_commands(sub):
     p.add_argument('--egress-baseline-bytes',type=int,required=True)
     sub.add_parser('shared-status')
     sub.add_parser('shared-growth')
+    p = sub.add_parser('shared-measure',help='Append an aggregate capacity/collection snapshot to .private/measurements and show growth')
+    p.add_argument('--days',type=int,default=14,help='collection-run window')
     sub.add_parser('shared-check-access')
     for name in ('shared-sync','shared-verify'):
         p = sub.add_parser(name)
@@ -122,6 +124,11 @@ def run_command(args):
     try:
         if args.command == 'shared-status':
             print(json.dumps(backend.usage(),indent=2))
+        elif args.command == 'shared-measure':
+            log = private/'measurements'/'capacity.jsonl'
+            entry = capacity.snapshot(backend,days=max(1,min(args.days,90)))
+            capacity.append(log,entry)
+            print(json.dumps({'latest':entry,'growth':capacity.growth(log)},indent=2))
         elif args.command == 'shared-growth':
             print(json.dumps(backend.growth_report(),indent=2))
         elif args.command == 'shared-check-access':
