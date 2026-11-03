@@ -40,9 +40,12 @@ must not be published in public Issues, Wiki pages or repository documentation.
 2. Pull current `develop`, refresh the assistant's instructions and create a focused
    work branch. One writer works on the branch at a time.
 3. Implement the issue scope and run the checks in AGENTS.md.
-4. Open a PR into `develop` with `Project: Sentra` and one full `Task URL:` pointing
-   to this repository's issue. Optional task ID uses the issue number, not a legacy
-   Notion ID. Include what/why, test evidence and risks.
+4. Open a PR into `develop` with `Project: Sentra` and one full primary `Task URL:`
+   pointing to this repository's issue. For each other task this PR implements,
+   add an `Additional Task URL:` line (maximum 10 total tasks). Title the PR
+   `[SEN-28, SEN-27] description`, listing every declared issue in order. A single
+   task uses `[SEN-28] description`. Optional `Task ID:` matches the primary issue.
+   Include what/why, test evidence and risks. Dependencies remain prose references.
 5. Use **Related to #NUMBER**, not Closes/Fixes/Resolves. Automatic closing keywords
    would bypass the separate human acceptance step.
 6. The teammate opens the PR from GitHub or Slack and asks their own assistant to
@@ -59,6 +62,50 @@ must not be published in public Issues, Wiki pages or repository documentation.
 The tracking issue for this rollout is [#16](https://github.com/han33-dotcom/Sentra/issues/16).
 Task ownership does not require buying a cloud AI reviewer. Personal assistants run
 when their human starts them; a Slack notification does not start a teammate's chat.
+
+## Consistent task identity and multi-task PRs
+
+The issue number is the authoritative task identity: `SEN-41` always means issue
+#41. Issue titles use `[SEN-41] description`, which is also the board card title.
+PR titles start with the same task identity; GitHub still assigns the PR its own
+number. Native Slack PR/review messages carry that PR title, so notifications for
+PR #65 show `[SEN-41] ...`. Old Slack messages remain historical; do not repost
+or duplicate notifications just to change their numbering.
+
+Declare only actual implementation scope:
+
+```text
+Title: [SEN-28, SEN-27] fix: retry joins and refresh participation permissions
+
+Project: Sentra
+Task URL: https://github.com/han33-dotcom/Sentra/issues/28
+Additional Task URL: https://github.com/han33-dotcom/Sentra/issues/27
+```
+
+The required `pr-policy` check verifies every issue endpoint and every title ID.
+Duplicate, invalid and foreign links fail validation. The board reconciler groups
+the PR under every declared issue; each task reaches Implemented only when all
+its remaining implementation PRs are merged. `Related to`, dependency links,
+comments and fenced examples do not declare implementation scope. A release into
+main does not duplicate implementation evidence from PRs into develop.
+
+The trusted default-branch job repairs generated issue prefixes and open team PR
+title prefixes on issue/PR events and daily reconciliation. It preserves the human
+description, reads current metadata before edits, and writes only changed titles
+and Project Status. Done, Blocked, closed-issue status, acceptance and closure
+remain human-owned. An API edit can still race after the final read; the next
+reconciliation repairs prefixes, while humans restore any overwritten description.
+Title edits made by the job's `GITHUB_TOKEN` do not trigger another Actions run.
+If `pr-policy` already failed before an automatic title repair, rerun that check
+against the current head/base (or have the author save the corrected title) before
+merging. A repaired title is not itself a claim that checks passed.
+
+Rollout for [SEN-66](https://github.com/han33-dotcom/Sentra/issues/66): the title
+check becomes active after independent review and merge into develop. Automatic
+title repair and multi-task Project reconciliation become active only after the
+normal reviewed release carries these changes to main. Preview the updated job
+with `dry_run=true`, inspect task mappings, then verify a write run and a second
+no-change run. Do not claim the permanent automation is live before that release.
 
 ## Status meanings
 

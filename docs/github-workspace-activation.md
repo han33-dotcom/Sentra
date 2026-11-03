@@ -82,8 +82,17 @@ Triage/API errors make the run fail and leave completion unclaimed.
 
 Only PR authors in the configured team roster can influence task status; external
 contributor PRs need manual triage until deliberately added to that roster.
-The worker updates only Project Status, never issue content/closure, assignments or
-acceptance evidence. It preserves closed issues and manual Done/Blocked. A remaining
+After the SEN-66 reviewed release, the worker also repairs generated Sentra task
+prefixes in issue titles and open team implementation PR titles, using the issue
+number as the identity. Its separate identity job needs `issues: write` and
+`pull-requests: write` solely for title PATCHes; the separate Project token still
+handles Status in the original repository-read-only reconciliation job. Title
+repair does not depend on Project-token access or expiry. Both jobs check out only
+trusted default-branch code and never
+executes issue/PR content. Issue events wake the same reconciliation worker.
+Until that release, the existing worker still updates only Project Status.
+It never changes issue bodies/closure, assignments or acceptance evidence.
+It preserves closed-issue status and manual Done/Blocked. A remaining
 race exists if a human edits Status after the final read and before the API write;
 GitHub supplies no compare-and-swap here. If that happens, restore the intended manual
 state and rerun. This is not a guarantee of atomic human/automation updates.

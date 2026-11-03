@@ -118,8 +118,13 @@ A human teammate reviews the latest head and decides whether to approve.
 Record lasting decisions in project documents or the task. Implemented means the
 required implementation PRs merged into `develop`; Done requires human verification
 of acceptance criteria. Release/deployment work remains separate when required.
-Automatic shared AI review, Slack notification and Project sync are later rollout
-steps; until they are enabled, share the PR link and update the tracker manually.
+Native Slack PR/review notifications and Project status synchronization are enabled;
+see the current [team workflow](docs/team-workflow.md) for scope and limitations.
+Use the issue number as the stable task ID: `[SEN-41] description` on tasks and
+PRs. A PR implementing several tasks declares one `Task URL:` plus one
+`Additional Task URL:` per other implemented task, and lists all IDs in its title
+in that order: `[SEN-28, SEN-27] fix: retry joins`. References and dependencies
+stay in prose. GitHub's own PR number is a secondary identifier.
 
 After shared policy changes merge, update clean local `develop` with
 `git pull --ff-only` and bring `origin/develop` into ongoing feature branches

@@ -4,6 +4,19 @@ from scripts.team_workflow.github_client import GitHubClient
 
 
 class ClientTests(unittest.TestCase):
+    def test_title_mutations_patch_only_title_with_repository_token(self):
+        calls = []
+        def transport(url, token, payload, method=None):
+            calls.append((url, token, payload, method))
+            return {}
+        client = GitHubClient("han33-dotcom/Sentra", "repo-token", "project-token", transport)
+        client.set_issue_title(28, "[SEN-28] Enroll")
+        client.set_pull_title(64, "[SEN-28, SEN-27] Retry joins")
+        self.assertEqual(calls, [
+            ("https://api.github.com/repos/han33-dotcom/Sentra/issues/28", "repo-token", {"title": "[SEN-28] Enroll"}, "PATCH"),
+            ("https://api.github.com/repos/han33-dotcom/Sentra/pulls/64", "repo-token", {"title": "[SEN-28, SEN-27] Retry joins"}, "PATCH"),
+        ])
+
     def test_project_status_schema_is_read_from_api(self):
         calls = []
         def transport(url, token, payload):

@@ -11,16 +11,18 @@ class GitHubClient:
         self.repo, self.token, self.project_token = repo, token, project_token
         self.transport = transport or self._network
 
-    def _network(self, url, token, payload):
-        request = Request(url, data=json.dumps(payload).encode() if payload is not None else None,
+    def _network(self, url, token, payload, method=None):
+        request = Request(url, data=json.dumps(payload).encode() if payload is not None else None, method=method,
             headers={"Authorization": "Bearer " + token, "Accept": "application/vnd.github+json",
                      "Content-Type": "application/json", "X-GitHub-Api-Version": "2022-11-28"})
         with build_opener(NoRedirect()).open(request, timeout=30) as response:
             return json.load(response)
 
-    def _call(self, url, token, payload=None):
+    def _call(self, url, token, payload=None, method=None):
         for attempt in range(3):
             try:
+                if method is not None:
+                    return self.transport(url, token, payload, method=method)
                 return self.transport(url, token, payload)
             except HTTPError as error:
                 if error.code not in {429, 500, 502, 503, 504} or attempt == 2:
@@ -50,6 +52,20 @@ class GitHubClient:
 
     def list_pulls(self):
         return self._pages("/pulls?state=all")
+
+    def list_issues(self):
+        return self._pages("/issues?state=all")
+
+    def pull(self, number):
+        return self._rest(f"/pulls/{number}")
+
+    def set_issue_title(self, number, title):
+        self._call(f"https://api.github.com/repos/{self.repo}/issues/{number}",
+                   self.token, {"title": title}, method="PATCH")
+
+    def set_pull_title(self, number, title):
+        self._call(f"https://api.github.com/repos/{self.repo}/pulls/{number}",
+                   self.token, {"title": title}, method="PATCH")
 
     def reviews(self, number):
         return self._pages(f"/pulls/{number}/reviews")
