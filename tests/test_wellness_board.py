@@ -15,7 +15,7 @@ from sentra.errors import SentraError
 from sentra.processing import board as board_mod
 from sentra.processing.canonical import SLEEP_STAGE
 from sentra.processing.observations import google_sleep, load
-from sentra.processing.pipeline import run
+from sentra.processing.pipeline import ASSESSMENT_VERSION, run
 from sentra.shared import Limits
 from sentra.tiers import hr_tables, measurements_table, parquet_bytes, sessions_table
 
@@ -164,7 +164,7 @@ class RefreshTests(unittest.TestCase):
 
     def test_older_watermark_does_not_rebuild_an_already_newer_board(self):
         from sentra import wellness_refresh as w
-        storage = self.Storage({'source_run': '2026-10-11T00:00:00+00:00'})
+        storage = self.Storage({'source_run': '2026-10-11T00:00:00+00:00', 'assessment_version': ASSESSMENT_VERSION})
         with mock.patch.object(w, 'build', side_effect=AssertionError('Older data must not rebuild tiers')):
             result = w.refresh(self.Reader(datetime(2026, 10, 10, tzinfo=UTC)), Limits(), storage, log=lambda *_: None)
         self.assertEqual(result['status'], 'skipped')
@@ -199,12 +199,30 @@ class RefreshTests(unittest.TestCase):
     def test_skips_without_new_collection_run_and_reads_nothing(self):
         from sentra import wellness_refresh as w
         finished = datetime(2026, 10, 11, 0, 5, tzinfo=UTC)
-        storage = self.Storage({'source_run': finished.isoformat()})
+        storage = self.Storage({'source_run': finished.isoformat(), 'assessment_version': ASSESSMENT_VERSION})
         with mock.patch.object(w, 'build') as build:
             result = w.refresh(self.Reader(finished), Limits(), storage, log=lambda *_: None)
         self.assertEqual(result['status'], 'skipped')
         build.assert_not_called()
         self.assertEqual(storage.posts, {})
+
+    def test_a_board_from_older_rules_is_rebuilt_without_new_collection(self):
+        from sentra import wellness_refresh as w
+        finished = datetime(2026, 10, 11, 0, 5, tzinfo=UTC)
+        with tempfile.TemporaryDirectory() as folder:
+            write(folder, sleep_rows())
+            objects = {p.relative_to(folder).as_posix(): p.read_bytes() for p in Path(folder).rglob('*.parquet')}
+        legacy = {'source_run': finished.isoformat(), 'people': [{'id': 'p01', 'days': [{'d': '2026-10-10', 'lvl': 'green'}]}]}
+        storage = self.Storage(legacy)  # published before assessment states existed: no version
+        with mock.patch.object(w, 'build', return_value=(objects, {})) as build, mock.patch.object(w, 'publish'):
+            result = w.refresh(self.Reader(finished), Limits(), storage, now=NOW, log=lambda *_: None)
+        build.assert_called_once()
+        self.assertEqual(result['status'], 'published')
+        board = json.loads(storage.posts['board/board.json'][0])
+        self.assertEqual((board['assessment_version'], board['source_run']), (ASSESSMENT_VERSION, finished.isoformat()))
+        storage.previous = board  # the rebuilt board is current: the next run skips again
+        with mock.patch.object(w, 'build', side_effect=AssertionError('current board must not rebuild')):
+            self.assertEqual(w.refresh(self.Reader(finished), Limits(), storage, log=lambda *_: None)['status'], 'skipped')
 
     def test_publishes_tiers_then_board_with_capacity_check(self):
         from sentra import wellness_refresh as w

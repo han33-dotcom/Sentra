@@ -45,3 +45,12 @@ test('sleeping HR card compares against its supplied baseline', () => {
   const page = board([{ d: '2026-10-01', sleep_hr: 60, sleep_hr_b: 50 }]);
   assert.ok(page.get('cards').children[0].innerHTML.includes('▲ 10 vs normal'));
 });
+
+test('a partial amber or red day is labelled partial, a complete one is not', () => {
+  const partial = board([{ d: '2026-10-01', lvl: 'amber', f: ['short_sleep'], a: 'partial', m: ['rhr:no_reading', 'hrv:no_reading'] }]);
+  const card = partial.get('cards').children[0].innerHTML;
+  assert.ok(card.includes('Amber · partial assessment'));
+  assert.ok(card.includes('Not assessed: resting HR: no reading; HRV: no reading'));
+  const complete = board([{ d: '2026-10-01', lvl: 'red', f: ['short_sleep', 'hrv_down'] }]);
+  assert.ok(!complete.get('cards').children[0].innerHTML.includes('partial'));
+});
