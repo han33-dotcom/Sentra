@@ -84,9 +84,32 @@ class AccessDecisionTests(unittest.TestCase):
                {'participant_id': 'Alice', 'org_id': 'org-a', 'sharing': 'individual', 'withdrawn': False,
                 'membership_open': True},
                consent('p952', 'org-a', 'everyone')]
+        odd.append({'participant_id': 'p953', 'org_id': 'org-a', 'withdrawn': False, 'membership_open': True})
         a = resolve('officer@a.test', team_emails=TEAM, org_users=USERS, consents=odd)
         self.assertEqual(a.individuals, frozenset())
-        self.assertEqual(a.contributors, {'p952'})
+        self.assertEqual(a.contributors, frozenset())
+
+    def test_missing_or_malformed_organization_is_never_a_scope(self):
+        loose = {'participant_id': 'p907', 'sharing': 'individual', 'withdrawn': False, 'membership_open': True}
+        for org in (None, '', 'Org A', 7):
+            user = {'email': 'x@a.test', 'role': 'officer', 'active': True}
+            if org is not None:
+                user['org_id'] = org
+            with self.subTest(org=org), self.assertRaises(SentraError):
+                resolve('x@a.test', team_emails=TEAM, org_users=[user], consents=[loose, {**loose, 'org_id': org}])
+        a = access('officer@a.test')
+        self.assertFalse(resolve('officer@a.test', team_emails=TEAM, org_users=USERS,
+                                 consents=[loose]).can_view_individual('p907'))
+        self.assertNotIn('p907', a.contributors)
+
+    def test_four_valid_contributors_plus_a_malformed_row_stay_suppressed(self):
+        rows = [consent(f'p96{i}', 'org-a') for i in range(4)]
+        rows += [{**consent('p965', 'org-a'), 'sharing': 'unknown'},
+                 {k: v for k, v in consent('p966', 'org-a').items() if k != 'sharing'}]
+        a = resolve('officer@a.test', team_emails=TEAM, org_users=USERS, consents=rows)
+        members = a.group_contributors([f'p96{i}' for i in range(7)])
+        self.assertEqual(len(members), 4)
+        self.assertFalse(publishable(len(members)))
 
     def test_group_statistics_need_k_contributors(self):
         self.assertEqual(K_ANONYMITY, 5)

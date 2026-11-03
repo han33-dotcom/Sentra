@@ -19,7 +19,9 @@ from .errors import SentraError
 THRESHOLDS = Path(__file__).resolve().parent / 'processing' / 'thresholds.json'
 K_ANONYMITY = json.loads(THRESHOLDS.read_text(encoding='utf-8'))['cohort_k_anonymity']
 PSEUDONYM = re.compile(r'p[0-9]{2,4}')
+ORG_ID = re.compile(r'[a-z0-9][a-z0-9-]{1,39}')  # same rule as org.organizations
 ROLES = ('officer', 'reviewer')
+SHARING = ('group_only', 'individual')
 DENIED = 'Access restricted to authorized team or organization accounts.'
 
 
@@ -62,6 +64,9 @@ def resolve(email, *, team_emails, org_users=(), consents=()):
         return Access(email, 'team', None)
     memberships = {(u.get('org_id'), u.get('role')) for u in org_users
                    if u.get('email') == email and u.get('active') is True and u.get('role') in ROLES}
+    # Missing or malformed organization evidence is never an organization scope.
+    if any(not isinstance(org, str) or not ORG_ID.fullmatch(org) for org, _ in memberships):
+        raise SentraError(DENIED)
     # One organization per account; an ambiguous account must not link organizations.
     if len({org for org, _ in memberships}) != 1:
         raise SentraError(DENIED)
@@ -71,7 +76,8 @@ def resolve(email, *, team_emails, org_users=(), consents=()):
     for c in consents:
         pid = c.get('participant_id')
         if (c.get('org_id') != org_id or not isinstance(pid, str) or not PSEUDONYM.fullmatch(pid)
-                or c.get('withdrawn') is not False or c.get('membership_open') is not True):
+                or c.get('withdrawn') is not False or c.get('membership_open') is not True
+                or c.get('sharing') not in SHARING):
             continue
         contributors.add(pid)
         if c.get('sharing') == 'individual':
