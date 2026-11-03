@@ -15,7 +15,7 @@ class Backend:
     class db:
         @staticmethod
         def execute(query, values=()):
-            rows = {'pg_total_relation_size': [('measurements', 1000)],
+            rows = {'pg_total_relation_size': [('audit.measurements', 1000)],
                     'audit.measurements': [('p01', 'whoop', 'recovery', 3)],
                     'audit.collection_runs': [('p01', 'whoop', 'succeeded', 2)]}
             found = next(v for k, v in rows.items() if k in query)
@@ -34,7 +34,20 @@ class CapacityTests(unittest.TestCase):
             first['taken_at'] = '2098-12-30T00:00:00+00:00'
             log.write_text(json.dumps(first) + '\n' + json.dumps(second) + '\n', encoding='utf-8')
             result = capacity.growth(log)
-            self.assertEqual((result['days'], result['database_bytes_per_day'], result['egress_bytes_per_day']), (2.0, 86_400, 0))
+            self.assertEqual((result['days'], result['database_bytes_per_day']), (2.0, 86_400))
+            self.assertIsNone(result['egress_bytes_per_day'])  # the two snapshots are in different months
+
+    def test_egress_growth_never_spans_a_monthly_reset(self):
+        with tempfile.TemporaryDirectory() as folder:
+            log = Path(folder) / 'capacity.jsonl'
+            snap = lambda at, egress: {'taken_at': at, 'usage': {'database_bytes': 0, 'object_bytes': 0, 'egress_bytes': egress}}
+            entries = [snap('2026-11-30T00:00:00+00:00', 3_000_000_000), snap('2026-12-01T00:00:00+00:00', 50_000_000),
+                       snap('2026-12-03T00:00:00+00:00', 150_000_000)]
+            log.write_text(''.join(json.dumps(e) + '\n' for e in entries), encoding='utf-8')
+            result = capacity.growth(log)
+            self.assertEqual((result['egress_bytes_per_day'], result['egress_from']), (50_000_000, '2026-12-01T00:00:00+00:00'))
+            log.write_text(''.join(json.dumps(e) + '\n' for e in entries[:2]), encoding='utf-8')
+            self.assertIsNone(capacity.growth(log)['egress_bytes_per_day'])
 
 
 if __name__ == '__main__':

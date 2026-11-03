@@ -16,9 +16,9 @@ def snapshot(backend, *, days=14):
     backend.reserve(131_072)
     db = backend.db
     usage = backend.usage()
-    tables = {name: int(size) for name, size in db.execute('''select c.relname, pg_total_relation_size(c.oid)
+    tables = {name: int(size) for name, size in db.execute('''select n.nspname||'.'||c.relname, pg_total_relation_size(c.oid)
         from pg_class c join pg_namespace n on n.oid=c.relnamespace
-        where n.nspname='audit' and c.relkind='r' order by 1''').fetchall()}
+        where n.nspname in ('audit','org','enrollment_private') and c.relkind='r' order by 1''').fetchall()}
     rows = db.execute('''select participant_id, provider, dataset, count(*) from audit.measurements
         group by 1,2,3 order by 1,2,3''').fetchall()
     runs = db.execute('''select participant_id, provider, status, count(*) from audit.collection_runs
@@ -42,11 +42,17 @@ def growth(log):
     if len(entries) < 2:
         return {'snapshots': len(entries), 'meaning': 'at least two snapshots are needed'}
     first, last = entries[0], entries[-1]
-    days = (datetime.fromisoformat(last['taken_at']) - datetime.fromisoformat(first['taken_at'])).total_seconds() / 86_400
-    change = lambda key: (last['usage'].get(key) or 0) - (first['usage'].get(key) or 0)
-    per_day = lambda value: round(value / days) if days > 0 else None
-    return {'snapshots': len(entries), 'from': first['taken_at'], 'to': last['taken_at'], 'days': round(days, 2),
-            'database_bytes_per_day': per_day(change('database_bytes')),
-            'object_bytes_per_day': per_day(change('object_bytes')),
-            'egress_bytes_per_day': per_day(change('egress_bytes')),
-            'meaning': 'Observed change between snapshots; includes corrections and bloat. Egress resets monthly.'}
+    when = lambda entry: datetime.fromisoformat(entry['taken_at'])
+    rate = lambda a, b, key: (round(((b['usage'].get(key) or 0) - (a['usage'].get(key) or 0))
+                                    / ((when(b) - when(a)).total_seconds() / 86_400))
+                              if when(b) > when(a) else None)
+    # The egress ledger restarts each UTC month, so compare only snapshots from the latest month.
+    month = lambda entry: when(entry).astimezone(timezone.utc).strftime('%Y-%m')
+    same_month = next(e for e in entries if month(e) == month(last))
+    return {'snapshots': len(entries), 'from': first['taken_at'], 'to': last['taken_at'],
+            'days': round((when(last) - when(first)).total_seconds() / 86_400, 2),
+            'database_bytes_per_day': rate(first, last, 'database_bytes'),
+            'object_bytes_per_day': rate(first, last, 'object_bytes'),
+            'egress_bytes_per_day': rate(same_month, last, 'egress_bytes'), 'egress_from': same_month['taken_at'],
+            'meaning': 'Observed change between snapshots; includes corrections and bloat. Egress is compared only '
+                       'within the latest UTC month (its ledger resets monthly); null until two snapshots share it.'}

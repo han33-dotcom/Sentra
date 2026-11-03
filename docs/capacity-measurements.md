@@ -21,8 +21,9 @@ stays beneath `.private` and is not committed. Copy only the aggregate numbers i
 or the task.
 
 **Cadence while collection runs:** one `shared-measure` per day after the collection window,
-plus one before and after each compaction batch, backup and refresh. Egress budgets reset
-monthly, so compare egress only within a month.
+plus one before and after each compaction batch, backup and refresh. The egress ledger resets
+each UTC month, so `shared-measure` reports egress growth only between snapshots of the latest
+month (null until two exist). Table sizes cover the `audit`, `org` and `enrollment_private` schemas.
 
 ## Baseline (before restart)
 
