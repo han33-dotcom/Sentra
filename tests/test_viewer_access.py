@@ -124,6 +124,50 @@ class ViewerAccessTests(unittest.TestCase):
             self.assertIn('p99', html)
             self.assertNotIn('p98', html)
 
+    def test_open_reader_rechecks_the_current_decision_at_every_read(self):
+        """Hassan's P1: revocation while a reader stays open must deny the next read."""
+        from datetime import date
+        from sentra import viewer_app
+        from sentra.access import resolve
+        from sentra.errors import SentraError
+        from sentra.shared import Limits
+        from sentra.viewer_data import Selection
+        from sentra.viewer_reader import ViewerReader
+        allowed = resolve('officer@a.test', team_emails=TEAM, org_users=USERS, consents=consents())
+        revoked = resolve('officer@a.test', team_emails=TEAM, org_users=USERS, consents=consents(withdrawn=True))
+        decisions = iter([allowed, allowed, revoked, revoked, revoked])
+        captured = {}
+        def build(credentials, limits, principal, can_view):
+            captured['reader'] = ViewerReader(credentials, Limits(), lambda: 'officer@a.test', db=Mock(),
+                                              budget_db=Mock(), can_view=can_view)
+            return captured['reader']
+        with patch.object(viewer_app, 'current_access', side_effect=lambda: next(decisions)), \
+                patch.object(viewer_app, 'runtime_settings', return_value=({}, Limits(), None)), \
+                patch.object(viewer_app, 'ViewerReader', side_effect=build), \
+                patch.object(ViewerReader, 'close', lambda self: None):
+            with viewer_app.open_reader() as reader:
+                self.assertTrue(reader.can_view('p99'))  # still permitted
+                with self.assertRaisesRegex(SentraError, 'outside your permitted access'):
+                    reader.measurements(Selection('p99', 'whoop', 'sleep', date(2026, 10, 7), date(2026, 10, 8)))
+
+    def test_newly_shared_participant_appears_without_signing_out(self):
+        """Hassan's P2: an empty scoped catalog must refetch when the permitted set grows."""
+        from sentra import viewer_app
+        state = {'shared': False}
+        rows = lambda: [] if not state['shared'] else consents()
+        class Scoped(FakeReader):
+            def catalog(self):
+                return [r for r in super().catalog() if viewer_app.current_access().can_view_individual(r['participant_id'])]
+        patches, load, _ = self.run_as('officer@a.test', (USERS, []), Mock(wraps=Scoped()))
+        load.side_effect = lambda email: (USERS, rows())
+        with patches[0], patches[1], patches[2], patch.object(viewer_app, 'ACCESS_TTL_SECONDS', 0):
+            app = self.app(); app.run()
+            self.assertTrue(any('No participant has shared' in i.value for i in app.info))
+            self.assertIn('Check again', [b.label for b in app.button])
+            state['shared'] = True
+            app.run()
+            self.assertFalse(app.exception); self.assertFalse(app.error)
+            self.assertEqual(app.selectbox[0].options, ['p99'])
 
 if __name__ == '__main__':
     unittest.main()

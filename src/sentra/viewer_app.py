@@ -56,6 +56,11 @@ def principal():
     return current_access().email
 
 
+def access_scope(decision):
+    """What a cached catalog/board was fetched for: the team, or a specific permitted set."""
+    return 'team' if decision.is_team else tuple(sorted(decision.individuals))
+
+
 def clear_private_state():
     for key in list(st.session_state):
         if key.startswith('audit_'): del st.session_state[key]
@@ -96,8 +101,9 @@ def open_reader():
     principal()
     with tempfile.TemporaryDirectory(prefix='sentra-viewer-') as folder:
         credentials,limits,_=runtime_settings(st.secrets,folder)
-        decision=current_access()
-        reader=ViewerReader(credentials,limits,principal,can_view=decision.can_view_individual)
+        # Consult the current decision at every read, so a refresh during an open reader applies.
+        reader=ViewerReader(credentials,limits,principal,
+                            can_view=lambda participant:current_access().can_view_individual(participant))
         try: yield reader
         finally: reader.close()
 
@@ -232,10 +238,12 @@ def wellness_board():
         st.caption('PRIVATE WORKSPACE')
         st.title('Wellness board')
     reload=st.sidebar.button('Reload board',icon=':material/refresh:')
-    if reload or 'audit_board' not in st.session_state:
+    decision=current_access()
+    # Refetch when the permitted set changes; filtering a cached copy cannot add newly shared people.
+    if reload or 'audit_board' not in st.session_state or st.session_state.get('audit_board_scope')!=access_scope(decision):
         with open_reader() as reader:
             st.session_state['audit_board']=reader.board()
-    decision=current_access()
+        st.session_state['audit_board_scope']=access_scope(decision)
     # Re-filter the cached board so a withdrawal applies without a manual reload.
     board={**st.session_state['audit_board'],'people':[p for p in st.session_state['audit_board']['people']
                                                          if decision.can_view_individual(p.get('id'))]}
@@ -384,10 +392,12 @@ def main():
         if page=='Wellness board':
             wellness_board()
             return
-        if 'audit_catalog' not in st.session_state:
+        decision=current_access()
+        # Refetch when the permitted set changes; filtering a cached copy cannot add newly shared people.
+        if 'audit_catalog' not in st.session_state or st.session_state.get('audit_catalog_scope')!=access_scope(decision):
             with open_reader() as reader:
                 st.session_state['audit_catalog']=reader.catalog()
-        decision=current_access()
+            st.session_state['audit_catalog_scope']=access_scope(decision)
         # Re-filter cached rows so consent changes apply without a manual refresh.
         catalog=[r for r in st.session_state['audit_catalog'] if decision.can_view_individual(r['participant_id'])]
         if st.session_state.get('audit_participant') and not decision.can_view_individual(st.session_state['audit_participant']):
@@ -395,6 +405,9 @@ def main():
         if not catalog:
             st.info('No collected datasets are available yet.' if current_access().is_team else
                     'No participant has shared individual details with your organization yet.')
+            if st.sidebar.button('Check again',icon=':material/refresh:'):
+                clear_private_state()
+                st.rerun()
             st.stop()
         participants=sorted({r['participant_id'] for r in catalog})
         remembered=st.session_state.get('audit_participant')
