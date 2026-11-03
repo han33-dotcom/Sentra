@@ -22,7 +22,10 @@ Streamlit viewer "Wellness board" page      ->  reads board/board.json, renders 
   1. Checks finished `audit.collection_runs` against durable record-write timestamps,
      including partial runs whose counters omit already committed pages.
      Paused and unchanged attempts do not advance the watermark. Without new changes,
-     only metadata and the previous board are checked; tier reads and publication are skipped.
+     only metadata and the previous board are checked; tier reads and publication are skipped,
+     **unless** the previous board was built under a different `assessment_version` (or none).
+     Then it is rebuilt from the existing data so new assessment rules apply without restarting
+     collection.
   2. Otherwise it rebuilds the tiers, runs processing and uploads
      `sentra-tiers/board/board.json`.
 - **Viewer:** the **Wellness board** page. It is available only after the existing Google
