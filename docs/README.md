@@ -31,6 +31,7 @@ Tasks belong in [GitHub Issues](https://github.com/han33-dotcom/Sentra/issues); 
 - [stage 6 plan](stage-6-plan.md)
 - [stage 6 validation](stage-6-validation.md)
 - [stage 7 audit plan](stage-7-audit-plan.md)
+- [capacity measurements](capacity-measurements.md)
 - [storage plan](storage-plan.md)
 - [team workflow](team-workflow.md)
 - [synthetic workflow pilot](workflow-pilot.md)
