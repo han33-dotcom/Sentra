@@ -10,6 +10,7 @@ See [Stage 3 operations](stage-3-storage.md) for setup, evidence and remaining b
 | `audit.participants` | Stable pseudonyms such as `p01`, `p02`; no names, emails or vendor account IDs |
 | `audit.records` | Stable provider/dataset record key, complete normalized/vendor context, content hash and original-response reference; parent context can be shared losslessly across metric JSON |
 | `audit.measurements` | Participant/provider/dataset/metric, standardized value/unit, vendor value/unit, point time or interval, vendor time, collection time, resolution, classification and source pointer; vendor metric paths also remain in record JSON |
+| `audit.series` (sql/009) | Lossless compact copy of dense measurement rows: one row per participant/provider/dense dataset/metric/original response, shared fields once, per-reading fields as parallel arrays. `audit.series_rows` re-expands it column-for-column. Derived and rebuildable; see [storage-plan.md](storage-plan.md#implementation-status-46) |
 | `audit.sessions` | Sleep/workout/cycle record keys, interval, score state and provisional flag; join `records` for complete vendor fields, provider IDs and source reference |
 | `audit.raw_response_manifest` | Endpoint, requested range/resolution, collection time, private object location, hash of unchanged response bytes and compressed size |
 | `audit.collection_runs` | Participant/provider run status and full durable local context: requested/stored intervals, counts, sanitized failures and local storage statistics |
