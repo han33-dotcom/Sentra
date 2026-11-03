@@ -148,6 +148,25 @@ class OrganizationPageTests(unittest.TestCase):
         self.assertFalse(app.exception)
         self.assertEqual(self.table(app)['Sleep']['Contributors'], '5')
 
+    def test_personal_trends_list_only_individually_permitted_people(self):
+        app = self.open('officer@a.test', 'Trends')
+        self.assertEqual(app.selectbox(key='audit_trend_person').options, ['p91'])
+        metrics = {m.label: m.value for m in app.metric}
+        self.assertEqual(metrics['Days with data'], '1 of 7')
+        self.assertEqual(metrics['Usual (own baseline)'], '410 min')
+        self.assertEqual(len(app.get('vega_lite_chart')), 1)
+
+    def test_group_trends_show_only_days_with_enough_contributors(self):
+        app = self.open('officer@a.test', 'Trends')
+        app.radio(key='audit_trend_view').set_value('Group').run()
+        rows = {r['Device']: r for r in app.dataframe[0].value.to_dict('records')}
+        self.assertEqual((rows['Fitbit']['Days shown'], rows['Fitbit']['Most contributors on a day']), (1, '5'))
+        app.selectbox(key='audit_trend_metric').set_value('Resting heart rate').run()
+        self.assertFalse(app.exception)
+        rows = {r['Device']: r for r in app.dataframe[0].value.to_dict('records')}
+        self.assertEqual((rows['Fitbit']['Days shown'], rows['Fitbit']['Most contributors on a day']), (0, '<5'))
+        self.assertIn('nothing is shown', ' '.join(i.value for i in app.info))
+
 
 if __name__ == '__main__':
     unittest.main()

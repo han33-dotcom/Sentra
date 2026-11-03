@@ -375,16 +375,9 @@ def team_consents():
     return consents
 
 
-def organization_overview():
-    """Group summaries and participation for the signed-in user's scope (#39)."""
-    from .access import K_ANONYMITY
-    from .organization import group_summary, latest_group_day, participation, shown_count, team_scope
-    principal()
-    with st.container(key='page-heading'):
-        st.caption('ORGANIZATION')
-        st.title('Organization overview')
-    decision=current_access()
-    reload=st.sidebar.button('Reload overview',icon=':material/refresh:')
+def organization_data(decision,reload):
+    """Group-scoped board and catalog, plus who counts: (data, enrolled, scope, people, catalog)."""
+    from .organization import team_scope
     if reload or st.session_state.get('audit_org_scope')!=group_scope(decision):
         with open_reader() as reader:
             if decision.is_team:
@@ -406,6 +399,20 @@ def organization_overview():
         enrolled=scope=set(decision.contributors)
     people=[p for p in data['board']['people'] if p.get('id') in scope and decision.group_contributors([p.get('id')])]
     catalog=[r for r in data['catalog'] if r['participant_id'] in scope and decision.group_contributors([r['participant_id']])]
+    return data,enrolled,scope,people,catalog
+
+
+def organization_overview():
+    """Group summaries and participation for the signed-in user's scope (#39)."""
+    from .access import K_ANONYMITY
+    from .organization import group_summary, latest_group_day, participation, shown_count
+    principal()
+    with st.container(key='page-heading'):
+        st.caption('ORGANIZATION')
+        st.title('Organization overview')
+    decision=current_access()
+    reload=st.sidebar.button('Reload overview',icon=':material/refresh:')
+    data,enrolled,scope,people,catalog=organization_data(decision,reload)
     today=datetime.now(timezone.utc).astimezone(BEIRUT).date()
     st.caption("Wellness information for health-and-safety conversations, compared with each person's own pattern; "
                'not a medical assessment or diagnosis.')
@@ -476,6 +483,96 @@ def profiles_page():
     st.caption("Compared with this person's own recent pattern; not a medical assessment. Missing values stay missing.")
 
 
+def trend_chart(rows,label,unit,*,baseline=False,color=None):
+    """Daily points on a full date axis so missing days stay visible gaps; optional own-baseline ticks."""
+    days=[r['d'] for r in rows]
+    values=pd.DataFrame([{'Date':r['d'],'Value':r['value'],'Series':r.get('series','Value')}
+                         for r in rows if r['value'] is not None],columns=['Date','Value','Series'])
+    x=alt.X('Date:N',scale=alt.Scale(domain=days),axis=alt.Axis(title='Date · Asia/Beirut',labelAngle=0,
+        labelExpr='slice(datum.label, 5)',labelOverlap=True))
+    points=alt.Chart(values).mark_circle(size=65,opacity=1).encode(
+        x=x,y=alt.Y('Value:Q',title=f'{label} ({unit})'),
+        color=alt.Color('Series:N',legend=alt.Legend(title=None,orient='top')) if color is None else alt.value(color),
+        tooltip=[alt.Tooltip('Date:N',title='Date in Beirut'),alt.Tooltip('Series:N'),alt.Tooltip('Value:Q',title=f'{label} ({unit})')])
+    chart=points
+    if baseline:
+        usual=pd.DataFrame([{'Date':r['d'],'Usual':r['baseline']} for r in rows if r['baseline'] is not None],
+                           columns=['Date','Usual'])
+        chart=alt.Chart(usual).mark_tick(color='#a59fb0',thickness=2).encode(
+            x=x,y='Usual:Q',tooltip=[alt.Tooltip('Date:N',title='Date in Beirut'),
+                                     alt.Tooltip('Usual:Q',title=f'Own baseline ({unit})')])+points
+    return (chart.properties(height=240).configure_view(stroke=None)
+        .configure_axis(gridColor='#efedf2',domain=False,ticks=False,labelColor='#686471',titleColor='#686471'))
+
+
+def trends_page():
+    """Personal trends against the own baseline, or permitted group trends, over a selected period (#40)."""
+    from .access import K_ANONYMITY
+    from .organization import METRICS, latest_group_day, shown_count
+    from .trends import PERIODS, group_trend, personal_trend
+    principal()
+    with st.container(key='page-heading'):
+        st.caption('ORGANIZATION')
+        st.title('Trends')
+    decision=current_access()
+    reload=st.sidebar.button('Reload trends',icon=':material/refresh:')
+    st.caption("Wellness information compared with each person's own pattern; not a medical assessment or diagnosis.")
+    view=st.radio('View',('One person','Group'),horizontal=True,key='audit_trend_view')
+    labels={label:key for key,label,_,_ in METRICS}
+    key=labels[st.selectbox('Measure',list(labels),key='audit_trend_metric')]
+    days=st.radio('Period',PERIODS,format_func=lambda n:f'Last {n} days',horizontal=True,key='audit_trend_period')
+    if view=='One person':
+        if reload or 'audit_board' not in st.session_state or st.session_state.get('audit_board_scope')!=access_scope(decision):
+            with open_reader() as reader:
+                st.session_state['audit_board']=reader.board()
+            st.session_state['audit_board_scope']=access_scope(decision)
+        people=[p for p in st.session_state['audit_board']['people'] if decision.can_view_individual(p.get('id'))]
+        if not people:
+            st.info('No participant with published days has shared individual details with you.')
+            return
+        person=next(p for p in people if p['id']==st.selectbox('Participant ID',sorted(p['id'] for p in people),key='audit_trend_person'))
+        end=latest_group_day([person])
+        if not end:
+            st.info('This participant has no published days yet.')
+            return
+        trend=personal_trend(person,key,end=end,days=days)
+        s=trend['summary']
+        columns=st.columns(4)
+        columns[0].metric('Days with data',f"{s['days_with_data']} of {s['days']}")
+        columns[1].metric('Period median','—' if s['median'] is None else f"{s['median']:g} {s['unit']}")
+        columns[2].metric('Usual (own baseline)','—' if s['median_baseline'] is None else f"{s['median_baseline']:g} {s['unit']}")
+        columns[3].metric('Typical difference','—' if s['median_difference'] is None else f"{s['median_difference']:+g} {s['unit']}",
+                          help=f"Median of daily differences on the {s['days_compared']} days with both a reading and a baseline.")
+        st.altair_chart(trend_chart(trend['points'],s['label'],s['unit'],baseline=True,color='#716187'),width='stretch',theme=None)
+        notes=[f"Days through {end.isoformat()}. Dots are daily readings; grey ticks are this person's usual value "
+               '(previous 28 days, at least 7 with a reading). Empty days had no reading and are not filled.']
+        if s['signal_days'] is not None:
+            notes.append(f"Days this measure met its provisional wellness rule: {s['signal_days']}.")
+        for note in notes: st.caption(note)
+        return
+    data,_,scope,people,_=organization_data(decision,reload)
+    end=latest_group_day(people)
+    if not end:
+        st.info('No processed days are published yet.')
+        return
+    trend=group_trend(people,scope,key,end=end,days=days)
+    if not trend['devices']:
+        st.info('No eligible contributor has this measurement.')
+        return
+    rows=[{**r,'series':device} for device,series in trend['devices'].items() for r in series]
+    if any(r['value'] is not None for r in rows):
+        st.altair_chart(trend_chart(rows,trend['label'],trend['unit']),width='stretch',theme=None)
+    else:
+        st.info(f'No day in this period has {K_ANONYMITY} or more eligible contributors for this measure, so nothing is shown.')
+    st.dataframe([{'Device':device,'Days shown':sum(r['status']=='available' for r in series),
+                   'Days hidden (fewer than %d)'%K_ANONYMITY:sum(r['status']=='suppressed' for r in series),
+                   'Most contributors on a day':shown_count(max(r['contributors'] for r in series))}
+                  for device,series in trend['devices'].items()],hide_index=True,width='stretch')
+    st.caption(f'Days through {end.isoformat()}. Each dot is the median of one value per contributing person that day, '
+               f'per device (Fitbit and WHOOP are never pooled). A day needs at least {K_ANONYMITY} contributors; '
+               'otherwise it is left out. Department comparisons are not available yet.')
+
+
 def main():
     st.set_page_config(page_title='Sentra · Wearable explorer',page_icon='🔎',layout='wide')
     st.html(STYLE)
@@ -504,7 +601,7 @@ def main():
                 st.session_state['audit_access']=decision
             st.session_state['audit_owner']=identity
         page=st.sidebar.radio('Explore',('Daily activity','Sleep','Workouts','Data availability','Wellness board',
-            'Organization overview','Profiles'),key='explore',label_visibility='collapsed',width='stretch')
+            'Organization overview','Profiles','Trends'),key='explore',label_visibility='collapsed',width='stretch')
         st.sidebar.divider()
         if page=='Wellness board':
             wellness_board()
@@ -514,6 +611,9 @@ def main():
             return
         if page=='Profiles':
             profiles_page()
+            return
+        if page=='Trends':
+            trends_page()
             return
         decision=current_access()
         # Refetch when the permitted set changes; filtering a cached copy cannot add newly shared people.
