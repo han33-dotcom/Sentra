@@ -67,5 +67,5 @@ jobs:
         env:
           PYTHONUNBUFFERED: '1'
         run: python -m pytest -ra
-      - name: Board JavaScript regressions
-        run: node --test tests/test_board_chart.cjs
+      - name: Browser JavaScript regressions
+        run: node --test tests/test_board_chart.cjs tests/test_enrollment_browser.cjs
