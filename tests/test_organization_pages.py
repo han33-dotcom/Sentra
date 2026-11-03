@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from test_viewer_app import FakeReader
+from sentra.processing.pipeline import ASSESSMENT_VERSION
 
 TEAM = ['team@example.test']
 USERS = [{'org_id': 'org-a', 'email': 'officer@a.test', 'role': 'officer', 'active': True}]
@@ -99,6 +100,19 @@ class OrganizationPageTests(unittest.TestCase):
         self.assertEqual((rows['Sleep']['Latest'], rows['Sleep']['Usual (own baseline)'], rows['Sleep']['Difference']),
                          ('401 min', '410 min', '-9 min'))
         self.assertIn('Not enough history', rows['Resting heart rate']['Note'])
+
+    def test_assessable_counts_consume_the_versioned_board_state(self):
+        from sentra import viewer_app
+        people = [{**p, 'days': [{**p['days'][0], 'lvl': 'green'}]} for p in BOARD['people']]
+        with patch.dict(BOARD, people=people, assessment_version=ASSESSMENT_VERSION), \
+                patch.object(viewer_app, 'datetime', wraps=datetime) as clock:
+            clock.now.return_value = datetime(2026, 10, 8, tzinfo=timezone.utc)
+            app = self.open('officer@a.test', 'Organization overview')
+            self.assertEqual({m.label: m.value for m in app.metric}['Assessable'], '5')
+            people[4]['days'][0].update(lvl='amber', a='partial')
+            next(b for b in app.button if b.label == 'Reload overview').click().run()
+            self.assertFalse(app.exception)
+            self.assertEqual({m.label: m.value for m in app.metric}['Assessable'], '<5')
 
     def test_team_operator_sees_all_participants(self):
         app = self.open('team@example.test', 'Organization overview')
