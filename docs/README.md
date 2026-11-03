@@ -11,6 +11,7 @@ Tasks belong in [GitHub Issues](https://github.com/han33-dotcom/Sentra/issues); 
 - [dashboard restoration](dashboard-restoration.md)
 - [operating guide](operating-guide.md)
 - [parquet tiers](parquet-tiers.md)
+- [participation permissions](participation-permissions.md)
 - [pr policy activation](pr-policy-activation.md)
 - [processing](processing.md)
 - [read api](read-api.md)
