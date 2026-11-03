@@ -19,6 +19,25 @@ from .shared import CapacityStop
 from .vault import atomic_write
 
 TABLES = ('participants','raw_response_manifest','records','measurements','sessions','collection_runs','connection_state')
+# Consent history, organization roles and enrollment identities (sql/007, sql/008), in restore order.
+# Browser sessions and rate limits are short-lived and excluded; so are credentials, as before.
+PRIVATE_TABLES = ('org.organizations','org.org_users','org.memberships','org.consents',
+                  'enrollment_private.invites','enrollment_private.identities')
+IDENTITY_TABLES = {'org.memberships':'membership_id','org.consents':'consent_id'}
+# Restored storage relative to the source's measured table size (heap, TOAST and indexes). Freshly
+# inserted rows carry none of the source's dead-row bloat, so a small margin suffices; the running
+# guard during insertion still stops the restore before any limit is crossed.
+RESTORE_FACTOR = 1.05
+
+
+def member(table):
+    """Backup member prefix: audit tables keep their bare names, others are schema__table."""
+    return table.replace('.','__')
+
+
+def relation(table, schema='audit'):
+    owner, _, name = table.rpartition('.')
+    return sql.Identifier(owner or schema, name)
 SAFE_NAME = re.compile(r'[a-z0-9_-]{1,100}')
 
 
@@ -95,15 +114,48 @@ class BackupReader:
             raise SentraError('Backup member corrupt, missing or unauthenticated; restoration stopped.') from None
 
 
-def make_backup(backend, root, cipher, *, participant=None, provider=None, dataset=None, max_bytes=200_000_000):
+def make_backup(backend, root, cipher, *, participant=None, provider=None, dataset=None, max_bytes=200_000_000, admin_db=None):
+    """admin_db (optional) adds the organization and enrollment tables to full backups."""
     # Serialize local quota writers with collection and exports, as well as cloud writers.
     with FileLock(Path(root).parent / 'collection-io.lock',timeout=10):
-        return _make_backup(backend,root,cipher,participant=participant,provider=provider,dataset=dataset,max_bytes=max_bytes)
+        return _make_backup(backend,root,cipher,participant=participant,provider=provider,dataset=dataset,
+                            max_bytes=max_bytes,admin_db=admin_db)
 
 
-def _make_backup(backend, root, cipher, *, participant=None, provider=None, dataset=None, max_bytes=200_000_000):
+def _export(db, backend, writer, table, filters, params, objects):
+    """Write one table as bounded encrypted chunks; return its row count and fingerprint."""
+    query = sql.SQL('select to_jsonb(t) from {} t').format(relation(table))
+    size_query = sql.SQL('select coalesce(sum(octet_length(to_jsonb(t)::text)+128),0) from {} t').format(relation(table))
+    if filters:
+        query += sql.SQL(' where ') + sql.SQL(' and ').join(filters)
+        size_query += sql.SQL(' where ') + sql.SQL(' and ').join(filters)
+    # Estimate reads from actual table storage, reserve before fetching rows.
+    size = db.execute(size_query,params).fetchone()[0]
+    # Budget updates use a separate transaction/connection outside read-only snapshot.
+    backend.reserve_external(size * 2 + 65_536)
+    total, part, fingerprint, buffer, prefix = 0,0,0,bytearray(),member(table)
+    with db.cursor(name='backup_' + prefix) as cursor:
+        cursor.execute(query,params)
+        for row in cursor:
+            encoded = (canonical(row[0])+'\n').encode()
+            if len(encoded) > 16_777_216:
+                raise SentraError('Backup row exceeds supported size; no truncation performed.')
+            if buffer and len(buffer)+len(encoded) > 1_000_000:
+                writer.write(f'{prefix}-{part:05d}',bytes(buffer),rows=buffer.count(b'\n'))
+                part += 1; buffer.clear()
+            buffer.extend(encoded); total += 1
+            fingerprint = (fingerprint + int(hashlib.sha256(canonical(row[0]).encode()).hexdigest(),16)) % (1 << 256)
+            if table == 'raw_response_manifest':
+                objects[row[0]['object_location']] = (row[0]['content_sha256'],row[0]['compressed_bytes'])
+    if buffer:
+        writer.write(f'{prefix}-{part:05d}',bytes(buffer),rows=buffer.count(b'\n'))
+    return total, f'{fingerprint:064x}'
+
+
+def _make_backup(backend, root, cipher, *, participant=None, provider=None, dataset=None, max_bytes=200_000_000, admin_db=None):
     writer = BackupWriter(root,cipher,max_bytes=max_bytes,private_root=Path(root).parent)
-    totals, objects, fingerprints = {}, {}, {}
+    totals, objects, fingerprints, sizes, private, private_fingerprints, absent = {}, {}, {}, {}, {}, {}, []
+    selection = {'participant':participant,'provider':provider,'dataset':dataset} if participant or provider or dataset else None
     backend.lock()
     try:
         backend.guard()
@@ -118,42 +170,49 @@ def _make_backup(backend, root, cipher, *, participant=None, provider=None, data
                     filters.append(sql.SQL('provider=%s')); params.append(provider)
                 if dataset and table not in ('participants','collection_runs'):
                     filters.append(sql.SQL('dataset=%s')); params.append(dataset)
-                query = sql.SQL('select to_jsonb(t) from audit.{} t').format(sql.Identifier(table))
-                if filters:
-                    query += sql.SQL(' where ') + sql.SQL(' and ').join(filters)
-                # Estimate reads from actual table storage, reserve before fetching health rows.
-                size_query = sql.SQL('select coalesce(sum(octet_length(to_jsonb(t)::text)+128),0) from audit.{} t').format(sql.Identifier(table))
-                if filters: size_query += sql.SQL(' where ') + sql.SQL(' and ').join(filters)
-                size = backend.db.execute(size_query,params).fetchone()[0]
-                # Budget updates use a separate transaction/connection outside read-only snapshot.
-                backend.reserve_external(size * 2 + 65_536)
-                total, part, fingerprint, buffer = 0,0,0,bytearray()
-                with backend.db.cursor(name='backup_' + table) as cursor:
-                    cursor.execute(query,params)
-                    for row in cursor:
-                        encoded = (canonical(row[0])+'\n').encode()
-                        if len(encoded) > 16_777_216:
-                            raise SentraError('Backup row exceeds supported size; no truncation performed.')
-                        if buffer and len(buffer)+len(encoded) > 1_000_000:
-                            writer.write(f'{table}-{part:05d}',bytes(buffer),rows=buffer.count(b'\n'))
-                            part += 1; buffer.clear()
-                        buffer.extend(encoded); total += 1
-                        fingerprint = (fingerprint + int(hashlib.sha256(canonical(row[0]).encode()).hexdigest(),16)) % (1 << 256)
-                        if table == 'raw_response_manifest':
-                            objects[row[0]['object_location']] = (row[0]['content_sha256'],row[0]['compressed_bytes'])
-                if buffer:
-                    writer.write(f'{table}-{part:05d}',bytes(buffer),rows=buffer.count(b'\n'))
-                totals[table] = total
-                fingerprints[table] = f'{fingerprint:064x}'
+                totals[table], fingerprints[table] = _export(backend.db, backend, writer, table, filters, params, objects)
+                sizes[table] = backend.db.execute('select pg_total_relation_size(%s::regclass)', ('audit.'+table,)).fetchone()[0]
+            if admin_db is not None and selection is None:
+                # The same snapshot, read by the admin role: the collector cannot read these schemas.
+                snapshot = backend.db.execute('select pg_export_snapshot()').fetchone()[0]
+                with admin_db.transaction():
+                    admin_db.execute('set transaction isolation level repeatable read read only')
+                    admin_db.execute(sql.SQL('set transaction snapshot {}').format(sql.Literal(snapshot)))
+                    for table in PRIVATE_TABLES:
+                        if admin_db.execute('select to_regclass(%s)', (table,)).fetchone()[0] is None:
+                            absent.append(table)
+                            continue
+                        private[table], private_fingerprints[table] = _export(admin_db, backend, writer, table, [], [], objects)
+                        sizes[table] = admin_db.execute('select pg_total_relation_size(%s::regclass)', (table,)).fetchone()[0]
         for location,(digest,size) in objects.items():
             key = location.split('/',1)[1]
             content = backend.storage.get(key,digest,maximum=max(size*2,65_536))
             writer.write('raw-' + hashlib.sha256(location.encode()).hexdigest(),content)
         return writer.finish({'tables':totals,'table_fingerprints':fingerprints,'objects':objects,'project_url':backend.credentials['url'],
+                              'private_tables':private,'private_fingerprints':private_fingerprints,'private_absent':absent,
+                              'table_bytes':{k:int(v) for k,v in sizes.items()},
                               'selection':{'participant':participant,'provider':provider,'dataset':dataset},
-                              'excludes':'provider credentials, storage accounts, database passwords and OAuth keys'})
+                              'excludes':'provider credentials, storage accounts, database passwords, OAuth keys, '
+                                         'enrollment browser sessions and rate limits'
+                                         + ('' if private or absent else '; organization and enrollment tables '
+                                                                         '(no admin connection, or a partial selection)')})
     finally:
         backend.unlock()
+
+
+def inventory(info):
+    """[(table, rows, fingerprint)] for every table the manifest declares, audit tables first."""
+    if set(info.get('tables',{})) != set(TABLES) or set(info.get('table_fingerprints',{})) != set(TABLES):
+        raise SentraError('Backup table inventory incomplete.')
+    private, fingerprints = info.get('private_tables',{}), info.get('private_fingerprints',{})
+    if set(private) != set(fingerprints) or not set(private) <= set(PRIVATE_TABLES):
+        raise SentraError('Backup organization/enrollment inventory incomplete.')
+    return ([(t, info['tables'][t], info['table_fingerprints'][t]) for t in TABLES]
+            + [(t, private[t], fingerprints[t]) for t in PRIVATE_TABLES if t in private])
+
+
+def chunks(info, table):
+    return sorted(name for name in info['files'] if name.startswith(member(table)+'-'))
 
 
 def verify_backup(reader):
@@ -161,29 +220,28 @@ def verify_backup(reader):
     table has its manifest row count and fingerprint, and every original response matches its digest.
     Reads only the local encrypted files; no database or storage access."""
     info = reader.info
-    if set(info.get('tables',{})) != set(TABLES) or set(info.get('table_fingerprints',{})) != set(TABLES):
-        raise SentraError('Backup table inventory incomplete.')
+    tables = inventory(info)
     objects = {location:(digest,size) for location,(digest,size) in info.get('objects',{}).items()}
     raw = {'raw-' + hashlib.sha256(location.encode()).hexdigest():location for location in objects}
     # Every declared member must be a table chunk or the original of a listed object, and every listed
     # original must be declared; nothing is skipped, so "members" below were all read and authenticated.
-    chunk = re.compile('(' + '|'.join(TABLES) + r')-\d{5}')
+    chunk = re.compile('(' + '|'.join(member(t) for t,_,_ in tables) + r')-\d{5}')
     if any(not chunk.fullmatch(name) and name not in raw for name in info['files']) or not set(raw) <= set(info['files']):
         raise SentraError('Backup member inventory differs from its tables and originals.')
     counts, referenced = {}, {}
-    for table in TABLES:
+    for table,rows,expected in tables:
         total, fingerprint = 0, 0
         # One chunk is decoded at a time, so memory stays bounded by the chunk size, not the table.
-        for member in sorted(name for name in info['files'] if name.startswith(table+'-')):
-            for line in reader.read(member).splitlines():
+        for name in chunks(info, table):
+            for line in reader.read(name).splitlines():
                 row = json.loads(line)
                 total += 1
                 fingerprint = (fingerprint + int(hashlib.sha256(canonical(row).encode()).hexdigest(),16)) % (1 << 256)
                 if table == 'raw_response_manifest':
                     referenced[row['object_location']] = (row['content_sha256'],row['compressed_bytes'])
-        if total != info['tables'][table]:
+        if total != rows:
             raise SentraError(f'Backup row count differs for {table}.')
-        if f'{fingerprint:064x}' != info['table_fingerprints'][table]:
+        if f'{fingerprint:064x}' != expected:
             raise SentraError(f'Backup row content differs for {table}.')
         counts[table] = total
     if referenced != objects:
@@ -192,51 +250,74 @@ def verify_backup(reader):
         if hashlib.sha256(gzip.decompress(reader.read(name))).hexdigest() != objects[location][0]:
             raise SentraError('Backup original response hash mismatch.')
     return {'status':'verified','created_at':info.get('created_at'),'selection':info.get('selection'),
-            'project_url':info.get('project_url'),'tables':counts,'originals':len(objects),'members':len(info['files'])}
+            'project_url':info.get('project_url'),'tables':counts,'originals':len(objects),'members':len(info['files']),
+            'not_covered':info.get('private_absent',[]) if info.get('private_tables') or info.get('private_absent')
+                          else list(PRIVATE_TABLES),
+            'restore_estimate_bytes':restore_estimate(info)}
+
+
+def restore_estimate(info):
+    """Database bytes a restore may add: measured source table sizes when recorded, else the
+    serialized size. Older backups without sizes stay conservative; the running guard still applies."""
+    sizes = info.get('table_bytes')
+    if isinstance(sizes,dict) and set(TABLES) <= set(sizes) and all(type(v) is int and v >= 0 for v in sizes.values()):
+        return int(sum(sizes.values()) * RESTORE_FACTOR) + 16_000_000
+    return sum(i['bytes'] for name,i in info['files'].items() if not name.startswith('raw-')) + 16_000_000
 
 
 def restore_backup(reader, backend, admin_db, *, empty_audit=False):
     # Validate every member before any cloud change. Only a new isolated schema may be created.
     for name in reader.info['files']:
         reader.read(name)
-    if set(reader.info.get('tables',{})) != set(TABLES) or set(reader.info.get('table_fingerprints',{})) != set(TABLES):
-        raise SentraError('Backup table inventory incomplete; no restoration attempted.')
-    required = sum(i['bytes'] * 8 for name,i in reader.info['files'].items() if not name.startswith('raw-'))
-    name = 'audit' if empty_audit else 'sentra_restore_' + uuid4().hex[:12]
+    try:
+        tables = inventory(reader.info)
+    except SentraError:
+        raise SentraError('Backup table inventory incomplete; no restoration attempted.') from None
+    schema = 'audit' if empty_audit else 'sentra_restore_' + uuid4().hex[:12]
+    target = lambda table: relation(table) if empty_audit else sql.Identifier(schema, member(table))
     backend.lock()
     try:
-        backend.guard(database_add=required)
+        # Measured source sizes, not a multiple of the serialized JSON (which exceeds the real storage).
+        backend.guard(database_add=restore_estimate(reader.info))
         backend.reserve(sum(i['bytes']*2 for name,i in reader.info['files'].items() if not name.startswith('raw-')) + 65_536)
         with admin_db.transaction():
+            for table,_,_ in tables:
+                if '.' in table and admin_db.execute('select to_regclass(%s)', (table,)).fetchone()[0] is None:
+                    raise SentraError('Apply sql/007 and sql/008 to the target before restoring organization and enrollment tables.')
             if empty_audit:
-                if any(admin_db.execute(sql.SQL('select exists(select 1 from audit.{})').format(sql.Identifier(t))).fetchone()[0] for t in TABLES):
-                    raise SentraError('All audit tables must be empty for operational restoration; existing data preserved.')
+                if any(admin_db.execute(sql.SQL('select exists(select 1 from {})').format(relation(t))).fetchone()[0] for t,_,_ in tables):
+                    raise SentraError('All restored tables must be empty for operational restoration; existing data preserved.')
             else:
-                admin_db.execute(sql.SQL('create schema {}').format(sql.Identifier(name)))
-                admin_db.execute(sql.SQL('revoke all on schema {} from public,anon,authenticated,sentra_viewer').format(sql.Identifier(name)))
-            for table in TABLES:
+                admin_db.execute(sql.SQL('create schema {}').format(sql.Identifier(schema)))
+                admin_db.execute(sql.SQL('revoke all on schema {} from public,anon,authenticated,sentra_viewer').format(sql.Identifier(schema)))
+            pending = 0
+            for table,rows,expected in tables:
                 if not empty_audit:
-                    admin_db.execute(sql.SQL('create table {}.{} (like audit.{} including all)').format(
-                        sql.Identifier(name),sql.Identifier(table),sql.Identifier(table)))
-                    admin_db.execute(sql.SQL('revoke all on {}.{} from public,anon,authenticated,sentra_viewer').format(sql.Identifier(name),sql.Identifier(table)))
-                inserted = 0
-                for member in sorted(reader.info['files']):
-                    if not member.startswith(table+'-'):
-                        continue
-                    for line in reader.read(member).splitlines():
-                        row = json.loads(line)
-                        admin_db.execute(sql.SQL('insert into {}.{} select * from jsonb_populate_record(null::{}.{},%s)').format(
-                            sql.Identifier(name),sql.Identifier(table),sql.Identifier(name),sql.Identifier(table)), (Jsonb(row),))
-                        inserted += 1
-                        if inserted % 100 == 0:
-                            backend.guard(database_add=2_000_000)
-                count = admin_db.execute(sql.SQL('select count(*) from {}.{}').format(sql.Identifier(name),sql.Identifier(table))).fetchone()[0]
-                if count != reader.info['tables'][table]:
+                    admin_db.execute(sql.SQL('create table {} (like {} including all)').format(target(table),relation(table)))
+                    admin_db.execute(sql.SQL('revoke all on {} from public,anon,authenticated,sentra_viewer').format(target(table)))
+                # Identity values are restored as recorded, so consent and membership ids keep their links.
+                insert = sql.SQL('insert into {} {}select * from jsonb_populate_record(null::{},%s)').format(
+                    target(table), sql.SQL('overriding system value ' if table in IDENTITY_TABLES else ''), target(table))
+                for name in chunks(reader.info, table):
+                    body = reader.read(name)
+                    for line in body.splitlines():
+                        admin_db.execute(insert, (Jsonb(json.loads(line)),))
+                    # Recheck real usage as rows land; uncommitted rows already occupy database space.
+                    pending += len(body)
+                    if pending >= 1_000_000:
+                        backend.guard(database_add=2_000_000)
+                        pending = 0
+                if empty_audit and table in IDENTITY_TABLES:
+                    column = IDENTITY_TABLES[table]
+                    admin_db.execute(sql.SQL("select setval(pg_get_serial_sequence({},{}),coalesce(max({}),0)+1,false) from {}").format(
+                        sql.Literal(table),sql.Literal(column),sql.Identifier(column),relation(table)))
+                count = admin_db.execute(sql.SQL('select count(*) from {}').format(target(table))).fetchone()[0]
+                if count != rows:
                     raise SentraError('Restored backup count differs; isolated transaction rolled back.')
-                with admin_db.cursor(name='restore_verify_'+table) as cursor:
-                    cursor.execute(sql.SQL('select to_jsonb(t) from {}.{} t').format(sql.Identifier(name),sql.Identifier(table)))
+                with admin_db.cursor(name='restore_verify_'+member(table).replace('.','_')) as cursor:
+                    cursor.execute(sql.SQL('select to_jsonb(t) from {} t').format(target(table)))
                     fingerprint = row_fingerprint(row[0] for row in cursor)
-                if fingerprint != reader.info['table_fingerprints'][table]:
+                if fingerprint != expected:
                     raise SentraError('Restored row content differs; isolated transaction rolled back.')
             for location,(digest,size) in reader.info['objects'].items():
                 compressed = reader.read('raw-' + hashlib.sha256(location.encode()).hexdigest())
@@ -245,6 +326,6 @@ def restore_backup(reader, backend, admin_db, *, empty_audit=False):
                 # Restore into the same immutable hash namespace; a missing object is uploaded safely.
                 backend.guard(object_add=len(compressed))
                 backend.storage.put(location.split('/',1)[1],compressed,digest)
-        return {'schema':name,'counts':reader.info['tables'],'status':'restored_and_verified'}
+        return {'schema':schema,'counts':{table:rows for table,rows,_ in tables},'status':'restored_and_verified'}
     finally:
         backend.unlock()
