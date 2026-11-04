@@ -17,6 +17,7 @@ URL = os.environ.get('SENTRA_TEST_DATABASE_URL')
 ROLES = ('anon', 'authenticated', 'sentra_collector', 'sentra_viewer')
 # The two enrollment tables a backup carries, as defined in sql/008 (which also creates roles and grants).
 ENROLLMENT = '''create schema enrollment_private;
+create sequence enrollment_private.participant_number start 100 maxvalue 9999 no cycle;
 create table enrollment_private.invites (invite_hash text primary key, org_id text not null references org.organizations,
   remaining integer not null, expires_at timestamptz not null);
 create table enrollment_private.identities (provider text not null, identity_hash text not null,
@@ -49,8 +50,9 @@ class BackupRestoreDatabaseTests(unittest.TestCase):
         cls.source, info = database()
         cls.admin = psycopg.connect(info, autocommit=True)  # second session, as the admin role in production
         cls.target, _ = database()  # an empty, migrated replacement project
+        cls.reader_info = info
         db = cls.source
-        db.execute("insert into audit.participants values ('p01'),('p02')")
+        db.execute("insert into audit.participants values ('p01'),('p02'),('p150')")
         db.execute("insert into org.organizations(org_id,display_name) values ('org-a','A')")
         db.execute("insert into org.org_users(org_id,email,role) values ('org-a','officer@example.org','officer')")
         for pid in ('p01', 'p02'):
@@ -104,6 +106,8 @@ class BackupRestoreDatabaseTests(unittest.TestCase):
                                       "select membership_id,participant_id,org_id,'1.0' from org.memberships where participant_id='p01' "
                                       "returning consent_id").fetchone()[0]
             self.assertGreater(new, 3)
+            # New enrollments continue after the restored participant numbers (p150 restored).
+            self.assertEqual(self.target.execute("select nextval('enrollment_private.participant_number')").fetchone()[0], 151)
             with self.assertRaises(m.SentraError):  # never over existing rows
                 m.restore_backup(reader, self.Backend(self.source), self.target, empty_audit=True)
 
@@ -114,6 +118,21 @@ class BackupRestoreDatabaseTests(unittest.TestCase):
             schema = restored['schema']
             self.assertEqual(self.admin.execute(f'select count(*) from {schema}.org__consents').fetchone()[0], 3)
             self.admin.execute(f'drop schema {schema} cascade')
+
+    def test_full_backup_fails_closed_when_row_security_would_filter_the_admin(self):
+        from psycopg.conninfo import make_conninfo
+        role, password = 'sentra_test_backup_reader', uuid4().hex
+        with self.psycopg.connect(URL, autocommit=True) as server:
+            if not server.execute('select 1 from pg_roles where rolname=%s', (role,)).fetchone():
+                server.execute(f"create role {role} login nobypassrls password '{password}'")
+            else:
+                server.execute(f"alter role {role} password '{password}'")
+        self.source.execute(f'grant usage on schema org,enrollment_private to {role}; '
+                            f'grant select on all tables in schema org,enrollment_private to {role}')
+        with self.psycopg.connect(make_conninfo(self.reader_info, user=role, password=password), autocommit=True) as limited:
+            self.assertEqual(limited.execute('select count(*) from org.consents').fetchone()[0], 0)  # silently filtered
+            with tempfile.TemporaryDirectory() as folder, self.assertRaisesRegex(m.SentraError, 'row-level security'):
+                self.backup(folder, limited)
 
     def test_audit_only_backup_says_what_it_does_not_cover(self):
         with tempfile.TemporaryDirectory() as folder:

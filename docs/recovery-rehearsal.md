@@ -77,6 +77,11 @@ differs. The original responses are uploaded into the rehearsal project's own
 | Processing from restored data | board and daily features identical to the live run for the same day | |
 | Time to restore | — | |
 
+After an `--empty-audit` restore, membership and consent ids continue after the restored ones,
+and enrollment's participant-number allocator moves past the highest restored `pNNN`. A new
+participant therefore never collides with a restored one. Record a synthetic test enrollment
+after the rehearsal if the enrollment service is deployed against the target.
+
 ## Not covered (record as unverified)
 
 - Enrollment browser sessions and rate limits, which are short-lived and excluded on purpose.

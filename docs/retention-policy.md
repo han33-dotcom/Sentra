@@ -69,6 +69,9 @@ not to the 28-day baseline, because baselines use daily values.
   sessions and rate limits. Partial (`--participant`/`--provider`/`--dataset`) and `--audit-only`
   backups contain the audit tables only, and `shared-backup-verify` lists what they do not cover
   (`not_covered`). Only a full backup with an empty `not_covered` satisfies the gates below.
+  These tables force row-level security, so the backup reads them with `row_security = off`.
+  An admin connection without bypass rights therefore stops the backup with an error, instead
+  of silently backing up no rows.
 - Supabase Free's own backups are not relied on; this was not verified.
 
 ## Gates before any destructive storage step (#46)

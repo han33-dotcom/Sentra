@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from cryptography.fernet import InvalidToken
 from filelock import FileLock
+import psycopg
 from psycopg import sql
 from psycopg.types.json import Jsonb
 
@@ -178,11 +179,18 @@ def _make_backup(backend, root, cipher, *, participant=None, provider=None, data
                 with admin_db.transaction():
                     admin_db.execute('set transaction isolation level repeatable read read only')
                     admin_db.execute(sql.SQL('set transaction snapshot {}').format(sql.Literal(snapshot)))
+                    # These tables FORCE row-level security. Without bypass rights the reads would silently
+                    # return no rows; with row_security off they fail instead, so the backup stops.
+                    admin_db.execute('set local row_security = off')
                     for table in PRIVATE_TABLES:
                         if admin_db.execute('select to_regclass(%s)', (table,)).fetchone()[0] is None:
                             absent.append(table)
                             continue
-                        private[table], private_fingerprints[table] = _export(admin_db, backend, writer, table, [], [], objects)
+                        try:
+                            private[table], private_fingerprints[table] = _export(admin_db, backend, writer, table, [], [], objects)
+                        except psycopg.errors.InsufficientPrivilege:
+                            raise SentraError('The admin connection cannot read every organization and enrollment row '
+                                              '(row-level security applies to it); backup stopped. Use the project admin role.') from None
                         sizes[table] = admin_db.execute('select pg_total_relation_size(%s::regclass)', (table,)).fetchone()[0]
         for location,(digest,size) in objects.items():
             key = location.split('/',1)[1]
@@ -265,6 +273,20 @@ def restore_estimate(info):
     return sum(i['bytes'] for name,i in info['files'].items() if not name.startswith('raw-')) + 16_000_000
 
 
+def advance_participant_numbers(db):
+    """Move enrollment's participant-number allocator past every restored pNNN id, never backwards.
+
+    A fresh target starts the sequence at 100; enrollment tries a bounded number of candidates, so
+    restored participants would otherwise make new enrollments fail."""
+    if db.execute("select to_regclass('enrollment_private.participant_number')").fetchone()[0] is None:
+        return
+    last, called = db.execute('select last_value,is_called from enrollment_private.participant_number').fetchone()
+    restored = db.execute(r"""select coalesce(max(substr(participant_id,2)::int),0) from audit.participants
+        where participant_id ~ '^p[0-9]{2,4}$'""").fetchone()[0]
+    following = max(last + 1 if called else last, restored + 1)
+    db.execute("select setval('enrollment_private.participant_number',%s,false)", (following,))
+
+
 def restore_backup(reader, backend, admin_db, *, empty_audit=False):
     # Validate every member before any cloud change. Only a new isolated schema may be created.
     for name in reader.info['files']:
@@ -281,6 +303,8 @@ def restore_backup(reader, backend, admin_db, *, empty_audit=False):
         backend.guard(database_add=restore_estimate(reader.info))
         backend.reserve(sum(i['bytes']*2 for name,i in reader.info['files'].items() if not name.startswith('raw-')) + 65_536)
         with admin_db.transaction():
+            # Checks and fingerprints must see every row, never a policy-filtered subset.
+            admin_db.execute('set local row_security = off')
             for table,_,_ in tables:
                 if '.' in table and admin_db.execute('select to_regclass(%s)', (table,)).fetchone()[0] is None:
                     raise SentraError('Apply sql/007 and sql/008 to the target before restoring organization and enrollment tables.')
@@ -311,6 +335,8 @@ def restore_backup(reader, backend, admin_db, *, empty_audit=False):
                     column = IDENTITY_TABLES[table]
                     admin_db.execute(sql.SQL("select setval(pg_get_serial_sequence({},{}),coalesce(max({}),0)+1,false) from {}").format(
                         sql.Literal(table),sql.Literal(column),sql.Identifier(column),relation(table)))
+                if empty_audit and table == 'participants':
+                    advance_participant_numbers(admin_db)
                 count = admin_db.execute(sql.SQL('select count(*) from {}').format(target(table))).fetchone()[0]
                 if count != rows:
                     raise SentraError('Restored backup count differs; isolated transaction rolled back.')
