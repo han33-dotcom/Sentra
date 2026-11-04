@@ -122,6 +122,22 @@ class ViewerReader:
         except psycopg.Error:
             raise SentraError('Viewer database request unavailable. Check project pause and viewer configuration; sensitive details omitted.') from None
 
+    def follow_up_rows(self):
+        """Follow-ups and their history (#31); the caller filters by organization and sharing. Empty
+        until migration 010 exists."""
+        try:
+            follow_ups=self._rows('''select follow_up_id,org_id,participant_id,opened_by,opened_at
+              from org.follow_ups order by follow_up_id desc limit 1000''')
+            events=self._rows('''select event_id,follow_up_id,recorded_at,actor,status,assignee,note
+              from org.follow_up_events where follow_up_id=any(%s) order by event_id limit 10000''',
+              ([r['follow_up_id'] for r in follow_ups],))
+            return follow_ups,events
+        except (psycopg.errors.UndefinedTable,psycopg.errors.InvalidSchemaName):
+            self.db.rollback()
+            return [],[]
+        except psycopg.Error:
+            raise SentraError('Viewer database request unavailable. Check project pause and viewer configuration; sensitive details omitted.') from None
+
     @safe_database
     def catalog(self):
         return [r for r in self._catalog_rows() if self.can_view(r['participant_id'])]

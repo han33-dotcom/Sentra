@@ -123,3 +123,11 @@ Collection discovery is opt-in and does not change existing activation controls.
 
 See [self-service enrollment](self-service-enrollment.md) for configuration,
 deployment, participant behavior and the isolated PostgreSQL verification fixture.
+
+## Follow-ups (`sql/010_follow_ups.sql`, not yet applied)
+
+After 007, `org.follow_ups` and `org.follow_up_events` hold brief follow-up notes, an assignee
+and open/ongoing/resolved history. Both are append-only with forced RLS; `sentra_viewer` can
+only read them. Writes go through two security-definer functions, executable only by a separate
+`sentra_followups` role with no table privileges, which re-check the officer, assignee and
+`individual` consent rules. See [follow-ups](follow-ups.md).

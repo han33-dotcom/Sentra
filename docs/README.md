@@ -10,6 +10,7 @@ Tasks belong in [GitHub Issues](https://github.com/han33-dotcom/Sentra/issues); 
 - [collection restart readiness](collection-restart-readiness.md)
 - [data dictionary](data-dictionary.md)
 - [dashboard restoration](dashboard-restoration.md)
+- [follow-ups](follow-ups.md)
 - [operating guide](operating-guide.md)
 - [organization overview](organization-overview.md)
 - [parquet tiers](parquet-tiers.md)
