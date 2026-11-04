@@ -68,9 +68,11 @@ when their human starts them; a Slack notification does not start a teammate's c
 The issue number is the authoritative task identity: `SEN-41` always means issue
 #41. Issue titles use `[SEN-41] description`, which is also the board card title.
 PR titles start with the same task identity; GitHub still assigns the PR its own
-number. Native Slack PR/review messages carry that PR title, so notifications for
-PR #65 show `[SEN-41] ...`. Old Slack messages remain historical; do not repost
-or duplicate notifications just to change their numbering.
+number. The native Slack app still prepends its own PR number before that title.
+The [task-first Slack replacement](task-first-slack.md) puts the task ID first
+and the PR link underneath, using one updated card per PR. It stays disabled until
+the approved app setup and verified native-subscription cutover; do not run both
+senders. Old Slack messages remain historical and are not reposted in bulk.
 
 Declare only actual implementation scope:
 
@@ -106,6 +108,8 @@ title repair and multi-task Project reconciliation become active only after the
 normal reviewed release carries these changes to main. Preview the updated job
 with `dry_run=true`, inspect task mappings, then verify a write run and a second
 no-change run. Do not claim the permanent automation is live before that release.
+Task-first Slack delivery additionally requires the separate credential and
+cutover in the linked guide; title prefixes alone do not change native formatting.
 
 ## Status meanings
 

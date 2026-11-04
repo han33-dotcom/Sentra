@@ -125,6 +125,9 @@ PRs. A PR implementing several tasks declares one `Task URL:` plus one
 `Additional Task URL:` per other implemented task, and lists all IDs in its title
 in that order: `[SEN-28, SEN-27] fix: retry joins`. References and dependencies
 stay in prose. GitHub's own PR number is a secondary identifier.
+For Slack's task-first presentation and the no-overlap cutover, follow
+[task-first Slack notifications](docs/task-first-slack.md). Native and custom
+PR/review delivery must not run together.
 
 After shared policy changes merge, update clean local `develop` with
 `git pull --ff-only` and bring `origin/develop` into ongoing feature branches

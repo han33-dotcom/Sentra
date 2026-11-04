@@ -19,6 +19,28 @@ concurrency:
   group: team-project-sync
   cancel-in-progress: false
 jobs:
+  notify:
+    if: (vars.TEAM_SLACK_MODE == 'task-first' && vars.TEAM_SYNC_ENABLED == 'true') || (github.event_name == 'workflow_dispatch' && inputs.dry_run == true)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - name: Check out trusted default-branch code only
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Reconcile task-first Slack cards without repeated copies
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TEAM_SLACK_BOT_TOKEN: ${{ secrets.TEAM_SLACK_BOT_TOKEN }}
+          TEAM_SLACK_MODE: ${{ vars.TEAM_SLACK_MODE }}
+          TEAM_SLACK_NATIVE_DISABLED_AT: ${{ vars.TEAM_SLACK_NATIVE_DISABLED_AT }}
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && 'true' || 'false' }}
+        run: python3 -m scripts.team_workflow.slack_notify
   identity:
     if: vars.TEAM_SYNC_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && inputs.dry_run == true)
     runs-on: ubuntu-24.04

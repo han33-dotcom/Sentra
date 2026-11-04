@@ -38,6 +38,7 @@ Tasks belong in [GitHub Issues](https://github.com/han33-dotcom/Sentra/issues); 
 - [retention evidence](retention-evidence.md)
 - [storage plan](storage-plan.md)
 - [team workflow](team-workflow.md)
+- [task-first Slack notifications and cutover](task-first-slack.md)
 - [synthetic workflow pilot](workflow-pilot.md)
 - [viewer redesign plan](viewer-redesign-plan.md)
 - [viewer redesign validation](viewer-redesign-validation.md)

@@ -123,8 +123,11 @@ No existing subscription was removed. The configured command is:
 /github subscribe han33-dotcom/Sentra pulls reviews
 ```
 
-Inspect `/github subscribe list` before changing subscriptions. Native messages handle PR/review events; no custom bot duplicates
-those messages. Task descriptions and review details remain on GitHub. Receiving a
+Inspect `/github subscribe list` before changing subscriptions. Native messages
+currently handle PR/review events. The proposed [task-first replacement](task-first-slack.md)
+must remain disabled until its app and reviewed default-branch code are ready,
+then replace only Sentra's native pulls/reviews subscription with a verified
+nonoverlapping cutover. Task descriptions and review details remain on GitHub. Receiving a
 notification does not automatically launch a teammate's personal AI assistant.
 
 ## October 21 live activation evidence

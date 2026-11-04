@@ -70,6 +70,18 @@ class GitHubClient:
     def reviews(self, number):
         return self._pages(f"/pulls/{number}/reviews")
 
+    def comments(self, number):
+        return self._pages(f"/issues/{number}/comments")
+
+    def create_comment(self, number, body):
+        # A retry after an uncertain POST could create another delivery claim.
+        return self.transport(f"https://api.github.com/repos/{self.repo}/issues/{number}/comments",
+                              self.token, {"body": body}, method="POST")
+
+    def update_comment(self, comment_id, body):
+        return self._call(f"https://api.github.com/repos/{self.repo}/issues/comments/{comment_id}",
+                          self.token, {"body": body}, method="PATCH")
+
     def issue(self, number):
         return self._rest(f"/issues/{number}")
 

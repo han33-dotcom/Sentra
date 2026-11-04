@@ -3,7 +3,7 @@ on:
   issues:
     types: [opened, edited, reopened, closed]
   pull_request:
-    types: [opened, edited, synchronize, reopened, closed, ready_for_review, converted_to_draft]
+    types: [opened, edited, synchronize, reopened, closed, ready_for_review, converted_to_draft, review_requested, review_request_removed]
   pull_request_review:
     types: [submitted, edited, dismissed]
 permissions: {}
