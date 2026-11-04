@@ -1,6 +1,10 @@
 import copy
+import io
 import json
+import os
 import unittest
+from contextlib import redirect_stdout
+from unittest.mock import patch
 
 from scripts.team_workflow.slack_notify import (
     CHANNEL, EVENT_TYPE, LEDGER_ACTOR, REPO, WORKSPACE,
@@ -35,11 +39,12 @@ class GitHub:
         return copy.deepcopy(self.reviews_list)
 
     def comments(self, number):
-        return copy.deepcopy(self.thread)
+        return copy.deepcopy([c for c in self.thread if c["pr"] == number])
 
     def create_comment(self, number, body):
         self.events.append("claim")
-        comment = {"id": 1, "body": body, "user": {"login": LEDGER_ACTOR, "type": "Bot"}}
+        comment = {"id": len(self.thread) + 1, "pr": number, "body": body,
+                   "user": {"login": LEDGER_ACTOR, "type": "Bot"}}
         self.thread.append(comment)
         return copy.deepcopy(comment)
 
@@ -48,7 +53,7 @@ class GitHub:
         if self.fail_save:
             self.fail_save = False
             raise TimeoutError("synthetic ledger save failure")
-        self.thread[0]["body"] = body
+        next(c for c in self.thread if c["id"] == comment_id)["body"] = body
 
 
 class Slack:
@@ -95,6 +100,72 @@ def run(github, slack, **kwargs):
 
 
 class SlackNotificationTests(unittest.TestCase):
+    def test_failed_pr_does_not_block_another_card_or_repost_uncertain_delivery(self):
+        for failure in ["pending", "invalid", "rejected", "post-timeout", "claim-timeout", "save-timeout", "recovery-window"]:
+            with self.subTest(failure=failure):
+                github = GitHub(); slack = Slack(github.events)
+                github.pulls.append(dict(copy.deepcopy(github.pulls[0]), number=64))
+                _, fingerprint, _ = card(github.pulls[0], [28, 27], [])
+                if failure in {"pending", "invalid", "rejected", "recovery-window"}:
+                    state = {"repo": REPO, "channel": CHANNEL, "pr": 63, "phase": "pending",
+                             "fingerprint": fingerprint, "attempted_at": 100}
+                    if failure == "invalid":
+                        state["fingerprint"] = "invalid"
+                    if failure == "rejected":
+                        state.update(phase="rejected", attempts=3)
+                    github.create_comment(63, ledger_body(state))
+                if failure == "recovery-window":
+                    def unavailable(*args):
+                        raise ValueError("synthetic-private-history")
+                    slack.client.recover = unavailable
+                if failure == "post-timeout":
+                    slack.accept_then_timeout = True
+                if failure == "save-timeout":
+                    github.fail_save = True
+                if failure == "claim-timeout":
+                    original = github.create_comment
+                    def uncertain(number, body):
+                        comment = original(number, body)
+                        if number == 63:
+                            raise TimeoutError("synthetic-private-claim")
+                        return comment
+                    github.create_comment = uncertain
+                result = run(github, slack)
+                self.assertEqual(result[0]["pr"], 63)
+                self.assertTrue(result[0]["errors"])
+                self.assertEqual(result[1], {"pr": 64, "action": "created"})
+                self.assertNotIn("synthetic-private", json.dumps(result))
+                second_state = read_ledger(github.comments(64), 64)[1]
+                self.assertEqual(second_state["phase"], "sent")
+                posts = slack.count("chat.postMessage")
+                replay = run(github, slack)
+                self.assertEqual(replay[1], {"pr": 64, "action": "unchanged"})
+                self.assertEqual(slack.count("chat.postMessage"), posts)
+                self.assertEqual(len(github.comments(63)), 1)
+                self.assertEqual(len(github.comments(64)), 1)
+
+    def test_cli_reports_failed_pr_safely_and_returns_nonzero_after_other_cards(self):
+        from scripts.team_workflow.slack_notify import main
+        github = GitHub(); slack = Slack(github.events)
+        github.pulls.append(dict(copy.deepcopy(github.pulls[0]), number=64))
+        original = github.comments
+        def unavailable(number):
+            if number == 63:
+                raise RuntimeError("synthetic-private-payload")
+            return original(number)
+        github.comments = unavailable
+        output = io.StringIO()
+        with patch("scripts.team_workflow.github_client.GitHubClient", return_value=github), \
+                patch("scripts.team_workflow.slack_notify.SlackClient", return_value=slack.client), \
+                patch.dict(os.environ, GITHUB_REPOSITORY=REPO, GH_TOKEN="synthetic", DRY_RUN="false",
+                           TEAM_SLACK_MODE="task-first", TEAM_SLACK_NATIVE_DISABLED_AT=CUTOVER), \
+                redirect_stdout(output):
+            self.assertEqual(main(), 1)
+        result = json.loads(output.getvalue())
+        self.assertTrue(result[0]["errors"])
+        self.assertEqual(result[1], {"pr": 64, "action": "created"})
+        self.assertNotIn("synthetic-private-payload", output.getvalue())
+
     def test_task_ids_lead_visible_blocks_and_notification_text_pr_link_is_secondary(self):
         github = GitHub()
         payload, fingerprint, key = card(github.pulls[0], [28, 27], [])
@@ -174,16 +245,14 @@ class SlackNotificationTests(unittest.TestCase):
 
     def test_crash_after_accepted_post_recovers_without_reposting(self):
         github = GitHub(); slack = Slack(github.events); slack.accept_then_timeout = True
-        with self.assertRaises(TimeoutError):
-            run(github, slack)
+        self.assertTrue(run(github, slack)[0]["errors"])
         self.assertEqual(read_ledger(github.thread, 63)[1]["phase"], "pending")
         self.assertEqual(run(github, slack)[0]["action"], "unchanged")
         self.assertEqual(slack.count("chat.postMessage"), 1)
 
     def test_crash_before_ledger_save_recovers_the_accepted_message(self):
         github = GitHub(); slack = Slack(github.events); github.fail_save = True
-        with self.assertRaises(TimeoutError):
-            run(github, slack)
+        self.assertTrue(run(github, slack)[0]["errors"])
         run(github, slack)
         self.assertEqual(slack.count("chat.postMessage"), 1)
 
@@ -194,10 +263,8 @@ class SlackNotificationTests(unittest.TestCase):
             original(number, body)
             raise TimeoutError("synthetic uncertain claim creation")
         github.create_comment = uncertain
-        with self.assertRaises(TimeoutError):
-            run(github, slack)
-        with self.assertRaisesRegex(ValueError, "uncertain"):
-            run(github, slack)
+        self.assertTrue(run(github, slack)[0]["errors"])
+        self.assertTrue(run(github, slack)[0]["errors"])
         self.assertEqual(slack.count("chat.postMessage"), 0)
         self.assertEqual(len(github.thread), 1)
 
@@ -205,18 +272,14 @@ class SlackNotificationTests(unittest.TestCase):
         github = GitHub(); slack = Slack(github.events)
         slack.post_error = {"ok": False, "error": "missing_scope"}
         for _ in range(3):
-            with self.assertRaises(ValueError):
-                run(github, slack)
-        with self.assertRaisesRegex(ValueError, "repeatedly rejected"):
-            run(github, slack)
+            self.assertTrue(run(github, slack)[0]["errors"])
+        self.assertTrue(run(github, slack)[0]["errors"])
         self.assertEqual(slack.count("chat.postMessage"), 3)
         self.assertEqual(slack.messages, [])
         github = GitHub(); slack = Slack(github.events)
         slack.post_error = {"ok": False, "error": "internal_error"}
-        with self.assertRaises(ValueError):
-            run(github, slack)
-        with self.assertRaisesRegex(ValueError, "uncertain"):
-            run(github, slack)
+        self.assertTrue(run(github, slack)[0]["errors"])
+        self.assertTrue(run(github, slack)[0]["errors"])
         self.assertEqual(slack.count("chat.postMessage"), 1)
 
     def test_uncertain_delivery_without_recoverable_message_never_posts_again(self):
@@ -225,16 +288,15 @@ class SlackNotificationTests(unittest.TestCase):
         github.create_comment(63, ledger_body({"repo": REPO, "channel": CHANNEL, "pr": 63,
                                               "phase": "pending", "fingerprint": fingerprint, "attempted_at": 100}))
         for _ in range(2):
-            with self.assertRaisesRegex(ValueError, "uncertain"):
-                run(github, slack)
+            self.assertTrue(run(github, slack)[0]["errors"])
         self.assertEqual(slack.count("chat.postMessage"), 0)
 
     def test_malformed_slack_response_is_uncertain_not_permission_to_post_again(self):
         for acknowledgement in [{}, {"unexpected": "response"}, {"ok": True},
                                 {"ok": True, "ts": "1.000001", "channel": "other"}]:
             github = GitHub(); slack = Slack(github.events); slack.bad_ack = acknowledgement
-            with self.subTest(acknowledgement=acknowledgement), self.assertRaises(ValueError):
-                run(github, slack)
+            with self.subTest(acknowledgement=acknowledgement):
+                self.assertTrue(run(github, slack)[0]["errors"])
             run(github, slack)
             self.assertEqual(slack.count("chat.postMessage"), 1)
 

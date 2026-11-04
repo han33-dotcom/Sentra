@@ -98,6 +98,12 @@ and Project Status. Done, Blocked, closed-issue status, acceptance and closure
 remain human-owned. An API edit can still race after the final read; the next
 reconciliation repairs prefixes, while humans restore any overwritten description.
 Title edits made by the job's `GITHUB_TOKEN` do not trigger another Actions run.
+Title reconciliation records sanitized errors per issue or PR and continues with
+other items. A bad title, stale edit or item-level API failure cannot stop all
+repairs; the job exits nonzero after processing the list if any item failed.
+Inspect the reported item numbers and rerun after correction. Dry runs report the
+same failures without writes; failure to fetch a list still stops the run.
+
 If `pr-policy` already failed before an automatic title repair, rerun that check
 against the current head/base (or have the author save the corrected title) before
 merging. A repaired title is not itself a claim that checks passed.

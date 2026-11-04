@@ -174,66 +174,75 @@ def notify(github, slack, mode="native", cutover=None, dry_run=True, now=None):
         slack.verify()
     output = []
     for pull in github.list_pulls():
-        if pull["user"]["login"] not in APPROVERS[REPO]:
-            continue
-        reviews = github.reviews(pull["number"]) if pull["state"] == "open" else []
-        changed_at = max([parse_time(pull["updated_at"])] +
-                         [parse_time(r["submitted_at"]) for r in reviews if r.get("submitted_at")])
-        # Old native messages are not reposted in bulk during cutover.
-        if cutoff is not None and changed_at < cutoff:
-            continue
-        if dry_run and cutoff is None and pull["state"] != "open":
-            continue
-        numbers = declared_tasks(pull.get("body") or "", REPO)
-        for number in numbers:
-            verified_task(github, REPO, number)
-        payload, fingerprint, key = card(pull, numbers, reviews)
-        if dry_run:
-            output.append({"pr": pull["number"], "action": "preview", "payload": payload})
-            continue
-        comment_id, state = read_ledger(github.comments(pull["number"]), pull["number"])
-        if state and state["phase"] == "pending":
-            timestamp = slack.recover(key, state["attempted_at"])
-            if timestamp is None:
-                raise ValueError("Prior Slack delivery is uncertain; refusing to send another copy.")
-            state.update(phase="sent", ts=timestamp)
-            github.update_comment(comment_id, ledger_body(state))
-        if state and state["phase"] == "sent":
-            if state["fingerprint"] == fingerprint:
-                output.append({"pr": pull["number"], "action": "unchanged"})
-                continue
-            # Updating the same Slack timestamp is safe to repeat after a crash.
-            update = dict(payload, ts=state["ts"])
-            update.pop("unfurl_links")
-            update.pop("unfurl_media")
-            slack.call("chat.update", update)
-            state["fingerprint"] = fingerprint
-            github.update_comment(comment_id, ledger_body(state))
-            output.append({"pr": pull["number"], "action": "updated"})
-            continue
-        if state and state.get("attempts", 1) >= 3:
-            raise ValueError("Slack delivery was repeatedly rejected; manual reconciliation required.")
-        attempts = state.get("attempts", 0) if state else 0
-        state = {"repo": REPO, "channel": CHANNEL, "pr": pull["number"], "phase": "pending",
-                 "fingerprint": fingerprint, "attempted_at": (now or time.time)(), "attempts": attempts + 1}
-        if comment_id is None:
-            # A timed-out claim creates no Slack POST. A replay finds the claim.
-            comment_id = github.create_comment(pull["number"], ledger_body(state))["id"]
-        else:
-            github.update_comment(comment_id, ledger_body(state))
         try:
-            result = slack.call("chat.postMessage", payload)
-        except SlackRejected:
-            state["phase"] = "rejected"  # An explicit ok:false did not create a message.
-            github.update_comment(comment_id, ledger_body(state))
-            raise
-        # Missing/invalid timestamp is uncertain too: preserve the pending claim.
-        if result.get("channel") != CHANNEL or not re.fullmatch(r"[0-9]+\.[0-9]+", result.get("ts", "")):
-            raise ValueError("Slack delivery acknowledgement is incomplete; preserve the pending claim.")
-        state.update(phase="sent", ts=result["ts"])
-        github.update_comment(comment_id, ledger_body(state))
-        output.append({"pr": pull["number"], "action": "created"})
+            result = _notify_pull(github, slack, pull, cutoff, dry_run, now)
+        except Exception:
+            # Preserve this PR's ledger and never retry a possibly accepted POST.
+            # Do not expose raw exceptions, HTTP bodies or channel history.
+            result = {"pr": pull["number"], "action": "error",
+                      "errors": ["Card reconciliation failed; inspect this PR's metadata, delivery ledger and access."]}
+        if result is not None:
+            output.append(result)
     return output
+
+
+def _notify_pull(github, slack, pull, cutoff, dry_run, now):
+    if pull["user"]["login"] not in APPROVERS[REPO]:
+        return None
+    reviews = github.reviews(pull["number"]) if pull["state"] == "open" else []
+    changed_at = max([parse_time(pull["updated_at"])] +
+                     [parse_time(r["submitted_at"]) for r in reviews if r.get("submitted_at")])
+    # Old native messages are not reposted in bulk during cutover.
+    if cutoff is not None and changed_at < cutoff:
+        return None
+    if dry_run and cutoff is None and pull["state"] != "open":
+        return None
+    numbers = declared_tasks(pull.get("body") or "", REPO)
+    for number in numbers:
+        verified_task(github, REPO, number)
+    payload, fingerprint, key = card(pull, numbers, reviews)
+    if dry_run:
+        return {"pr": pull["number"], "action": "preview", "payload": payload}
+    comment_id, state = read_ledger(github.comments(pull["number"]), pull["number"])
+    if state and state["phase"] == "pending":
+        timestamp = slack.recover(key, state["attempted_at"])
+        if timestamp is None:
+            raise ValueError("Prior Slack delivery is uncertain; refusing to send another copy.")
+        state.update(phase="sent", ts=timestamp)
+        github.update_comment(comment_id, ledger_body(state))
+    if state and state["phase"] == "sent":
+        if state["fingerprint"] == fingerprint:
+            return {"pr": pull["number"], "action": "unchanged"}
+        # Updating the same Slack timestamp is safe to repeat after a crash.
+        update = dict(payload, ts=state["ts"])
+        update.pop("unfurl_links")
+        update.pop("unfurl_media")
+        slack.call("chat.update", update)
+        state["fingerprint"] = fingerprint
+        github.update_comment(comment_id, ledger_body(state))
+        return {"pr": pull["number"], "action": "updated"}
+    if state and state.get("attempts", 1) >= 3:
+        raise ValueError("Slack delivery was repeatedly rejected; manual reconciliation required.")
+    attempts = state.get("attempts", 0) if state else 0
+    state = {"repo": REPO, "channel": CHANNEL, "pr": pull["number"], "phase": "pending",
+             "fingerprint": fingerprint, "attempted_at": (now or time.time)(), "attempts": attempts + 1}
+    if comment_id is None:
+        # A timed-out claim creates no Slack POST. A replay finds the claim.
+        comment_id = github.create_comment(pull["number"], ledger_body(state))["id"]
+    else:
+        github.update_comment(comment_id, ledger_body(state))
+    try:
+        result = slack.call("chat.postMessage", payload)
+    except SlackRejected:
+        state["phase"] = "rejected"  # An explicit ok:false did not create a message.
+        github.update_comment(comment_id, ledger_body(state))
+        raise
+    # Missing/invalid timestamp is uncertain too: preserve the pending claim.
+    if result.get("channel") != CHANNEL or not re.fullmatch(r"[0-9]+\.[0-9]+", result.get("ts", "")):
+        raise ValueError("Slack delivery acknowledgement is incomplete; preserve the pending claim.")
+    state.update(phase="sent", ts=result["ts"])
+    github.update_comment(comment_id, ledger_body(state))
+    return {"pr": pull["number"], "action": "created"}
 
 
 def main():
@@ -244,7 +253,7 @@ def main():
                     mode=os.environ.get("TEAM_SLACK_MODE", "native"),
                     cutover=os.environ.get("TEAM_SLACK_NATIVE_DISABLED_AT"), dry_run=dry_run)
     print(json.dumps(result, indent=2))
-    return 0
+    return 1 if any(r.get("errors") for r in result) else 0
 
 
 if __name__ == "__main__":

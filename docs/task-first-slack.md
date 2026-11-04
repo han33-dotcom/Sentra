@@ -43,11 +43,18 @@ of Actions caches, artifacts, workstations or Slack retention.
 
 No Slack POST or GitHub claim POST is automatically retried after an uncertain
 response. A pending delivery is recovered from the same bot's Slack metadata. If
-the card cannot be found conclusively, the worker fails and sends no second copy.
+the card cannot be found conclusively, that PR fails and sends no second copy.
 Only explicit permission/validation rejections can be attempted again, at most
 three times. Ambiguous service errors remain pending. A crash while updating an
 existing card can safely repeat the update. Multiple ledgers/cards and incomplete
 API pagination fail closed.
+
+Per-PR failures produce a sanitized error result with the PR number. Other PRs
+still reconcile independently; after processing them, the job exits nonzero if
+any PR failed. Fix or reconcile the affected PR before rerunning. A replay keeps
+successful cards and pending claims, so it cannot use the partial failure as
+permission to create a duplicate. Workspace, cutover and list-fetch failures still
+stop the run because safe processing cannot continue without them.
 
 ## App setup
 
@@ -133,7 +140,8 @@ Do not erase the claim and blindly replay. A deleted/retained-out card with a se
 ledger is not automatically recreated; authorize and record any replacement
 explicitly after verifying it cannot duplicate an existing card. GitHub and Slack
 do not offer a cross-service atomic transaction, so uncertainty deliberately stops
-delivery instead of claiming exactly-once success or risking another post.
+delivery for the affected PR instead of claiming exactly-once success or risking
+another post. Independent PRs continue, while the job still reports failure.
 
 ## Validation
 

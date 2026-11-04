@@ -1,5 +1,10 @@
 import copy
+import io
+import json
+import os
 import unittest
+from contextlib import redirect_stdout
+from unittest.mock import patch
 
 from scripts.team_workflow.check_pr import check_pr_event
 from scripts.team_workflow.identity import canonical_title, reconcile_identity
@@ -120,6 +125,36 @@ class DeclarationTests(unittest.TestCase):
 
 
 class IdentityTests(unittest.TestCase):
+    def test_bad_issue_does_not_stop_later_issues_or_prs_and_cli_fails(self):
+        from scripts.team_workflow.identity import main
+        client = Client()
+        client.issues[27]["title"] = "[Task]"
+        output = io.StringIO()
+        with patch("scripts.team_workflow.github_client.GitHubClient", return_value=client), \
+                patch.dict(os.environ, GITHUB_REPOSITORY=REPO, GH_TOKEN="synthetic", DRY_RUN="false"), \
+                redirect_stdout(output):
+            self.assertEqual(main(), 1)
+        result = json.loads(output.getvalue())
+        self.assertEqual(result[0]["number"], 27)
+        self.assertTrue(result[0]["errors"])
+        self.assertEqual(client.issues[27]["title"], "[Task]")
+        self.assertEqual(client.writes, [("issue", 28), ("pull", 64)])
+
+    def test_bad_pr_does_not_stop_later_prs_or_expose_raw_errors(self):
+        client = Client()
+        client.pulls.append(dict(copy.deepcopy(client.pulls[0]), number=65))
+        original = client.pull
+        def unavailable(number):
+            if number == 64:
+                raise RuntimeError("synthetic-private-response")
+            return original(number)
+        client.pull = unavailable
+        result = reconcile_identity(REPO, client, dry_run=False)
+        self.assertTrue(next(r for r in result if r["number"] == 64)["errors"])
+        self.assertNotIn(("pull", 64), client.writes)
+        self.assertIn(("pull", 65), client.writes)
+        self.assertNotIn("synthetic-private-response", json.dumps(result))
+
     def test_preview_writes_nothing_then_repair_is_idempotent(self):
         client = Client()
         preview = reconcile_identity(REPO, client)
@@ -150,9 +185,10 @@ class IdentityTests(unittest.TestCase):
                 issue["title"] = "Edited by teammate"
             return issue
         client.issue = changed
-        with self.assertRaises(ValueError):
-            reconcile_identity(REPO, client, dry_run=False)
-        self.assertEqual(client.writes, [])
+        result = reconcile_identity(REPO, client, dry_run=False)
+        self.assertTrue(result[0]["errors"])
+        self.assertNotIn(("issue", 27), client.writes)
+        self.assertEqual(client.writes, [("issue", 28), ("pull", 64)])
 
     def test_live_pr_scope_edit_is_not_overwritten(self):
         client = Client()
@@ -164,8 +200,8 @@ class IdentityTests(unittest.TestCase):
             pull["body"] += f"Additional Task URL: {ROOT}49\n"
             return pull
         client.pull = changed
-        with self.assertRaises(ValueError):
-            reconcile_identity(REPO, client, dry_run=False)
+        result = reconcile_identity(REPO, client, dry_run=False)
+        self.assertTrue(result[-1]["errors"])
         self.assertEqual(client.writes, [])
 
     def test_other_repo_and_unconfigured_pr_author_are_not_renamed(self):
