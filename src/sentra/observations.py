@@ -8,12 +8,14 @@ plain wording. Three kinds are kept apart so they are never confused:
 - `wellness`: a rule signalled (or all core rules were checked and none signalled), relative to the
   person's own pattern. Rules are provisional until the medical expert signs them off.
 - `assessment`: what could not be checked on that day, and why.
-- `collection`: data problems (no published days, stale data, a board built under older rules).
+- `collection`: data problems (no published days, stale or future-dated data, a board built under
+  older rules). A stale or future-dated day gets no wellness or assessment conclusion at all, so old
+  or wrongly dated data never reads as calm.
 
 None of these is a medical conclusion or diagnosis.
 """
 
-from .organization import RECENT_DAYS, _day, _days, _number
+from .organization import RECENT_DAYS, board_day, is_number, valid_days
 from .processing.pipeline import ASSESSMENT_VERSION, CORE_RULES, TH
 
 RULE_LABELS = {'sleep': 'Sleep', 'rhr': 'Resting heart rate', 'sleep_hr': 'Sleeping heart rate',
@@ -29,6 +31,9 @@ REASONS = {'no_reading': 'no reading for this day',
            'baseline_building': f"personal normal still building (needs {TH['baseline_min_days']} of the previous "
                                 f"{TH['baseline_days']} days)"}
 PROVISIONAL = f"Provisional rule ({TH['_status']})."
+# The board publishes rounded values (processing.board.FIELDS); rules ran on the unrounded readings.
+ROUNDED = 'Readings are shown rounded; the rule was checked on the unrounded value.'
+NO_SLEEP_HR_VARIATION = 'The difference in usual variation is not published for sleeping heart rate.'
 NOT_MEDICAL = 'A wellness observation relative to this person\'s own pattern, not a medical conclusion.'
 
 
@@ -38,11 +43,11 @@ def _fmt(value, unit):
 
 def _readings(day, value_key, baseline_key, z_key, unit):
     readings = []
-    if _number(day.get(value_key)):
-        readings.append(('This day', _fmt(day[value_key], unit)))
-    if baseline_key and _number(day.get(baseline_key)):
+    if is_number(day.get(value_key)):
+        readings.append(('This day (rounded)', _fmt(day[value_key], unit)))
+    if baseline_key and is_number(day.get(baseline_key)):
         readings.append(('Usual (own baseline)', _fmt(day[baseline_key], unit)))
-    if z_key and _number(day.get(z_key)):
+    if z_key and is_number(day.get(z_key)):
         readings.append(('Difference from usual variation', f'{day[z_key]:+g} × usual variation'))
     if value_key == 'sleep':
         readings.append(('Rule', f"less than {TH['short_sleep_minutes']} min asleep"))
@@ -59,35 +64,41 @@ def _reasons(day):
 
 def observations(person, *, today, assessment_version, recent_days=RECENT_DAYS):
     """Observations for the person's latest published day, most important kind first."""
-    days = _days(person)
+    days = valid_days(person)
     if not days:
         return [{'kind': 'collection', 'day': None, 'title': 'No published days yet',
                  'detail': 'Nothing can be observed until processed days are published.', 'readings': [],
                  'limitations': []}]
     day = days[-1]
-    through = _day(day['d'])
-    result = []
+    through = board_day(day['d'])
+    if through > today:
+        # A source-date problem; the overview also refuses to count such a day as assessable.
+        return [{'kind': 'collection', 'day': through, 'title': 'Date in the future',
+                 'detail': f'The latest published day ({through.isoformat()}) is after today, so no wellness '
+                           'conclusion is drawn. Ask the team to check the source dates.',
+                 'readings': [], 'limitations': []}]
     if (today - through).days > recent_days:
-        result.append({'kind': 'collection', 'day': through, 'title': 'No recent data',
-                       'detail': f'The latest published day is {(today - through).days} days old, so this is not '
-                                 'a current picture. Check the wearable connection and syncing.',
-                       'readings': [], 'limitations': []})
+        return [{'kind': 'collection', 'day': through, 'title': 'No recent data',
+                 'detail': f'The latest published day is {(today - through).days} days old, so no current '
+                           'wellness conclusion is drawn. Check the wearable connection and syncing.',
+                 'readings': [], 'limitations': []}]
     if assessment_version != ASSESSMENT_VERSION:
         # Levels from older rules can look falsely complete; show nothing until the next refresh.
-        result.append({'kind': 'collection', 'day': through, 'title': 'Published under older rules',
-                       'detail': 'Observations appear after the next daily refresh rebuilds the board.',
-                       'readings': [], 'limitations': []})
-        return result
+        return [{'kind': 'collection', 'day': through, 'title': 'Published under older rules',
+                 'detail': 'Observations appear after the next daily refresh rebuilds the board.',
+                 'readings': [], 'limitations': []}]
+    result = []
     reasons = _reasons(day)
     limitations = [PROVISIONAL, NOT_MEDICAL] + ([f'Not checked: {"; ".join(reasons)}.'] if reasons else [])
     for flag in day.get('f') or ():
         if flag not in SIGNALS:
             continue
         rule, wording, value_key, baseline_key, z_key, unit = SIGNALS[flag]
+        notes = [ROUNDED] + ([NO_SLEEP_HR_VARIATION] if rule == 'sleep_hr' else [])
         result.append({'kind': 'wellness', 'day': through, 'title': wording,
                        'detail': f'{RULE_LABELS[rule]} met its rule on this day.',
                        'readings': _readings(day, value_key, baseline_key, z_key, unit),
-                       'limitations': limitations})
+                       'limitations': limitations + notes})
     if day.get('lvl') in ('amber', 'red') and not any(r['kind'] == 'wellness' for r in result):
         # Never leave a level unexplained; this means the board and this page disagree on rule codes.
         result.append({'kind': 'collection', 'day': through, 'title': 'Level without a recognised rule',

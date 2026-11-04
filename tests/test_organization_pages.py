@@ -175,8 +175,18 @@ class OrganizationPageTests(unittest.TestCase):
         self.assertEqual(app.selectbox[0].options, ['p91'])  # group-only people get no observations
 
     def test_profile_observations_wait_for_the_current_rules(self):
-        app = self.open('officer@a.test', 'Profiles')  # BOARD carries no assessment_version
+        today = datetime.now(timezone.utc).astimezone(ZoneInfo('Asia/Beirut')).date().isoformat()
+        legacy = {**BOARD, 'people': [{**p, 'days': [{**p['days'][0], 'd': today, 'lvl': 'green'}]}
+                                      for p in BOARD['people']]}  # no assessment_version
+        with patch.object(OrgReader, 'board', lambda self: legacy):
+            app = self.open('officer@a.test', 'Profiles')
         self.assertIn('Published under older rules', ' '.join(m.value for m in app.markdown))
+
+    def test_profile_with_stale_data_draws_no_wellness_conclusion(self):
+        app = self.open('officer@a.test', 'Profiles')  # BOARD's latest day is weeks old
+        text = ' '.join(m.value for m in app.markdown)
+        self.assertIn('No recent data', text)
+        self.assertNotIn('No change from usual pattern', text)
 
 
 if __name__ == '__main__':
