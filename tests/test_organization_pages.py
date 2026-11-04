@@ -172,12 +172,28 @@ class OrganizationPageTests(unittest.TestCase):
         app.radio(key='audit_trend_view').set_value('Group').run()
         rows = {r['Device']: r for r in app.dataframe[0].value.to_dict('records')}
         self.assertEqual((rows['Fitbit']['Days shown'], rows['Fitbit']['Most contributors on a day']), (1, '5'))
+        self.assertNotIn('Days hidden (fewer than 5)', rows['Fitbit'])  # organization users get no hidden counts
         app.selectbox(key='audit_trend_metric').set_value('Resting heart rate').run()
         self.assertFalse(app.exception)
-        rows = {r['Device']: r for r in app.dataframe[0].value.to_dict('records')}
-        self.assertEqual((rows['Fitbit']['Days shown'], rows['Fitbit']['Most contributors on a day']), (0, '<5'))
+        self.assertEqual(len(app.dataframe), 0)  # a device below 5 on every day is not listed at all
         self.assertIn('nothing is shown', ' '.join(i.value for i in app.info))
+        self.assertIn('not listed', ' '.join(c.value for c in app.caption))
 
+    def test_team_group_trends_keep_device_detail(self):
+        app = self.open('team@example.test', 'Trends')
+        app.radio(key='audit_trend_view').set_value('Group').run()
+        app.selectbox(key='audit_trend_metric').set_value('Heart rate variability').run()
+        self.assertFalse(app.exception)
+        self.assertIn('No eligible contributor', ' '.join(i.value for i in app.info))
+
+    def test_switching_between_permitted_people_keeps_working(self):
+        both = [{**c, 'sharing': 'individual'} if c['participant_id'] == 'p92' else c for c in CONSENTS]
+        app = self.open('officer@a.test', 'Trends', consents=both)
+        app.selectbox(key='audit_trend_person').set_value('p92').run()
+        self.assertFalse(app.exception)
+        self.assertFalse(app.error)
+        self.assertEqual({m.label: m.value for m in app.metric}['Days with data'], '1 of 7')
+        self.assertIn('older rules', ' '.join(c.value for c in app.caption))  # BOARD has no assessment_version
 
 if __name__ == '__main__':
     unittest.main()

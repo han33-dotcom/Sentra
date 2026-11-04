@@ -16,6 +16,7 @@ from datetime import date, timedelta
 from statistics import median
 
 from .access import K_ANONYMITY, SHARING, publishable
+from .processing.board import DEVICES
 from .processing.pipeline import ASSESSMENT_VERSION
 from .viewer_data import latest_available_day
 
@@ -28,28 +29,30 @@ METRICS = (
     ('rec', 'WHOOP recovery', '%', 0),
 )
 BASELINES = {'sleep': 'sleep_b', 'rhr': 'rhr_b', 'hrv': 'hrv_b', 'steps': 'steps_b'}
+KNOWN_DEVICES = frozenset(DEVICES.values())  # board device labels with a known measurement meaning
 RECENT_DAYS = 3  # proposed "recently contributing" window; latest measurement day within 3 days
 
 
-def _number(value):
+# Shared board parsing rules for every board consumer (overview, observations, trends).
+def is_number(value):
     return isinstance(value, (int, float)) and not isinstance(value, bool) and value == value
 
 
-def _day(value):
+def board_day(value):
     try:
         return date.fromisoformat(value) if isinstance(value, str) and len(value) == 10 else None
     except ValueError:
         return None
 
 
-def _days(person):
+def valid_days(person):
     """Day rows with a valid ISO date; one malformed row must not hide the valid ones."""
-    return [d for d in person.get('days', ()) if isinstance(d, dict) and _day(d.get('d'))]
+    return [d for d in person.get('days', ()) if isinstance(d, dict) and board_day(d.get('d'))]
 
 
 def latest_group_day(people):
     """Latest valid published day among the already authorized group contributors."""
-    return max((_day(d['d']) for person in people for d in _days(person)), default=None)
+    return max((board_day(d['d']) for person in people for d in valid_days(person)), default=None)
 
 
 def shown_count(count, k=K_ANONYMITY):
@@ -78,10 +81,11 @@ def group_summary(people, contributors, *, end, days=1, k=K_ANONYMITY):
     for key, label, unit, decimals in METRICS:
         by_device = {}
         for person in scoped:
-            values = [d[key] for d in _days(person) if d['d'] in window and _number(d.get(key))]
+            values = [d[key] for d in valid_days(person) if d['d'] in window and is_number(d.get(key))]
             if values:
-                device = person.get('device') if isinstance(person.get('device'), str) else 'Not supplied'
-                by_device.setdefault(device, []).append(median(values))
+                device = person.get('device')
+                if device in KNOWN_DEVICES:  # unknown devices may differ from each other; never pooled
+                    by_device.setdefault(device, []).append(median(values))
         for device in sorted(by_device) or [None]:
             per_person = by_device.get(device, [])
             count = len(per_person)
@@ -114,8 +118,8 @@ def participation(scope, catalog, people, *, today, recent_days=RECENT_DAYS, ass
         for person in people:
             if not isinstance(person, dict) or person.get('id') not in scope:
                 continue
-            latest = max(_days(person), key=lambda d: d['d'], default=None)
-            if (latest and today - timedelta(days=recent_days) <= _day(latest['d']) <= today
+            latest = max(valid_days(person), key=lambda d: d['d'], default=None)
+            if (latest and today - timedelta(days=recent_days) <= board_day(latest['d']) <= today
                     and latest.get('a') is None and latest.get('lvl') in ('green', 'amber', 'red')):
                 assessable.add(person['id'])
     return {'enrolled': len(scope), 'connected': len(connected), 'recently_contributing': len(recent),
@@ -124,14 +128,14 @@ def participation(scope, catalog, people, *, today, recent_days=RECENT_DAYS, ass
 
 def profile(person, *, today):
     """Latest values for one permitted person, compared with their own baseline; missing stays missing."""
-    days = _days(person)
+    days = valid_days(person)
     latest = days[-1] if days else {}
-    through = _day(latest['d']) if latest else None
+    through = board_day(latest['d']) if latest else None
     metrics = []
     for key, label, unit, decimals in METRICS:
-        value = latest.get(key) if _number(latest.get(key)) else None
+        value = latest.get(key) if is_number(latest.get(key)) else None
         baseline_key = BASELINES.get(key)
-        baseline = latest.get(baseline_key) if baseline_key and _number(latest.get(baseline_key)) else None
+        baseline = latest.get(baseline_key) if baseline_key and is_number(latest.get(baseline_key)) else None
         difference = round(value - baseline, decimals) if value is not None and baseline is not None else None
         if value is None:
             note = 'Not supplied for the latest day.'
@@ -141,7 +145,7 @@ def profile(person, *, today):
             note = None
         metrics.append({'key': key, 'label': label, 'unit': unit, 'value': value, 'baseline': baseline,
                         'difference': difference, 'note': note})
-    recent = sum(1 for d in days if today - timedelta(days=6) <= _day(d['d']) <= today)
+    recent = sum(1 for d in days if today - timedelta(days=6) <= board_day(d['d']) <= today)
     return {'id': person.get('id'), 'device': person.get('device'), 'data_through': through,
             'days_old': (today - through).days if through else None, 'days_with_data_last_7': recent,
             'metrics': metrics}

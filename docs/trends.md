@@ -10,7 +10,7 @@ medical assessment.
 
 | View | Who appears | What it shows |
 | --- | --- | --- |
-| One person | Only people who chose `individual` sharing (team: everyone) | Daily readings, the person's own baseline each day, days with data, the period median, the typical difference from their usual value, and how many days met the measure's provisional wellness rule |
+| One person | Only people who chose `individual` sharing (team: everyone) | Daily readings, the person's own baseline each day, days with data, the period median, the typical difference from their usual value, and on how many days the measure's provisional rule was checked and met |
 | Group | Group contributors (`group_only` and `individual`; team: current consent and pilot participants, never withdrawn) | The daily group median, per device |
 
 Measures: sleep (minutes), resting heart rate (bpm), heart rate variability (ms), steps and
@@ -24,17 +24,23 @@ WHOOP recovery (%).
   board: the median of the previous 28 days, needing at least 7 days with a reading. It is
   not recomputed here.
 - **Typical difference**: the median of daily (reading − own baseline) on days that have both.
-- **Days meeting the rule**: the board's own flags (short sleep, resting HR above normal,
-  HRV below normal). Rules are provisional until the medical expert signs them off.
+- **Rule state per day**, from the board only: *met* (its flag), *not checked* (a published reason
+  such as `rhr:baseline_building` or `no_reading`), *checked, not met*, or *no data*. A missing
+  flag alone never counts as calm. If no day was checked the page says "Not enough information";
+  boards from older rules show no rule results. Rules are provisional until the medical expert
+  signs them off.
 - **Group median**: one value per contributing person that day, then the median, separately
-  for Fitbit and WHOOP, which are never pooled.
+  for Fitbit and WHOOP, which are never pooled. Unknown devices are left out.
 
 ## Gaps and small groups
 
 - A day without a reading stays an empty position on the date axis. Nothing is filled or
   interpolated.
 - **Each group day needs at least 5 contributors of its own** (`cohort_k_anonymity` in
-  `processing/thresholds.json`). Smaller days are left out. Counts below 5 show only as "<5".
+  `processing/thresholds.json`). Smaller days are left out and their counts are not returned.
+- Organization users see only devices that reach 5 contributors on some day, and no hidden-day
+  counts, so a small group's (or one person's) wear pattern cannot be read off the table. Team
+  operators keep the per-device detail.
 
 ## Limitations
 
