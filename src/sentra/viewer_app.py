@@ -21,7 +21,7 @@ from .datasets import canonical
 from .viewer_style import BRAND, STYLE
 
 
-ACCESS_TTL_SECONDS=60  # consent/withdrawal changes apply within a minute
+ACCESS_TTL_SECONDS=60  # upper bound within one render; each new render rechecks access
 
 
 def load_organization_rows(email):
@@ -500,6 +500,10 @@ def observations_section(person,*,today,assessment_version):
 
 def main():
     st.set_page_config(page_title='Sentra · Wearable explorer',page_icon='🔎',layout='wide')
+    # A sharing change, withdrawal or removed role must apply on the next render.
+    # Reuse the decision during this render to avoid repeating guarded DB reads.
+    st.session_state.pop('audit_access', None)
+    st.session_state.pop('audit_team_consents', None)
     st.html(STYLE)
     st.sidebar.html(BRAND)
     try:
