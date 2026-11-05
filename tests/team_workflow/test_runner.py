@@ -7,7 +7,7 @@ class RunnerTests(unittest.TestCase):
         event = {"repository": {"full_name": "han33-dotcom/Sentra"},
                  "pull_request": {"number": 15, "head": {"sha": "current"},
                                   "base": {"sha": "base"}}}
-        pr = {"number": 15, "state": "open", "body":
+        pr = {"number": 15, "state": "open", "title": "[SEN-16] Fix the filter", "body":
               "Project: Sentra\nTask URL: https://github.com/han33-dotcom/Sentra/issues/16\n"
               "## What & why\nFix the filter.\n## How tested\nTests passed.\n"
               "## Risks / limitations\nNo live checks.\n",

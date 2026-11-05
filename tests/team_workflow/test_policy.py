@@ -1,6 +1,10 @@
 import unittest
 
-from scripts.team_workflow.policy import validate_pr_metadata, approved_exemptions
+from scripts.team_workflow.policy import validate_pr_metadata as _validate_pr_metadata, approved_exemptions
+
+
+def validate_pr_metadata(body, labels, repo, base, title="[SEN-16] Fix the filter"):
+    return _validate_pr_metadata(body, labels, repo, base, title)
 
 
 def body(project="Sentra", url=None):
