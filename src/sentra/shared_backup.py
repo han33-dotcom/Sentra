@@ -23,8 +23,10 @@ TABLES = ('participants','raw_response_manifest','records','measurements','sessi
 # Consent history, organization roles and enrollment identities (sql/007, sql/008), in restore order.
 # Browser sessions and rate limits are short-lived and excluded; so are credentials, as before.
 PRIVATE_TABLES = ('org.organizations','org.org_users','org.memberships','org.consents',
+                  'org.follow_ups','org.follow_up_events',
                   'enrollment_private.invites','enrollment_private.identities')
-IDENTITY_TABLES = {'org.memberships':'membership_id','org.consents':'consent_id'}
+IDENTITY_TABLES = {'org.memberships':'membership_id','org.consents':'consent_id',
+                   'org.follow_ups':'follow_up_id','org.follow_up_events':'event_id'}
 # Restored storage relative to the source's measured table size (heap, TOAST and indexes). Freshly
 # inserted rows carry none of the source's dead-row bloat, so a small margin suffices; the running
 # guard during insertion still stops the restore before any limit is crossed.
@@ -259,8 +261,10 @@ def verify_backup(reader):
             raise SentraError('Backup original response hash mismatch.')
     return {'status':'verified','created_at':info.get('created_at'),'selection':info.get('selection'),
             'project_url':info.get('project_url'),'tables':counts,'originals':len(objects),'members':len(info['files']),
-            'not_covered':info.get('private_absent',[]) if info.get('private_tables') or info.get('private_absent')
-                          else list(PRIVATE_TABLES),
+            # Tables not installed in the source hold nothing to cover; tables skipped by an audit-only or
+            # partial backup do.
+            'not_covered':[] if info.get('private_tables') or info.get('private_absent') else list(PRIVATE_TABLES),
+            'not_installed':info.get('private_absent',[]),
             'restore_estimate_bytes':restore_estimate(info)}
 
 
@@ -314,7 +318,8 @@ def restore_backup(reader, backend, admin_db, *, empty_audit=False):
             admin_db.execute('set local row_security = off')
             for table,_,_ in tables:
                 if '.' in table and admin_db.execute('select to_regclass(%s)', (table,)).fetchone()[0] is None:
-                    raise SentraError('Apply sql/007 and sql/008 to the target before restoring organization and enrollment tables.')
+                    raise SentraError('Apply the organization, enrollment and follow-up migrations (sql/007, 008, 010) '
+                                      'to the target before restoring those tables.')
             if empty_audit:
                 if any(admin_db.execute(sql.SQL('select exists(select 1 from {})').format(relation(t))).fetchone()[0] for t,_,_ in tables):
                     raise SentraError('All restored tables must be empty for operational restoration; existing data preserved.')

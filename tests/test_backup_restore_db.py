@@ -23,6 +23,14 @@ create table enrollment_private.invites (invite_hash text primary key, org_id te
 create table enrollment_private.identities (provider text not null, identity_hash text not null,
   participant_id text not null references audit.participants, primary key(provider,identity_hash));'''
 
+# The follow-up tables a backup carries, shaped as in sql/010 (#72), which also creates a role and functions.
+FOLLOW_UPS = '''create table org.follow_ups (follow_up_id bigint generated always as identity primary key,
+  org_id text not null references org.organizations, participant_id text references audit.participants,
+  opened_by text not null, opened_at timestamptz not null default now());
+create table org.follow_up_events (event_id bigint generated always as identity primary key,
+  follow_up_id bigint not null references org.follow_ups, recorded_at timestamptz not null default now(),
+  actor text not null, status text not null, assignee text not null, note text not null);'''
+
 
 @unittest.skipUnless(URL, 'set SENTRA_TEST_DATABASE_URL to a throwaway PostgreSQL server to run')
 class BackupRestoreDatabaseTests(unittest.TestCase):
@@ -46,6 +54,7 @@ class BackupRestoreDatabaseTests(unittest.TestCase):
             db.execute(Path('sql/001_foundation.sql').read_text(encoding='utf-8'))
             db.execute(Path('sql/007_organization_access.sql').read_text(encoding='utf-8'))
             db.execute(ENROLLMENT)
+            db.execute(FOLLOW_UPS)
             return db, make_conninfo(URL, dbname=name)
         cls.source, info = database()
         cls.admin = psycopg.connect(info, autocommit=True)  # second session, as the admin role in production
@@ -64,6 +73,11 @@ class BackupRestoreDatabaseTests(unittest.TestCase):
         db.execute("insert into org.consents(membership_id,participant_id,org_id,consent_version,withdrawn,recorded_at) "
                    "select membership_id,participant_id,org_id,'1.0',true,'2026-11-02' from org.memberships where participant_id='p02'")
         db.execute("insert into enrollment_private.identities values ('whoop',%s,'p01')", ('a' * 64,))
+        fid = db.execute("insert into org.follow_ups(org_id,participant_id,opened_by) values ('org-a','p01','officer@example.org') "
+                         "returning follow_up_id").fetchone()[0]
+        for status in ('open', 'resolved'):
+            db.execute("insert into org.follow_up_events(follow_up_id,actor,status,assignee,note) "
+                       "values (%s,'officer@example.org',%s,'officer@example.org','Synthetic note')", (fid, status))
         db.execute("insert into audit.connection_state values ('p01','whoop','sleep','authorized',null,'[]','{}',now())")
 
     @classmethod
@@ -95,6 +109,8 @@ class BackupRestoreDatabaseTests(unittest.TestCase):
             result = m.verify_backup(reader)
             self.assertEqual((result['tables']['org.consents'], result['tables']['org.memberships'],
                               result['tables']['enrollment_private.identities'], result['not_covered']), (3, 2, 1, []))
+            self.assertEqual((result['tables']['org.follow_ups'], result['tables']['org.follow_up_events'],
+                              result['not_installed']), (1, 2, []))
             self.assertEqual(result['restore_estimate_bytes'],
                              int(sum(reader.info['table_bytes'].values()) * m.RESTORE_FACTOR) + 16_000_000)
             backend = self.Backend(self.source)
@@ -109,6 +125,11 @@ class BackupRestoreDatabaseTests(unittest.TestCase):
             self.assertGreater(new, 3)
             # New enrollments continue after the restored participant numbers (p150 restored).
             self.assertEqual(self.target.execute("select nextval('enrollment_private.participant_number')").fetchone()[0], 151)
+            # Follow-up history keeps its ids, and new events continue after them.
+            event = self.target.execute("insert into org.follow_up_events(follow_up_id,actor,status,assignee,note) "
+                                        "select follow_up_id,'officer@example.org','ongoing','officer@example.org','Synthetic' "
+                                        "from org.follow_ups returning event_id").fetchone()[0]
+            self.assertGreater(event, 2)
             with self.assertRaises(m.SentraError):  # never over existing rows
                 m.restore_backup(reader, self.Backend(self.source), self.target, empty_audit=True)
 

@@ -62,8 +62,10 @@ not to the 28-day baseline, because baselines use daily values.
   ```
 
 - **Coverage:** a full backup also includes the consent history and organization tables
-  (`org.organizations`, `org.org_users`, `org.memberships`, `org.consents`) and the enrollment
-  invitations and provider identities (`enrollment_private.invites`, `identities`). They are read
+  (`org.organizations`, `org.org_users`, `org.memberships`, `org.consents`), the follow-up
+  history (`org.follow_ups`, `org.follow_up_events`, once sql/010 is installed), and the enrollment
+  invitations and provider identities (`enrollment_private.invites`, `identities`). Tables not yet
+  installed are listed by `shared-backup-verify` as `not_installed` and hold nothing. They are read
   by the admin role inside the same database snapshot as the audit tables, so the full backup
   needs `.private/supabase-admin.json`. Excluded on purpose: credentials, enrollment browser
   sessions and rate limits. Partial (`--participant`/`--provider`/`--dataset`) and `--audit-only`
