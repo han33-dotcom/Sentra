@@ -249,6 +249,25 @@ class EnrollmentPostgresTests(unittest.TestCase):
         with self.admin_db() as db:
             self.assertEqual(db.execute('select count(*) from org.consents where participant_id=%s', (status['participant_id'],)).fetchone()[0], 3)
 
+    def test_operator_summary_is_bounded_scoped_and_does_not_treat_unknown_as_assessable(self):
+        person = self.complete(invite=self.invite)
+        with open_store(self.config) as store:
+            summary = store.summary(self.org)
+            self.assertEqual(summary, dict(enrolled=1, connected=1, recently_contributing=0,
+                assessable=None, assessment_unknown=1, withdrawn=0))
+            self.assertNotIn(person['participant_id'], json.dumps(summary))
+            self.assertEqual(store.summary('different-organization')['enrolled'], 0)
+        headers = {**self.headers, 'X-CSRF-Token': person['csrf']}
+        self.assertEqual(self.client.post('/api/withdraw', json={}, headers=headers).status_code, 200)
+        with self.admin_db() as db:
+            before = db.execute('select count(*) from org.consents').fetchone()[0]
+        with open_store(self.config) as store:
+            summary = store.summary(self.org)
+            self.assertEqual(summary, dict(enrolled=0, connected=0, recently_contributing=0,
+                assessable=0, assessment_unknown=0, withdrawn=1))
+        with self.admin_db() as db:
+            self.assertEqual(db.execute('select count(*) from org.consents').fetchone()[0], before)
+
     def test_add_second_provider_and_reject_someone_elses_existing_identity(self):
         status = self.complete(invite=self.invite)
         pending = self.pending(self.client, status, 'google_health')

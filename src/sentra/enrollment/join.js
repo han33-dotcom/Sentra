@@ -3,15 +3,28 @@
   const el = id => document.getElementById(id);
   let state = null;
   let busy = false;
+  let invitation = null;
+  let initialization = Promise.resolve();
   async function api(path, body) {
-    const response = await fetch(path, {
-      method: body === undefined ? "GET" : "POST", credentials: "same-origin",
-      headers: {"Content-Type": "application/json", ...(state ? {"X-CSRF-Token": state.csrf} : {})},
-      ...(body === undefined ? {} : {body: JSON.stringify(body)})
-    });
-    const result = await response.json();
-    if (!response.ok) throw Object.assign(new Error(result.message || "Please try again."), {status: response.status});
-    return result;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    try {
+      let response;
+      try {
+        response = await fetch(path, {
+          method: body === undefined ? "GET" : "POST", credentials: "same-origin", signal: controller.signal,
+          headers: {"Content-Type": "application/json", ...(state ? {"X-CSRF-Token": state.csrf} : {})},
+          ...(body === undefined ? {} : {body: JSON.stringify(body)})
+        });
+      } catch (error) {
+        throw new Error("Sentra is taking longer to respond. Please wait a moment and try again.");
+      }
+      let result;
+      try { result = await response.json(); }
+      catch (error) { throw new Error("Sentra is temporarily unavailable. Please wait a moment and try again."); }
+      if (!response.ok) throw Object.assign(new Error(result.message || "Please try again."), {status: response.status});
+      return result;
+    } finally { clearTimeout(timeout); }
   }
   function message(text, error = false) {
     el("notice").hidden = true; el("error").hidden = true;
@@ -58,6 +71,8 @@
       el("data-status").textContent = !state.enrolled ? "Not contributing" : state.recently_contributing ? "Contributing" : state.latest_received_at ? "No recent readings" : "Waiting for first data";
       el("data-detail").textContent = !state.enrolled
         ? "Your sharing and collection have stopped. Stored data follows the retention policy. A new invitation is needed to join again."
+        : !state.connected
+          ? "Reconnect your wearable to resume its connection. Previous readings do not establish current collection or a ready assessment."
         : state.latest_received_at
           ? "A successful connection and received data do not guarantee recent usable coverage or a ready assessment."
           : state.collection_paused ? "Your account is connected. Data will appear after collection is enabled by the team. You don’t need to stay on this page."
@@ -86,19 +101,19 @@
     const result = await api("/api/withdraw", {}); el("withdraw-confirm").hidden = true; await refresh(); message(result.message);
   }));
   el("logout").addEventListener("click", () => action(async () => { await api("/api/logout", {}); window.location.assign("/join"); }));
-  async function initialize() {
+  async function load(outcome) {
     state = null;
+    el("retry").hidden = true;
     el("error").hidden = true; el("notice").hidden = true;
     el("form-content").hidden = true; el("loading").hidden = false;
     el("accepted").checked = false; el("demonstration").checked = false;
     document.querySelector('input[name="sharing"][value="group_only"]').checked = true;
-    const fragment = new URLSearchParams(window.location.hash.slice(1));
-    const invite = fragment.get("invite");
-    const outcome = new URLSearchParams(window.location.search).get("connection");
-    // Invitation stays in the fragment only until this page loads; never in HTTP URLs/referrers.
-    history.replaceState(null, "", window.location.pathname);
+    const invite = invitation;
     try {
-      if (invite) state = await api("/api/session", {invite});
+      if (invite) {
+        state = await api("/api/session", {invite});
+        if (invitation === invite) invitation = null;
+      }
       else {
         try { state = await api("/api/status"); }
         catch (error) { if (error.status !== 401) throw error; state = await api("/api/session", {}); }
@@ -106,8 +121,25 @@
       render();
       if (outcome === "cancelled") message("Connection cancelled. No changes were made by this attempt. You can try again.");
       if (outcome === "failed") message("Connection could not be completed. Please try again or ask the Sentra team for help.", true);
-    } catch (error) { el("loading").hidden = true; message(error.message, true); }
+    } catch (error) { el("loading").hidden = true; message(error.message, true); el("retry").hidden = false; }
   }
+  function initialize() {
+    const fragment = new URLSearchParams(window.location.hash.slice(1));
+    const invite = fragment.get("invite");
+    if (invite) invitation = invite;
+    const outcome = new URLSearchParams(window.location.search).get("connection");
+    // Remove the private fragment immediately, including while a previous load is in flight.
+    history.replaceState(null, "", window.location.pathname);
+    // Serialize loads so an older response cannot overwrite the new invitation's session cookie.
+    // A load that fails outside its own error handling must not stop later ones (Retry, a new
+    // invitation link): report it here so the queue always continues.
+    initialization = initialization.then(() => load(outcome)).catch(() => {
+      try { el("loading").hidden = true; message("Something went wrong. Please try again.", true); el("retry").hidden = false; }
+      catch (ignored) { /* nothing more can be shown */ }
+    });
+    return initialization;
+  }
+  el("retry").addEventListener("click", () => action(initialize));
   window.addEventListener("hashchange", initialize);
   initialize();
 })();

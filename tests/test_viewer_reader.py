@@ -46,6 +46,23 @@ class ViewerReaderTests(unittest.TestCase):
             m.ViewerReader({},Limits(),denied,db=db).organization_rows()
         db.cursor.assert_not_called()
 
+    def test_board_and_group_board_keep_individual_and_group_scopes_apart(self):
+        from unittest import mock
+        m=self.module()
+        reader=m.ViewerReader.__new__(m.ViewerReader)
+        reader.credentials,reader.principal,reader.reserve={},lambda:'officer@a.test',lambda amount:None
+        reader.can_view=lambda p:p=='p91'
+        reader.can_count=lambda p:p in ('p91','p92')
+        body=b'{"people":[{"id":"p91","days":[]},{"id":"p92","days":[]},{"id":"p93","days":[]}]}'
+        with mock.patch('sentra.viewer_reader.PrivateStorage') as storage:
+            storage.return_value.request.return_value=(200,body)
+            self.assertEqual([p['id'] for p in reader.board()['people']],['p91'])
+            self.assertEqual([p['id'] for p in reader.group_board()['people']],['p91','p92'])
+        rows=[{'participant_id':p} for p in ('p91','p92','p93')]
+        reader._rows=lambda *a,**k:rows
+        self.assertEqual([r['participant_id'] for r in reader.catalog()],['p91'])
+        self.assertEqual([r['participant_id'] for r in reader.group_catalog()],['p91','p92'])
+
     def test_curated_records_recheck_access_and_refuse_oversized_before_transfer(self):
         m=self.module()
         self.assertTrue(hasattr(m.ViewerReader,'records'),'Bounded curated read missing')

@@ -217,6 +217,10 @@ class EnrollmentStore:
         c = self._consent(pid)
         if not c or c['org_id'] != value['account']['org_id']:
             raise EnrollmentError('Your participation changed. Please sign in again.', 401)
+        public.update(self._participation(pid, c))
+        return public
+
+    def _participation(self, pid, c):
         org = self.db.execute('select display_name from org.organizations where org_id=%s', (c['org_id'],)).fetchone()[0]
         providers = {}
         rows = self.db.execute('select provider,refresh_status,encrypted_token_bundle from collector_private.provider_credentials where participant_id=%s', (pid,)).fetchall()
@@ -230,13 +234,39 @@ class EnrollmentStore:
             recent = 0 <= (datetime.now(ZoneInfo('Asia/Beirut')).date() - day).days <= 3
         except (TypeError, ValueError):
             recent = False
-        public.update(participant_id=pid, organization=org, sharing=c['sharing'], demonstration=c['demonstration'],
+        return dict(participant_id=pid, organization=org, sharing=c['sharing'], demonstration=c['demonstration'],
             enrolled=active, connected=active and any(s == 'active' for s in providers.values()),
             recently_contributing=active and recent,
             providers={p: ('connected' if s == 'active' else 'reconnect_required') for p, s in providers.items()},
             # Assessment needs actual eligibility results, not a count of arbitrary readings.
             assessable=None, **metadata)
-        return public
+
+    def summary(self, org_id):
+        """Private operator counts, never identities, readings or credentials."""
+        people = self.db.execute('''select participant_id from org.current_consent
+            where org_id=%s order by participant_id limit 101''', (org_id,)).fetchall()
+        if len(people) > 100:
+            raise EnrollmentError('Select a smaller organization for this bounded pilot summary.')
+        counts = dict(enrolled=0, connected=0, recently_contributing=0,
+                      assessable=0, assessment_unknown=0, withdrawn=0)
+        for (pid,) in people:
+            # Credential envelopes/status queries get their own conservative allowance.
+            self.db.execute('select collector_private.reserve_egress(65536,3500000000)')
+            consent = self._consent(pid)
+            if not consent or consent['org_id'] != org_id:
+                continue
+            status = self._participation(pid, consent)
+            for key in ('enrolled', 'connected', 'recently_contributing'):
+                counts[key] += int(status[key])
+            counts['withdrawn'] += int(consent['withdrawn'])
+            if status['enrolled']:
+                if status['assessable'] is None:
+                    counts['assessment_unknown'] += 1
+                else:
+                    counts['assessable'] += int(status['assessable'])
+        if counts['assessment_unknown']:
+            counts['assessable'] = None  # Unknown is not a verified zero eligible people.
+        return counts
 
     def change(self, sid, csrf, choices=None, *, withdraw=False):
         with self.db.transaction():
