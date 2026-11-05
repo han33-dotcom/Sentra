@@ -131,7 +131,12 @@
     // Remove the private fragment immediately, including while a previous load is in flight.
     history.replaceState(null, "", window.location.pathname);
     // Serialize loads so an older response cannot overwrite the new invitation's session cookie.
-    initialization = initialization.then(() => load(outcome));
+    // A load that fails outside its own error handling must not stop later ones (Retry, a new
+    // invitation link): report it here so the queue always continues.
+    initialization = initialization.then(() => load(outcome)).catch(() => {
+      try { el("loading").hidden = true; message("Something went wrong. Please try again.", true); el("retry").hidden = false; }
+      catch (ignored) { /* nothing more can be shown */ }
+    });
     return initialization;
   }
   el("retry").addEventListener("click", () => action(initialize));

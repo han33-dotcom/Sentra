@@ -10,7 +10,7 @@ const status = extra => ({csrf:'synthetic-csrf', joining:true, signed_in:false,
   providers_available:['google_health'], consent_version:'1.0', organization:'Synthetic pilot', ...extra});
 const response = value => ({ok:true, status:200, json:async()=>value});
 
-function browser(fetch, {hash='#invite=synthetic-private-invitation', shortTimeout=false}={}) {
+function browser(fetch, {hash='#invite=synthetic-private-invitation', shortTimeout=false, prepare=()=>{}}={}) {
   const nodes = new Map();
   const node = id => {
     if (!nodes.has(id)) nodes.set(id, {hidden:['retry','error','notice'].includes(id), textContent:'',
@@ -18,6 +18,7 @@ function browser(fetch, {hash='#invite=synthetic-private-invitation', shortTimeo
       addEventListener(name, handler){this.events[name]=handler;}});
     return nodes.get(id);
   };
+  prepare(node);
   const group = node('group'); group.value='group_only'; group.checked=true;
   const individual = node('individual'); individual.value='individual';
   const google = node('google'); google.dataset.provider='google_health';
@@ -102,4 +103,20 @@ test('an expired connection is not described as connected while waiting for data
   assert.equal(b.node('connection').textContent,'Reconnect required');
   assert.match(b.node('data-detail').textContent,/reconnect/i);
   assert.doesNotMatch(b.node('data-detail').textContent,/account is connected/);
+});
+
+test('a load that fails outside its error handling does not block later loads', async()=>{
+  let broken=true;
+  const b=browser(async()=>response(status()),{prepare:node=>{
+    const retry=node('retry'); let hidden=true;
+    Object.defineProperty(retry,'hidden',{get:()=>hidden,set:value=>{
+      if(broken){broken=false;throw new Error('synthetic page failure');} hidden=value;}});
+  }});
+  await flush();
+  assert.equal(b.calls.length,0);  // the first load stopped before any request
+  b.location.hash='#invite=second-synthetic-private-invitation';
+  await b.events.hashchange(); await flush();
+  assert.equal(b.calls.length,1);
+  assert.equal(JSON.parse(b.calls[0].options.body).invite,'second-synthetic-private-invitation');
+  assert.equal(b.node('form-content').hidden,false);
 });
