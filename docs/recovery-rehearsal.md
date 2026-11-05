@@ -79,7 +79,9 @@ differs. The original responses are uploaded into the rehearsal project's own
 
 After an `--empty-audit` restore, membership and consent ids continue after the restored ones,
 and enrollment's participant-number allocator moves past the highest restored `pNNN`. A new
-participant therefore never collides with a restored one. Record a synthetic test enrollment
+participant therefore never collides with a restored one. If the restored IDs already reach the
+allocator's maximum (p9999), it is kept at that bound: the restore still succeeds, and new
+enrollment reports that capacity is exhausted. Record a synthetic test enrollment
 after the rehearsal if the enrollment service is deployed against the target.
 
 ## Not covered (record as unverified)

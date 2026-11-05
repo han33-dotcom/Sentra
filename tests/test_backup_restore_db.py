@@ -51,6 +51,7 @@ class BackupRestoreDatabaseTests(unittest.TestCase):
         cls.admin = psycopg.connect(info, autocommit=True)  # second session, as the admin role in production
         cls.target, _ = database()  # an empty, migrated replacement project
         cls.reader_info = info
+        cls.database = staticmethod(database)
         db = cls.source
         db.execute("insert into audit.participants values ('p01'),('p02'),('p150')")
         db.execute("insert into org.organizations(org_id,display_name) values ('org-a','A')")
@@ -139,6 +140,27 @@ class BackupRestoreDatabaseTests(unittest.TestCase):
             result = m.verify_backup(self.backup(folder, None))
             self.assertEqual(set(result['not_covered']), set(m.PRIVATE_TABLES))
             self.assertNotIn('org.consents', result['tables'])
+
+
+    def test_restore_keeps_an_exhausted_participant_sequence_recoverable(self):
+        # sql/008 allows p9999 with MAXVALUE 9999: advancing past it must not roll the restore back.
+        self.source.execute("insert into audit.participants values ('p9999')")
+        try:
+            target, _ = self.database()
+            try:
+                with tempfile.TemporaryDirectory() as folder:
+                    reader = self.backup(folder, self.admin)
+                    restored = m.restore_backup(reader, self.Backend(self.source), target, empty_audit=True)
+                self.assertEqual(restored['status'], 'restored_and_verified')
+                self.assertEqual(target.execute("select count(*) from audit.participants").fetchone()[0], 4)
+                self.assertEqual(target.execute('select last_value,is_called from enrollment_private.participant_number').fetchone(),
+                                 (9999, True))
+                with self.assertRaises(self.psycopg.errors.SequenceGeneratorLimitExceeded):
+                    target.execute("select nextval('enrollment_private.participant_number')")  # capacity, not recovery
+            finally:
+                target.close()
+        finally:
+            self.source.execute("delete from audit.participants where participant_id='p9999'")
 
 
 if __name__ == '__main__':

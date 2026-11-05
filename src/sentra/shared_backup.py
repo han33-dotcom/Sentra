@@ -283,8 +283,15 @@ def advance_participant_numbers(db):
     last, called = db.execute('select last_value,is_called from enrollment_private.participant_number').fetchone()
     restored = db.execute(r"""select coalesce(max(substr(participant_id,2)::int),0) from audit.participants
         where participant_id ~ '^p[0-9]{2,4}$'""").fetchone()[0]
+    maximum = db.execute("""select max_value from pg_sequences
+        where schemaname='enrollment_private' and sequencename='participant_number'""").fetchone()[0]
     following = max(last + 1 if called else last, restored + 1)
-    db.execute("select setval('enrollment_private.participant_number',%s,false)", (following,))
+    if following > maximum:
+        # Exhausted (e.g. p9999 restored): keep it at its bound so recovery still succeeds; new
+        # enrollment then reports capacity exhaustion on its own instead of blocking the restore.
+        db.execute("select setval('enrollment_private.participant_number',%s,true)", (maximum,))
+    else:
+        db.execute("select setval('enrollment_private.participant_number',%s,false)", (following,))
 
 
 def restore_backup(reader, backend, admin_db, *, empty_audit=False):
