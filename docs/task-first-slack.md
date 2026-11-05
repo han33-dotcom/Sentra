@@ -66,6 +66,12 @@ Use the reviewed [Slack app manifest](../.github/slack-app-manifest.json) for
   has joined. Add the bot only to `#fyp-sentra` (`C0C92DZ9TN0`). Do not join other
   channels or grant private-channel/history, user-token or administrator scopes.
 
+In `#fyp-sentra`, `channels:history` can return messages written by channel members.
+Use it only to verify access to the target channel and to recover an uncertain
+delivery. The worker scans a bounded portion of history and uses only the
+timestamp of a message matching its own bot user ID, the `sentra_task_pr` event
+type and the pending delivery key.
+
 Store the installed bot token only as repository Actions secret
 `TEAM_SLACK_BOT_TOKEN`, through masked secure credential entry. Never paste it into
 chat, an issue, a PR, a command argument, logs or a committed file. The connected

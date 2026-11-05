@@ -91,6 +91,11 @@ its remaining implementation PRs are merged. `Related to`, dependency links,
 comments and fenced examples do not declare implementation scope. A release into
 main does not duplicate implementation evidence from PRs into develop.
 
+The issue prefix applies to every Sentra issue, including closed issues and issues
+opened by outside contributors. This preserves the same issue identity in references
+and board cards. Adding a prefix does not enroll an issue in the Project or change
+its status.
+
 The trusted default-branch job repairs generated issue prefixes and open team PR
 title prefixes on issue/PR events and daily reconciliation. It preserves the human
 description, reads current metadata before edits, and writes only changed titles
