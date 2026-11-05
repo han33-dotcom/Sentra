@@ -8,10 +8,17 @@ contingency testing (see [retention-evidence.md](retention-evidence.md), referen
 ## Where to restore
 
 **Not into the live project.** `shared-restore` without `--empty-audit` creates an isolated
-`sentra_restore_*` schema in the *same* database. Before writing, its capacity guard requires
-current usage plus about 8 × the backup's uncompressed table size to fit under the 400 MB
-database guard. At the last measurement the live database used 310 MB (storage-plan.md), so
-a full rehearsal there would be refused, and it would compete with collection headroom anyway.
+`sentra_restore_*` schema in the *same* database, which doubles the data. That cannot fit beside
+the live data under the 400 MB database guard, and it would compete with collection headroom anyway.
+
+**Size check.** Before writing, the restore asks the capacity guard for the source's measured
+table sizes (recorded in the backup manifest as `table_bytes`, including indexes) × 1.05 + 16 MB.
+`shared-backup-verify` prints this as `restore_estimate_bytes`. While rows are inserted, the guard
+is rechecked after every ~1 MB of input, so the restore stops and rolls back before any limit is
+crossed. Backups taken before `table_bytes` existed fall back to their serialized size, which is
+larger than the real storage: take a fresh backup before a full rehearsal. A full restore fits in an
+empty Free project only while the live audit tables plus this margin stay below the guard. Compare
+`restore_estimate_bytes` with the target's `shared-status` first.
 
 Use a **separate, throwaway Supabase Free project** and a **separate checkout** for it. A
 different `--config` file name in the live checkout is not enough: `load_connection()` and
@@ -70,10 +77,18 @@ differs. The original responses are uploaded into the rehearsal project's own
 | Processing from restored data | board and daily features identical to the live run for the same day | |
 | Time to restore | — | |
 
+After an `--empty-audit` restore, membership and consent ids continue after the restored ones,
+and enrollment's participant-number allocator moves past the highest restored `pNNN`. A new
+participant therefore never collides with a restored one. If the restored IDs already reach the
+allocator's maximum (p9999), it is kept at that bound: the restore still succeeds, and new
+enrollment reports that capacity is exhausted. Record a synthetic test enrollment
+after the rehearsal if the enrollment service is deployed against the target.
+
 ## Not covered (record as unverified)
 
-- `org` consent and `enrollment_private` tables, which backups do not include yet (see
-  retention-policy.md).
+- Enrollment browser sessions and rate limits, which are short-lived and excluded on purpose.
+  The rehearsal target needs sql/007 and sql/008 applied (after `shared-bootstrap`), or the
+  restore stops before writing the organization and enrollment tables.
 - Provider credentials, storage accounts and keys. They are excluded on purpose, so after
   a real loss participants must reconnect and keys come from secure recovery.
 - Parquet tiers and the board. They are derived and rebuilt from the restored audit data.
