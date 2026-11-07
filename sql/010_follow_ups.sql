@@ -38,12 +38,16 @@ create trigger follow_up_events_no_truncate before truncate on org.follow_up_eve
  for each statement execute function org.reject_follow_up_change();
 
 -- Checks shared by both writes. The signed-in e-mail is verified by the viewer's Google sign-in and
--- passed in; the database re-checks every organization and consent rule from its own rows.
-create function org.check_follow_up(actor text, org text, pid text, assignee text, note text) returns void
+-- passed in; the database re-checks every organization and consent rule from its own rows. Officers
+-- open and update follow-ups; the current assignee (officer or reviewer) may update their own.
+create function org.check_follow_up(actor text, org text, pid text, assignee text, note text,
+                                    current_assignee text default null) returns void
 language plpgsql stable security definer set search_path='' as $$
 begin
- if not exists (select 1 from org.org_users u where u.org_id=org and u.email=actor and u.active and u.role='officer') then
-  raise exception 'Only an active officer of this organization can record follow-ups.' using errcode='42501';
+ if not exists (select 1 from org.org_users u where u.org_id=org and u.email=actor and u.active
+                and (u.role='officer' or u.email=current_assignee)) then
+  raise exception 'Only an active officer of this organization, or the current assignee, can record follow-ups.'
+   using errcode='42501';
  end if;
  if not exists (select 1 from org.org_users u where u.org_id=org and u.email=assignee and u.active) then
   raise exception 'The assignee must be an active officer or reviewer of this organization.' using errcode='42501';
@@ -70,14 +74,16 @@ end $$;
 
 create function org.update_follow_up(actor text, fid bigint, new_status text, assignee text, note text) returns void
 language plpgsql security definer set search_path='' as $$
-declare f org.follow_ups;
+declare f org.follow_ups; holder text;
 begin
- select * into f from org.follow_ups where follow_up_id=fid for share;
+ select * into f from org.follow_ups where follow_up_id=fid for update;
  if not found then
   raise exception 'Follow-up not found.' using errcode='42501';
  end if;
+ select e.assignee into holder from org.follow_up_events e where e.follow_up_id=fid
+  order by e.recorded_at desc, e.event_id desc limit 1;
  -- A withdrawn or downgraded consent also stops further notes about that person.
- perform org.check_follow_up(actor, f.org_id, f.participant_id, assignee, note);
+ perform org.check_follow_up(actor, f.org_id, f.participant_id, assignee, note, holder);
  if new_status not in ('open','ongoing','resolved') then
   raise exception 'Status must be open, ongoing or resolved.' using errcode='22023';
  end if;
@@ -92,7 +98,7 @@ do $$ declare t text; begin
   execute format('create policy viewer_read on org.%I for select to sentra_viewer using (true)',t);
  end loop;
 end $$;
-revoke all on function org.reject_follow_up_change(),org.check_follow_up(text,text,text,text,text),
+revoke all on function org.reject_follow_up_change(),org.check_follow_up(text,text,text,text,text,text),
  org.open_follow_up(text,text,text,text,text),org.update_follow_up(text,bigint,text,text,text)
  from public,anon,authenticated,sentra_viewer,sentra_collector;
 grant select on org.follow_ups,org.follow_up_events to sentra_viewer;

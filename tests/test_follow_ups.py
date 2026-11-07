@@ -4,7 +4,7 @@ import unittest
 
 from sentra.access import resolve
 from sentra.errors import SentraError
-from sentra.follow_ups import assignees, can_record, clean_note, history, visible
+from sentra.follow_ups import assignees, can_record, can_update, clean_note, history, shared_pairs, visible
 
 USERS = [{'org_id': 'org-a', 'email': 'officer@a.test', 'role': 'officer', 'active': True},
          {'org_id': 'org-a', 'email': 'reviewer@a.test', 'role': 'reviewer', 'active': True},
@@ -18,39 +18,50 @@ def at(hour):
     return datetime(2026, 11, 4, hour, tzinfo=timezone.utc)
 
 
-FOLLOW_UPS = [{'follow_up_id': 1, 'org_id': 'org-a', 'participant_id': 'p91'},
-              {'follow_up_id': 2, 'org_id': 'org-a', 'participant_id': None},
-              {'follow_up_id': 3, 'org_id': 'org-a', 'participant_id': 'p92'},   # sharing since reduced
-              {'follow_up_id': 4, 'org_id': 'org-b', 'participant_id': None},
-              {'follow_up_id': 5, 'org_id': 'org-a', 'participant_id': None}]    # no events: incomplete
+def row(fid, org, pid, status, assignee='reviewer@a.test', count=1):
+    return {'follow_up_id': fid, 'org_id': org, 'participant_id': pid, 'status': status, 'assignee': assignee,
+            'note': f'note {fid}', 'updated_at': at(10), 'event_count': count}
+
+
+ROWS = [row(1, 'org-a', 'p91', 'ongoing', 'officer@a.test', count=2),
+        row(2, 'org-a', None, 'resolved'),
+        row(3, 'org-a', 'p92', 'open'),        # sharing since reduced to group_only
+        row(4, 'org-b', None, 'open', 'officer@b.test')]
 EVENTS = [{'event_id': 2, 'follow_up_id': 1, 'recorded_at': at(10), 'status': 'ongoing', 'assignee': 'officer@a.test', 'note': 'b'},
-          {'event_id': 1, 'follow_up_id': 1, 'recorded_at': at(9), 'status': 'open', 'assignee': 'reviewer@a.test', 'note': 'a'},
-          {'event_id': 3, 'follow_up_id': 2, 'recorded_at': at(9), 'status': 'resolved', 'assignee': 'reviewer@a.test', 'note': 'c'},
-          {'event_id': 4, 'follow_up_id': 3, 'recorded_at': at(9), 'status': 'open', 'assignee': 'reviewer@a.test', 'note': 'd'},
-          {'event_id': 5, 'follow_up_id': 4, 'recorded_at': at(9), 'status': 'open', 'assignee': 'officer@b.test', 'note': 'e'}]
+          {'event_id': 1, 'follow_up_id': 1, 'recorded_at': at(9), 'status': 'open', 'assignee': 'reviewer@a.test', 'note': 'a'}]
 
 
 class FollowUpTests(unittest.TestCase):
     def access(self, email):
         return resolve(email, team_emails=['team@example.test'], org_users=USERS, consents=CONSENTS)
 
-    def test_history_uses_the_latest_event_and_keeps_every_step(self):
-        items = {i['follow_up_id']: i for i in history(FOLLOW_UPS, EVENTS)}
+    def test_current_state_comes_from_the_latest_event_not_the_history_page(self):
+        items = {i['follow_up_id']: i for i in history(ROWS, EVENTS[1:])}  # history page lacks the latest event
         self.assertEqual((items[1]['status'], items[1]['assignee']), ('ongoing', 'officer@a.test'))
-        self.assertEqual([e['status'] for e in items[1]['events']], ['open', 'ongoing'])
-        self.assertNotIn(5, items)
+        self.assertEqual(([e['status'] for e in items[1]['events']], items[1]['history_complete']), (['open'], False))
+        self.assertEqual([e['event_id'] for e in {i['follow_up_id']: i for i in history(ROWS, EVENTS)}[1]['events']], [1, 2])
+
+    def test_follow_ups_about_people_who_stopped_sharing_are_closed(self):
+        items = {i['follow_up_id']: i for i in history(ROWS, EVENTS, shared=shared_pairs(CONSENTS))}
+        self.assertEqual((items[3]['status'], items[3]['closed_reason']),
+                         ('resolved', 'Sharing ended; no further updates are possible.'))
+        self.assertEqual((items[1]['status'], items[1]['closed_reason']), ('ongoing', None))
+        self.assertIsNone(items[4]['closed_reason'])  # group follow-ups are unaffected
 
     def test_notes_follow_organization_and_sharing_boundaries(self):
-        items = history(FOLLOW_UPS, EVENTS)
+        items = history(ROWS, EVENTS)
         self.assertEqual(sorted(i['follow_up_id'] for i in visible(items, self.access('officer@a.test'))), [1, 2])
         self.assertEqual(sorted(i['follow_up_id'] for i in visible(items, self.access('reviewer@a.test'))), [1, 2])
         self.assertEqual([i['follow_up_id'] for i in visible(items, self.access('officer@b.test'))], [4])
         self.assertEqual(len(visible(items, self.access('team@example.test'))), 4)
 
-    def test_only_officers_record_and_assignees_are_active_members(self):
-        self.assertTrue(can_record(self.access('officer@a.test')))
-        self.assertFalse(can_record(self.access('reviewer@a.test')))
-        self.assertFalse(can_record(self.access('team@example.test')))
+    def test_officers_open_and_assignees_update_their_own(self):
+        officer, reviewer, team = (self.access(e) for e in ('officer@a.test', 'reviewer@a.test', 'team@example.test'))
+        self.assertEqual((can_record(officer), can_record(reviewer), can_record(team)), (True, False, False))
+        mine, theirs = row(5, 'org-a', None, 'open', 'reviewer@a.test'), row(6, 'org-a', None, 'open', 'officer@a.test')
+        self.assertEqual((can_update(reviewer, mine), can_update(reviewer, theirs)), (True, False))
+        self.assertEqual((can_update(officer, theirs), can_update(team, mine)), (True, False))
+        self.assertFalse(can_update(officer, {**mine, 'closed_reason': 'Sharing ended'}))
         self.assertEqual(assignees(USERS, 'org-a'), ['officer@a.test', 'reviewer@a.test'])
 
     def test_notes_are_brief_and_never_empty(self):

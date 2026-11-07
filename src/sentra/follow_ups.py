@@ -5,7 +5,8 @@ same boundaries as the information they are about:
 - team operators see every follow-up but record none (they are not organization users);
 - an organization user sees only their own organization's follow-ups, and a follow-up about one
   participant only while that participant shares individual details with them;
-- only an active officer records or updates; the assignee is any active officer or reviewer.
+- only an active officer opens a follow-up; officers and the current assignee (any active officer or
+  reviewer) update it. A follow-up about someone who stopped sharing individual details is closed.
 The database re-checks every write rule; these checks decide what the page offers and shows.
 """
 from .errors import SentraError
@@ -16,19 +17,25 @@ GUIDANCE = ('Wellness wording only: what was observed and what was agreed. No di
             'names or contact information.')
 
 
-def history(follow_ups, events):
-    """Follow-ups with their events oldest first and the latest event as the current state."""
-    by_id = {}
+def history(rows, events, *, shared=None):
+    """Follow-ups with their authoritative current state and their latest events, oldest first.
+
+    `rows` already carry the latest event's status, assignee, note and time (fetched separately from the
+    history page). `shared`, when given, is the set of (participant, organization) pairs with current
+    individual sharing: a follow-up about anyone else can take no further updates, so it is shown as
+    closed rather than open forever."""
+    trails = {}
     for event in sorted(events, key=lambda e: (e['recorded_at'], e['event_id'])):
-        by_id.setdefault(event['follow_up_id'], []).append(event)
+        trails.setdefault(event['follow_up_id'], []).append(event)
     items = []
-    for row in follow_ups:
-        trail = by_id.get(row['follow_up_id'])
-        if not trail:
-            continue  # an item without events is incomplete; never shown as open
-        latest = trail[-1]
-        items.append({**row, 'status': latest['status'], 'assignee': latest['assignee'], 'note': latest['note'],
-                      'updated_at': latest['recorded_at'], 'events': trail})
+    for row in rows:
+        trail = trails.get(row['follow_up_id'], [])
+        item = {**row, 'events': trail, 'history_complete': len(trail) >= row.get('event_count', len(trail)),
+                'closed_reason': None}
+        if (shared is not None and row.get('participant_id') and row['status'] != 'resolved'
+                and (row['participant_id'], row.get('org_id')) not in shared):
+            item.update(status='resolved', closed_reason='Sharing ended; no further updates are possible.')
+        items.append(item)
     return sorted(items, key=lambda i: (STATUSES.index(i['status']), -i['follow_up_id']))
 
 
@@ -41,7 +48,20 @@ def visible(items, access):
 
 
 def can_record(access):
+    """Opening follow-ups: active officers of an organization."""
     return access.role == 'officer' and access.org_id is not None
+
+
+def can_update(access, item):
+    """Officers update any visible follow-up; the current assignee updates their own."""
+    return (access.org_id is not None and item.get('org_id') == access.org_id and item.get('closed_reason') is None
+            and (access.role == 'officer' or item.get('assignee') == access.email))
+
+
+def shared_pairs(consents):
+    """(participant, organization) pairs with current individual sharing, from `org.current_consent` rows."""
+    return {(c.get('participant_id'), c.get('org_id')) for c in consents if c.get('sharing') == 'individual'
+            and c.get('withdrawn') is False and c.get('membership_open') is True}
 
 
 def assignees(org_users, org_id):

@@ -536,23 +536,29 @@ def save_follow_up(action,message):
 
 def follow_ups_page():
     """Brief follow-ups with an assigned reviewer and open/ongoing/resolved history (#31)."""
-    from .follow_ups import GUIDANCE, NOTE_LIMIT, STATUSES, assignees, can_record, clean_note, history, visible
+    from .follow_ups import (GUIDANCE, NOTE_LIMIT, STATUSES, assignees, can_record, can_update, clean_note, history,
+                             shared_pairs, visible)
     principal()
     with st.container(key='page-heading'):
         st.caption('ORGANIZATION')
         st.title('Follow-ups')
     decision=current_access()
-    if st.sidebar.button('Reload follow-ups',icon=':material/refresh:') or 'audit_follow_ups' not in st.session_state:
+    reload=st.sidebar.button('Reload follow-ups',icon=':material/refresh:')
+    if reload or st.session_state.get('audit_follow_ups_scope')!=access_scope(decision):
         with open_reader() as reader:
-            st.session_state['audit_follow_ups']=reader.follow_up_rows()
+            # Scope first, then the page limit: other organizations' records never push these out.
+            st.session_state['audit_follow_ups']=(reader.follow_up_rows() if decision.is_team else
+                reader.follow_up_rows(decision.org_id,sorted(decision.individuals)))
+        st.session_state['audit_follow_ups_scope']=access_scope(decision)
     if saved:=st.session_state.pop('audit_follow_up_saved',None):
         st.success(saved)
     st.caption('Follow-ups record what was observed and agreed in health-and-safety conversations. '
                'They are not medical records or diagnoses.')
     rows,events=st.session_state['audit_follow_ups']
-    items=visible(history(rows,events),decision)
+    # The team sees every follow-up; one about someone who stopped sharing is shown as closed.
+    items=visible(history(rows,events,shared=shared_pairs(team_consents()) if decision.is_team else None),decision)
     recorder=can_record(decision)
-    people=assignees(load_organization_rows(decision.email)[0],decision.org_id) if recorder else []
+    people=assignees(load_organization_rows(decision.email)[0],decision.org_id) if decision.org_id else []
     if recorder:
         with st.form('audit_follow_up_new',clear_on_submit=True):
             st.subheader('Record a follow-up')
@@ -567,7 +573,7 @@ def follow_ups_page():
     elif decision.is_team:
         st.caption('Team operators can read follow-ups; organization officers record and update them.')
     else:
-        st.caption('Officers record and update follow-ups; reviewers can read the ones they may see.')
+        st.caption('Officers record follow-ups; you can update the ones assigned to you.')
     shown=st.radio('Show',('Open and ongoing','Resolved','All'),horizontal=True,key='audit_follow_up_filter')
     items=[i for i in items if shown=='All' or (i['status']=='resolved')==(shown=='Resolved')]
     if not items:
@@ -577,15 +583,19 @@ def follow_ups_page():
         with st.container(border=True):
             about='Participant '+item['participant_id'] if item['participant_id'] else 'Group'
             st.markdown(f"**Follow-up {item['follow_up_id']} · {about}**")
+            if item['closed_reason']:
+                st.caption(item['closed_reason'])
             st.caption(f"{item['status'].title()} · assigned to {item['assignee']} · updated "
                        f"{item['updated_at'].astimezone(BEIRUT):%Y-%m-%d %H:%M}"
                        +(f" · {item['org_id']}" if decision.is_team else ''))
             st.text(item['note'])  # plain text: notes are never rendered as Markdown
             with st.expander('History'):
+                if not item['history_complete']:
+                    st.caption(f"Showing the latest {len(item['events'])} of {item['event_count']} events.")
                 st.dataframe([{'Recorded':e['recorded_at'].astimezone(BEIRUT).strftime('%Y-%m-%d %H:%M'),'By':e['actor'],
                                'Status':e['status'],'Assigned to':e['assignee'],'Note':e['note']} for e in item['events']],
                              hide_index=True,width='stretch')
-            if recorder:
+            if can_update(decision,item):
                 with st.form(f"audit_follow_up_{item['follow_up_id']}",clear_on_submit=True):
                     columns=st.columns(2)
                     status=columns[0].selectbox('Status',STATUSES,index=STATUSES.index(item['status']))

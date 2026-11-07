@@ -77,6 +77,13 @@ class FollowUpDatabaseTests(unittest.TestCase):
                                'where follow_up_id=%s order by event_id', (fid,))
         self.assertEqual(history, [('open', REVIEWER, OFFICER), ('ongoing', REVIEWER, OFFICER), ('resolved', OFFICER, OFFICER)])
 
+    def test_the_current_assignee_records_progress_on_their_own_follow_up(self):
+        fid = self.open(assignee=REVIEWER)
+        self.update(fid, 'ongoing', actor=REVIEWER, note='Talked it through.')          # reviewer, assigned
+        other = self.open(assignee=OFFICER)
+        self.assertTrue(self.refused(self.update, other, 'resolved', actor=REVIEWER))  # not their assignment
+        self.assertTrue(self.refused(self.open, actor=REVIEWER))                       # reviewers never open
+
     def test_group_follow_up_needs_no_participant(self):
         fid = self.open(pid=None, note='Several people reported short sleep after night shifts.')
         self.assertEqual(self.as_role('sentra_viewer', 'select participant_id from org.follow_ups where follow_up_id=%s',
@@ -102,6 +109,37 @@ class FollowUpDatabaseTests(unittest.TestCase):
         finally:  # restore individual sharing for the other tests
             self.db.execute("insert into org.consents(membership_id,participant_id,org_id,consent_version,sharing,"
                             "recorded_at) values (%s,'p901','org-a','1.0','individual',now()+interval '2 seconds')", (m,))
+
+    def reader(self):
+        from unittest.mock import Mock
+        from psycopg.conninfo import make_conninfo
+        from sentra.shared import Limits
+        from sentra.viewer_reader import ViewerReader
+        db = self.psycopg.connect(make_conninfo(URL, dbname=self.name), autocommit=True)
+        db.execute('set role sentra_viewer')
+        self.addCleanup(db.close)
+        budget = Mock()
+        return ViewerReader({}, Limits(), lambda: 'officer@a.test', db=db, budget_db=budget), budget
+
+    def test_reader_scopes_before_the_page_limit_and_reports_the_latest_state(self):
+        mine = self.open(pid=None, note='Group check-in planned.')
+        for i in range(60):  # newer records in another organization exceed the page size
+            self.open(actor=OTHER, org='org-b', pid=None, assignee=OTHER, note=f'b{i}')
+        for i in range(12):  # history longer than the page shows, then a final resolution
+            self.update(mine, 'ongoing', note=f'step {i}')
+        self.update(mine, 'resolved', note='Closed after review.')
+        reader, budget = self.reader()
+        rows, events = reader.follow_up_rows('org-a', ['p901'])
+        found = {r['follow_up_id']: r for r in rows}
+        self.assertIn(mine, found)
+        self.assertTrue(all(r['org_id'] == 'org-a' for r in rows))
+        self.assertEqual((found[mine]['status'], found[mine]['note'], found[mine]['event_count']),
+                         ('resolved', 'Closed after review.', 14))
+        trail = [e for e in events if e['follow_up_id'] == mine]
+        self.assertEqual((len(trail), trail[-1]['status']), (reader.FOLLOW_UP_HISTORY, 'resolved'))
+        reserved = [c.args[1][0] for c in budget.execute.call_args_list]
+        self.assertGreaterEqual(reserved[1], reader.FOLLOW_UP_PAGE * reader.FOLLOW_UP_HISTORY * 2_000)  # 500 4-byte chars
+        self.assertEqual(len(reader.follow_up_rows()[0]), reader.FOLLOW_UP_PAGE)  # team: all, still bounded
 
     def test_history_is_append_only_and_roles_stay_narrow(self):
         fid = self.open()

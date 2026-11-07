@@ -10,14 +10,15 @@ health-and-safety conversations, not medical records.
 | Signed-in user | Reads | Records and updates |
 | --- | --- | --- |
 | Organization officer | Their organization's group follow-ups, and follow-ups about participants who currently share individual details with them | Yes |
-| Organization reviewer | Same as an officer | No; can be the assignee |
+| Organization reviewer | Same as an officer | Updates only follow-ups currently assigned to them; never opens one |
 | Team operator | Every follow-up (operator access) | No; operators are not organization users |
 
 - A follow-up is about the organization as a group, or about one participant who currently
   shares individual details with that organization (`individual` consent, open membership,
   not withdrawn). `group_only` participants never get individual follow-ups.
 - If a participant later withdraws or reduces sharing, their follow-ups disappear from the
-  organization's view, and the database refuses further updates about them.
+  organization's view, and the database refuses further updates about them. Team operators
+  and later reports see such a follow-up as closed ("Sharing ended"), never open forever.
 - The assignee must be an active officer or reviewer of the same organization.
 
 ## Notes
@@ -35,7 +36,19 @@ or contact information. Notes are shown as plain text, never as formatted Markdo
   database's own rows. They are executable only by a new, separate `sentra_followups` role,
   which has no table privileges. **`sentra_viewer` stays read-only.**
 - The signed-in e-mail comes from the viewer's Google sign-in and is passed to the function.
-  Like every viewer decision, it relies on the hosted viewer protecting its credentials.
+  The database checks that it belongs to an active officer (or the current assignee), but it
+  cannot verify who is calling: anyone holding the `sentra_followups` password can record events
+  as any officer. The secret must live only in the viewer's managed secrets, and the history's
+  `actor` is only as trustworthy as that secret.
+
+## Reading
+
+- Scope comes first: an organization user's read is limited to their organization and to
+  participants who currently share individual details, then to a page of the 50 follow-ups
+  shown first (open and ongoing before resolved, most recently updated first).
+- Each follow-up's current status, assignee and note come from its latest event, read
+  separately from the history; the history shows its latest 10 events and says when more exist.
+- Egress is reserved for each page at its maximum size (about 3 KB per row) before reading.
 
 ## Operator setup (private)
 
