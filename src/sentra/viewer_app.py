@@ -109,6 +109,22 @@ def open_reader():
         finally: reader.close()
 
 
+@contextmanager
+def open_follow_up_writer():
+    """The follow-up role's connection (#31), or None when the operator has not configured it."""
+    from .follow_up_store import FollowUpWriter, follow_up_credentials
+    principal()
+    with tempfile.TemporaryDirectory(prefix='sentra-viewer-') as folder:
+        credentials,_,_=runtime_settings(st.secrets,folder)
+        settings=follow_up_credentials(st.secrets,credentials)
+        if settings is None:
+            yield None
+            return
+        writer=FollowUpWriter(settings)
+        try: yield writer
+        finally: writer.close()
+
+
 def display_table(rows):
     # Exact numeric text remains visible and survives CSV; charts explicitly use floats.
     def text(value):
@@ -498,6 +514,99 @@ def observations_section(person,*,today,assessment_version):
                 st.caption(note)
 
 
+FOLLOW_UP_GROUP='Group (no individual)'
+
+
+def save_follow_up(action,message):
+    """Run one write through the follow-up role; reload the list after success."""
+    try:
+        with open_follow_up_writer() as writer:
+            if writer is None:
+                st.error('Follow-up recording is not configured yet. Ask the operator to apply migration 010 '
+                         'and add the followups secret.')
+                return
+            action(writer)
+    except SentraError as error:
+        st.error(str(error))
+        return
+    st.session_state.pop('audit_follow_ups',None)
+    st.session_state['audit_follow_up_saved']=message
+    st.rerun()
+
+
+def follow_ups_page():
+    """Brief follow-ups with an assigned reviewer and open/ongoing/resolved history (#31)."""
+    from .follow_ups import (GUIDANCE, NOTE_LIMIT, STATUSES, assignees, can_record, can_update, clean_note, history,
+                             shared_pairs, visible)
+    principal()
+    with st.container(key='page-heading'):
+        st.caption('ORGANIZATION')
+        st.title('Follow-ups')
+    decision=current_access()
+    reload=st.sidebar.button('Reload follow-ups',icon=':material/refresh:')
+    if reload or st.session_state.get('audit_follow_ups_scope')!=access_scope(decision):
+        with open_reader() as reader:
+            # Scope first, then the page limit: other organizations' records never push these out.
+            st.session_state['audit_follow_ups']=(reader.follow_up_rows() if decision.is_team else
+                reader.follow_up_rows(decision.org_id,sorted(decision.individuals)))
+        st.session_state['audit_follow_ups_scope']=access_scope(decision)
+    if saved:=st.session_state.pop('audit_follow_up_saved',None):
+        st.success(saved)
+    st.caption('Follow-ups record what was observed and agreed in health-and-safety conversations. '
+               'They are not medical records or diagnoses.')
+    rows,events=st.session_state['audit_follow_ups']
+    # The team sees every follow-up; one about someone who stopped sharing is shown as closed.
+    items=visible(history(rows,events,shared=shared_pairs(team_consents()) if decision.is_team else None),decision)
+    recorder=can_record(decision)
+    people=assignees(load_organization_rows(decision.email)[0],decision.org_id) if decision.org_id else []
+    if recorder:
+        with st.form('audit_follow_up_new',clear_on_submit=True):
+            st.subheader('Record a follow-up')
+            about=st.selectbox('About',[FOLLOW_UP_GROUP]+sorted(decision.individuals),
+                               help='Only participants who share individual details with your organization are listed.')
+            assignee=st.selectbox('Assign to',people)
+            note=st.text_area('Note',max_chars=NOTE_LIMIT,help=GUIDANCE)
+            st.caption(GUIDANCE)
+            if st.form_submit_button('Record follow-up',type='primary'):
+                save_follow_up(lambda w:w.open(decision.email,decision.org_id,None if about==FOLLOW_UP_GROUP else about,
+                                               assignee,clean_note(note)),'Follow-up recorded.')
+    elif decision.is_team:
+        st.caption('Team operators can read follow-ups; organization officers record and update them.')
+    else:
+        st.caption('Officers record follow-ups; you can update the ones assigned to you.')
+    shown=st.radio('Show',('Open and ongoing','Resolved','All'),horizontal=True,key='audit_follow_up_filter')
+    items=[i for i in items if shown=='All' or (i['status']=='resolved')==(shown=='Resolved')]
+    if not items:
+        st.info('No follow-ups to show.')
+        return
+    for item in items:
+        with st.container(border=True):
+            about='Participant '+item['participant_id'] if item['participant_id'] else 'Group'
+            st.markdown(f"**Follow-up {item['follow_up_id']} · {about}**")
+            if item['closed_reason']:
+                st.caption(item['closed_reason'])
+            st.caption(f"{item['status'].title()} · assigned to {item['assignee']} · updated "
+                       f"{item['updated_at'].astimezone(BEIRUT):%Y-%m-%d %H:%M}"
+                       +(f" · {item['org_id']}" if decision.is_team else ''))
+            st.text(item['note'])  # plain text: notes are never rendered as Markdown
+            with st.expander('History'):
+                if not item['history_complete']:
+                    st.caption(f"Showing the latest {len(item['events'])} of {item['event_count']} events.")
+                st.dataframe([{'Recorded':e['recorded_at'].astimezone(BEIRUT).strftime('%Y-%m-%d %H:%M'),'By':e['actor'],
+                               'Status':e['status'],'Assigned to':e['assignee'],'Note':e['note']} for e in item['events']],
+                             hide_index=True,width='stretch')
+            if can_update(decision,item):
+                with st.form(f"audit_follow_up_{item['follow_up_id']}",clear_on_submit=True):
+                    columns=st.columns(2)
+                    status=columns[0].selectbox('Status',STATUSES,index=STATUSES.index(item['status']))
+                    assignee=columns[1].selectbox('Assign to',people,
+                                                  index=people.index(item['assignee']) if item['assignee'] in people else 0)
+                    note=st.text_input('Update note',max_chars=NOTE_LIMIT,help=GUIDANCE)
+                    if st.form_submit_button('Save update'):
+                        save_follow_up(lambda w,i=item['follow_up_id'],s=status,a=assignee,n=note:
+                                       w.update(decision.email,i,s,a,clean_note(n)),'Follow-up updated.')
+
+
 def main():
     st.set_page_config(page_title='Sentra · Wearable explorer',page_icon='🔎',layout='wide')
     # A sharing change, withdrawal or removed role must apply on the next render.
@@ -530,7 +639,7 @@ def main():
                 st.session_state['audit_access']=decision
             st.session_state['audit_owner']=identity
         page=st.sidebar.radio('Explore',('Daily activity','Sleep','Workouts','Data availability','Wellness board',
-            'Organization overview','Profiles'),key='explore',label_visibility='collapsed',width='stretch')
+            'Organization overview','Profiles','Follow-ups'),key='explore',label_visibility='collapsed',width='stretch')
         st.sidebar.divider()
         if page=='Wellness board':
             wellness_board()
@@ -540,6 +649,9 @@ def main():
             return
         if page=='Profiles':
             profiles_page()
+            return
+        if page=='Follow-ups':
+            follow_ups_page()
             return
         decision=current_access()
         # Refetch when the permitted set changes; filtering a cached copy cannot add newly shared people.
