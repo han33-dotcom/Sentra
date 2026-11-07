@@ -62,11 +62,11 @@ class OrganizationPageTests(unittest.TestCase):
         from streamlit.testing.v1 import AppTest
         @contextmanager
         def reader(): yield OrgReader()
-        self.patches = [patch.object(viewer_app.st, 'user', User(email)),
-                        patch.object(viewer_app, 'open_reader', reader),
-                        patch.object(viewer_app, 'load_organization_rows', Mock(return_value=(USERS, consents)))]
-        for p in self.patches: p.start()
-        self.addCleanup(lambda: [p.stop() for p in self.patches])
+        for p in (patch.object(viewer_app.st, 'user', User(email)),
+                  patch.object(viewer_app, 'open_reader', reader),
+                  patch.object(viewer_app, 'load_organization_rows', Mock(return_value=(USERS, consents)))):
+            p.start()
+            self.addCleanup(p.stop)  # per patch, so a second open() in one test cannot leak the first
         OrgReader.catalog_calls = 0
         app = AppTest.from_file(Path(__file__).resolve().parents[1] / 'viewer' / 'app.py', default_timeout=10)
         app.secrets['viewer'] = {'allowed_emails': TEAM}
