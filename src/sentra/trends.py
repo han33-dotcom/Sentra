@@ -18,7 +18,7 @@ from datetime import timedelta
 from statistics import median
 
 from .access import K_ANONYMITY, publishable
-from .organization import BASELINES, KNOWN_DEVICES, METRICS, is_number, valid_days
+from .organization import BASELINES, KNOWN_DEVICES, METRICS, board_day, is_number, valid_days
 from .processing.pipeline import ASSESSMENT_VERSION
 
 PERIODS = (7, 14, 28)  # days ending on the latest published day
@@ -74,6 +74,24 @@ def personal_trend(person, key, *, end, days, assessment_version=ASSESSMENT_VERS
                'assessed_days': sum(s in ('signal', 'clear') for s in states) if rules else None,
                'signal_days': states.count('signal') if rules else None}
     return {'points': points, 'summary': summary}
+
+
+def publishable_end(people, contributors, k=K_ANONYMITY):
+    """Latest day with at least one publishable group statistic (any measure, known device, k contributors).
+
+    The group reporting window must not move because of readings that are then suppressed: one person's
+    newer reading would otherwise reveal that they wore and synced their device that day."""
+    counts = {}
+    for person in people:
+        if not isinstance(person, dict) or person.get('id') not in contributors or person.get('device') not in KNOWN_DEVICES:
+            continue
+        for day in valid_days(person):
+            for key, *_ in METRICS:
+                if is_number(day.get(key)):
+                    slot = (day['d'], person['device'], key)
+                    counts[slot] = counts.get(slot, 0) + 1
+    days = [d for (d, _, _), n in counts.items() if publishable(n, k)]
+    return board_day(max(days)) if days else None
 
 
 def group_trend(people, contributors, key, *, end, days, k=K_ANONYMITY):

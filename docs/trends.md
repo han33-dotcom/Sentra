@@ -18,8 +18,11 @@ WHOOP recovery (%).
 
 ## Definitions
 
-- **Period**: the selected number of calendar days ending on the latest published day
-  (for one person, their own latest day). Days are Asia/Beirut civil days.
+- **Period**: the selected number of calendar days ending on the latest published day. For one
+  person, that is their own latest day. For an organization's group view, it is the latest day
+  with at least one statistic that can be shown, so a suppressed reading never moves the window;
+  "no readings" and "all hidden" also look the same to organization users. Days are
+  Asia/Beirut civil days.
 - **Own baseline**: from the [indicator contract](indicator-contract.md), published on the
   board: the median of the previous 28 days, needing at least 7 days with a reading. It is
   not recomputed here.

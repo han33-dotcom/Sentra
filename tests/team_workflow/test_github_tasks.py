@@ -1,10 +1,14 @@
 import unittest
-from scripts.team_workflow.policy import validate_pr_metadata
+from scripts.team_workflow.policy import validate_pr_metadata as _validate_pr_metadata
 from scripts.team_workflow.check_pr import check_pr_event
 try:
     from . import test_runner
 except ImportError:
     import test_runner
+
+
+def validate_pr_metadata(body, labels, repo, base, title="[SEN-16] Fix the filter"):
+    return _validate_pr_metadata(body, labels, repo, base, title)
 
 
 def body(url, extra=""):

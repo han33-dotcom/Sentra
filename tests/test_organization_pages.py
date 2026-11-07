@@ -5,6 +5,7 @@ from pathlib import Path
 import time
 import unittest
 from unittest.mock import Mock, patch
+from zoneinfo import ZoneInfo
 
 from test_viewer_app import FakeReader
 from sentra.processing.pipeline import ASSESSMENT_VERSION
@@ -177,7 +178,25 @@ class OrganizationPageTests(unittest.TestCase):
         self.assertFalse(app.exception)
         self.assertEqual(len(app.dataframe), 0)  # a device below 5 on every day is not listed at all
         self.assertIn('nothing is shown', ' '.join(i.value for i in app.info))
-        self.assertIn('not listed', ' '.join(c.value for c in app.caption))
+
+    def test_suppressed_readings_never_move_the_window_or_the_empty_state(self):
+        def group_view(extra, metric):
+            consents = CONSENTS + [{'participant_id': 'p97', 'org_id': 'org-a', 'sharing': 'group_only',
+                                    'withdrawn': False, 'membership_open': True}]
+            board = {**BOARD, 'people': list(BOARD['people']) + extra}
+            with patch.object(OrgReader, 'group_board', lambda self: board):
+                app = self.open('officer@a.test', 'Trends', consents=consents)
+                app.radio(key='audit_trend_view').set_value('Group').run()
+                app.selectbox(key='audit_trend_metric').set_value(metric).run()
+            self.assertFalse(app.exception)
+            return ([i.value for i in app.info], [c.value for c in app.caption][-1:], len(app.dataframe))
+        lone = [{'id': 'p97', 'name': 'p97', 'device': 'WHOOP', 'days': [{'d': '2026-10-08', 'sleep': 300, 'rec': 40}]}]
+        for metric in ('Sleep', 'WHOOP recovery'):
+            with self.subTest(metric=metric):
+                # One group-only WHOOP reading a day later changes nothing an officer can see.
+                self.assertEqual(group_view(lone, metric), group_view([], metric))
+        sleep = group_view(lone, 'Sleep')
+        self.assertIn('Days through 2026-10-07', sleep[1][0])
 
     def test_team_group_trends_keep_device_detail(self):
         app = self.open('team@example.test', 'Trends')
@@ -194,6 +213,35 @@ class OrganizationPageTests(unittest.TestCase):
         self.assertFalse(app.error)
         self.assertEqual({m.label: m.value for m in app.metric}['Days with data'], '1 of 7')
         self.assertIn('older rules', ' '.join(c.value for c in app.caption))  # BOARD has no assessment_version
+
+    def test_profile_explains_observations_for_permitted_people_only(self):
+        today = datetime.now(timezone.utc).astimezone(ZoneInfo('Asia/Beirut')).date().isoformat()
+        people = [{**p, 'days': [{'d': today, 'lvl': 'amber', 'f': ['rhr_up'], 'rhr': 64, 'rhr_b': 55.0, 'rhr_z': 2.4,
+                                  'a': 'partial', 'm': ['hrv:baseline_building']}]} for p in BOARD['people']]
+        board = {**BOARD, 'people': people, 'data_through': today, 'assessment_version': ASSESSMENT_VERSION}
+        with patch.object(OrgReader, 'board', lambda self: board):
+            app = self.open('officer@a.test', 'Profiles')
+        text = ' '.join(m.value for m in app.markdown) + ' '.join(c.value for c in app.caption)
+        self.assertIn('Resting heart rate above your normal', text)
+        self.assertIn('Partial assessment', text)
+        self.assertIn('Heart-rate variability: personal normal still building', text)
+        self.assertIn('not a medical conclusion', text)
+        self.assertEqual(app.selectbox[0].options, ['p91'])  # group-only people get no observations
+
+    def test_profile_observations_wait_for_the_current_rules(self):
+        today = datetime.now(timezone.utc).astimezone(ZoneInfo('Asia/Beirut')).date().isoformat()
+        legacy = {**BOARD, 'people': [{**p, 'days': [{**p['days'][0], 'd': today, 'lvl': 'green'}]}
+                                      for p in BOARD['people']]}  # no assessment_version
+        with patch.object(OrgReader, 'board', lambda self: legacy):
+            app = self.open('officer@a.test', 'Profiles')
+        self.assertIn('Published under older rules', ' '.join(m.value for m in app.markdown))
+
+    def test_profile_with_stale_data_draws_no_wellness_conclusion(self):
+        app = self.open('officer@a.test', 'Profiles')  # BOARD's latest day is weeks old
+        text = ' '.join(m.value for m in app.markdown)
+        self.assertIn('No recent data', text)
+        self.assertNotIn('No change from usual pattern', text)
+
 
 if __name__ == '__main__':
     unittest.main()

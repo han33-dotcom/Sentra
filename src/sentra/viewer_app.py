@@ -481,6 +481,28 @@ def profiles_page():
                    'Difference':'' if m['difference'] is None else f"{m['difference']:+g} {m['unit']}",
                    'Note':m['note'] or ''} for m in summary['metrics']],hide_index=True,width='stretch')
     st.caption("Compared with this person's own recent pattern; not a medical assessment. Missing values stay missing.")
+    observations_section(person,today=today,assessment_version=st.session_state['audit_board'].get('assessment_version'))
+
+
+OBSERVATION_KINDS={'wellness':'Wellness observation','assessment':'Assessment limits','collection':'Data collection'}
+
+
+def observations_section(person,*,today,assessment_version):
+    """Explained observations for one permitted person's latest published day (#41)."""
+    from .observations import observations
+    st.subheader('Observations')
+    items=observations(person,today=today,assessment_version=assessment_version)
+    if not items:
+        st.info('No observation for the latest published day.')
+    for item in items:
+        with st.container(border=True):
+            when=f" · {item['day'].isoformat()}" if item['day'] else ''
+            st.caption(OBSERVATION_KINDS[item['kind']].upper()+when)
+            st.markdown(f"**{item['title']}**  \n{item['detail']}")
+            if item['readings']:
+                st.dataframe([{'Reading':k,'Value':v} for k,v in item['readings']],hide_index=True,width='stretch')
+            for note in item['limitations']:
+                st.caption(note)
 
 
 def trend_chart(rows,label,unit,*,baseline=False,color=None):
@@ -509,7 +531,7 @@ def trends_page():
     """Personal trends against the own baseline, or permitted group trends, over a selected period (#40)."""
     from .access import K_ANONYMITY
     from .organization import METRICS, latest_group_day
-    from .trends import PERIODS, SIGNAL_FLAGS, group_trend, personal_trend
+    from .trends import PERIODS, SIGNAL_FLAGS, group_trend, personal_trend, publishable_end
     principal()
     with st.container(key='page-heading'):
         st.caption('ORGANIZATION')
@@ -559,23 +581,26 @@ def trends_page():
         for note in notes: st.caption(note)
         return
     data,_,scope,people,_=organization_data(decision,reload)
-    end=latest_group_day(people)
+    # Organization users: the window ends on the latest publishable day, so suppressed readings never move it,
+    # and "no readings" and "all suppressed" look the same.
+    end=latest_group_day(people) if decision.is_team else publishable_end(people,scope)
+    hidden=f'No day in this period has {K_ANONYMITY} or more eligible contributors for this measure, so nothing is shown.'
     if not end:
-        st.info('No processed days are published yet.')
+        st.info('No processed days are published yet.' if decision.is_team else hidden)
         return
     trend=group_trend(people,scope,key,end=end,days=days)
-    if not trend['devices']:
-        st.info('No eligible contributor has this measurement.')
-        return
     devices=trend['devices']
     if not decision.is_team:
         # A device below k on every day would reveal a small group's (or one person's) wear pattern.
         devices={d:series for d,series in devices.items() if any(r['status']=='available' for r in series)}
+    if not devices:
+        st.info('No eligible contributor has this measurement.' if decision.is_team and not trend['devices'] else hidden)
+        return
     rows=[{**r,'series':device} for device,series in devices.items() for r in series]
     if any(r['value'] is not None for r in rows):
         st.altair_chart(trend_chart(rows,trend['label'],trend['unit']),width='stretch',theme=None)
     else:
-        st.info(f'No day in this period has {K_ANONYMITY} or more eligible contributors for this measure, so nothing is shown.')
+        st.info(hidden)
     table=[]
     for device,series in devices.items():
         shown=[r['contributors'] for r in series if r['status']=='available']
@@ -583,14 +608,12 @@ def trends_page():
         if decision.is_team:
             row['Days hidden (fewer than %d)'%K_ANONYMITY]=sum(r['status']=='suppressed' for r in series)
         table.append(row)
-    if table:
-        st.dataframe([{**r,'Most contributors on a day':str(r['Most contributors on a day'])} for r in table],
-                     hide_index=True,width='stretch')
-    if len(devices)<len(trend['devices']):
-        st.caption(f'Devices with fewer than {K_ANONYMITY} contributors on every day are not listed.')
+    st.dataframe([{**r,'Most contributors on a day':str(r['Most contributors on a day'])} for r in table],
+                 hide_index=True,width='stretch')
     st.caption(f'Days through {end.isoformat()}. Each dot is the median of one value per contributing person that day, '
                f'per device (Fitbit and WHOOP are never pooled). A day needs at least {K_ANONYMITY} contributors; '
-               'otherwise it is left out. Unknown devices are not included. Department comparisons are not available yet.')
+               'otherwise it is left out, and devices that never reach that are not listed. Unknown devices are not included. '
+               'Department comparisons are not available yet.')
 
 
 def main():

@@ -1,11 +1,10 @@
 """Trusted metadata-only GitHub Projects reconciliation."""
 import json
 import os
-import re
 import sys
 
 from .lifecycle import plan_status
-from .policy import PROJECTS, APPROVERS, task_issue_number, visible_text
+from .policy import PROJECTS, APPROVERS, declared_tasks, verified_task
 
 STATUSES = {"Not started", "In progress", "In review", "Changes requested", "Implemented", "Blocked", "Done"}
 
@@ -17,11 +16,13 @@ def task_pulls(repo, client):
         if (pull["base"]["ref"] != integration
                 or pull["user"]["login"] not in APPROVERS[repo]):
             continue
-        urls = re.findall(r"^Task URL:\s*(.*?)\s*$", visible_text(pull.get("body") or ""), flags=re.M)
-        if len(urls) != 1:
-            continue
-        number = task_issue_number(urls[0], repo)
-        if number is None:
+        try:
+            numbers = declared_tasks(pull.get("body") or "", repo)
+        except ValueError:
+            if repo != "han33-dotcom/Sentra":
+                continue  # Preserve legacy behavior in the other repository.
+            raise
+        if not numbers:
             continue
         latest = {}
         if pull["state"] == "open":
@@ -32,8 +33,9 @@ def task_pulls(repo, client):
                         and user.get("type") == "User"
                         and review["state"] in {"APPROVED", "CHANGES_REQUESTED", "DISMISSED"}):
                     latest[actor] = review["state"]
-        grouped.setdefault(number, []).append({"state": pull["state"], "draft": pull.get("draft", False),
-            "merged": bool(pull.get("merged_at")), "changes_requested": "CHANGES_REQUESTED" in latest.values()})
+        for number in numbers:
+            grouped.setdefault(number, []).append({"state": pull["state"], "draft": pull.get("draft", False),
+                "merged": bool(pull.get("merged_at")), "changes_requested": "CHANGES_REQUESTED" in latest.values()})
     return grouped
 
 
@@ -47,13 +49,12 @@ def synchronize(repo, project_id, client, dry_run=True):
         raise ValueError("Project owner or Status options do not match the team configuration.")
     output = []
     candidates = task_pulls(repo, client)
+    # Verify every issue before the first write, including secondary tasks.
+    issues = {number: verified_task(client, repo, number) for number in candidates}
     for number in sorted(candidates):
         # Fresh PR/review state defeats duplicate and out-of-order event payloads.
         pulls = candidates[number] if dry_run else task_pulls(repo, client).get(number, [])
-        issue = client.issue(number)
-        if (issue.get("number") != number or "pull_request" in issue
-                or task_issue_number(issue.get("html_url", ""), repo) != number):
-            raise ValueError("Task identity could not be verified in the configured repository.")
+        issue = issues[number] if dry_run else verified_task(client, repo, number)
         item = client.item(issue["node_id"], project_id)
         current = item["status"] if item else "Not started"
         if current not in STATUSES:

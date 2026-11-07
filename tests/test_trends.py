@@ -2,7 +2,7 @@
 from datetime import date
 import unittest
 
-from sentra.trends import group_trend, period_days, personal_trend
+from sentra.trends import group_trend, period_days, personal_trend, publishable_end
 from sentra.processing.pipeline import ASSESSMENT_VERSION
 
 END = date(2026, 11, 4)
@@ -71,6 +71,11 @@ class GroupTrendTests(unittest.TestCase):
     def test_unknown_devices_are_never_pooled(self):
         people = self.people('Unknown', 5, 50.0) + [{**p, 'device': None} for p in self.people('WHOOP', 5, 50.0, start=10)]
         self.assertEqual(group_trend(people, {p['id'] for p in people}, 'hrv', end=END, days=1)['devices'], {})
+
+    def test_window_ends_on_the_latest_publishable_day_only(self):
+        people = self.people('WHOOP', 5, 50.0) + [{'id': 'p50', 'device': 'Fitbit', 'days': [{'d': '2026-11-06', 'hrv': 1.0}]}]
+        self.assertEqual(publishable_end(people, {p['id'] for p in people}), END)  # p50's later reading is suppressed
+        self.assertIsNone(publishable_end(people[:4], {p['id'] for p in people}))
 
     def test_period_days_are_oldest_first(self):
         self.assertEqual(period_days(END, 3), ['2026-11-02', '2026-11-03', '2026-11-04'])

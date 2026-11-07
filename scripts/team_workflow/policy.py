@@ -11,6 +11,7 @@ APPROVERS = {
     "han33-dotcom/TechScout": {"han33-dotcom", "MohamadNasrallah", "Ahmad860187"},
 }
 EXEMPTIONS = {"workflow-maintenance", "release"}
+MAX_TASKS = 10
 WORKFLOW_FILES = {"AGENTS.md", "CLAUDE.md", "CONTRIBUTING.md", ".gitignore"}
 WORKFLOW_PREFIXES = ("docs/", ".github/", "scripts/team_workflow/", "tests/team_workflow/")
 
@@ -39,7 +40,43 @@ def task_issue_number(value, repo):
     return None
 
 
-def validate_pr_metadata(body: str, labels: set[str], repo: str, base: str) -> list[str]:
+def declared_tasks(body, repo):
+    """Read explicit implementation links, never incidental issue references.
+
+    Additional Task URL lines extend the existing single-task format. Reject
+    the entire declaration on error so a bad secondary link cannot be ignored.
+    """
+    fields = re.findall(r"^(Additional )?Task URL:[ \t]*([^\r\n]*)$", visible_text(body), flags=re.M)
+    primary = [value for extra, value in fields if not extra]
+    additional = [value for extra, value in fields if extra]
+    if len(primary) > 1 or (additional and not primary):
+        raise ValueError("Declare exactly one primary Task URL before adding implementation tasks.")
+    if additional and repo != "han33-dotcom/Sentra":
+        raise ValueError("Additional implementation tasks are supported only in Sentra.")
+    urls = primary + additional
+    limit = MAX_TASKS if repo == "han33-dotcom/Sentra" else 1
+    numbers = [task_issue_number(url.strip(), repo) for url in urls]
+    if len(numbers) > limit or any(n is None for n in numbers):
+        raise ValueError(f"Declare at most {limit} implementation tasks, each a canonical HTTPS GitHub issue link in this repository.")
+    if len(set(numbers)) != len(numbers):
+        raise ValueError("Each implementation task must be declared exactly once.")
+    return numbers
+
+
+def task_title_prefix(repo, numbers):
+    prefix = PROJECTS[repo][1]
+    return "[" + ", ".join(f"{prefix}-{number}" for number in numbers) + "]"
+
+
+def verified_task(client, repo, number):
+    issue = client.issue(number)
+    if (issue.get("number") != number or "pull_request" in issue
+            or task_issue_number(issue.get("html_url", ""), repo) != number):
+        raise ValueError("Task identity could not be verified in the configured repository.")
+    return issue
+
+
+def validate_pr_metadata(body: str, labels: set[str], repo: str, base: str, title: str = "") -> list[str]:
     """Labels must first pass approved_exemptions; this function does no network IO."""
     if repo not in PROJECTS:
         return ["Unsupported repository."]
@@ -55,17 +92,20 @@ def validate_pr_metadata(body: str, labels: set[str], repo: str, base: str) -> l
     ids = re.findall(r"^Task ID:\s*(.*?)\s*$", text, flags=re.M)
     if len(ids) > 1 or (ids and not re.fullmatch(re.escape(prefix) + r"-\d+", ids[0])):
         errors.append("Task ID must use the project's prefix and numeric ID.")
-    urls = re.findall(r"^Task URL:\s*(.*?)\s*$", text, flags=re.M)
     exempt = bool(labels & EXEMPTIONS)
-    if urls:
-        if len(urls) != 1 or task_issue_number(urls[0], repo) is None:
-            errors.append("Task URL must be one canonical HTTPS GitHub issue link in this repository.")
-    elif not exempt:
+    try:
+        numbers = declared_tasks(body, repo)
+    except ValueError as error:
+        errors.append(str(error))
+        numbers = []
+    if not numbers and not exempt:
         errors.append("Provide a Task URL or an independently approved scoped exemption.")
-    if len(ids) == 1 and len(urls) == 1:
-        number = task_issue_number(urls[0], repo)
-        if number is not None and ids[0] != f"{prefix}-{number}":
-            errors.append("Task ID must match the linked GitHub issue number.")
+    if len(ids) == 1 and numbers and ids[0] != f"{prefix}-{numbers[0]}":
+        errors.append("Task ID must match the first linked GitHub issue number.")
+    if numbers and repo == "han33-dotcom/Sentra":
+        expected = task_title_prefix(repo, numbers) + " "
+        if not title.startswith(expected) or not title[len(expected):].strip():
+            errors.append("Start the PR title with " + expected.strip() + " followed by a description; use every Task URL in declaration order.")
     if re.search(r"\b(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?)\b[\s:*_]+(?:#[1-9][0-9]*|[\w.-]+/[\w.-]+#[1-9][0-9]*|https://github\.com/[\w.-]+/[\w.-]+/issues/[1-9][0-9]*)", text, re.I):
         errors.append("Use Related to instead of automatic issue-closing keywords; human acceptance controls Done.")
     sections = {}
