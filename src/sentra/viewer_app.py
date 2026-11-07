@@ -490,6 +490,28 @@ def profiles_page():
                    'Difference':'' if m['difference'] is None else f"{m['difference']:+g} {m['unit']}",
                    'Note':m['note'] or ''} for m in summary['metrics']],hide_index=True,width='stretch')
     st.caption("Compared with this person's own recent pattern; not a medical assessment. Missing values stay missing.")
+    observations_section(person,today=today,assessment_version=st.session_state['audit_board'].get('assessment_version'))
+
+
+OBSERVATION_KINDS={'wellness':'Wellness observation','assessment':'Assessment limits','collection':'Data collection'}
+
+
+def observations_section(person,*,today,assessment_version):
+    """Explained observations for one permitted person's latest published day (#41)."""
+    from .observations import observations
+    st.subheader('Observations')
+    items=observations(person,today=today,assessment_version=assessment_version)
+    if not items:
+        st.info('No observation for the latest published day.')
+    for item in items:
+        with st.container(border=True):
+            when=f" · {item['day'].isoformat()}" if item['day'] else ''
+            st.caption(OBSERVATION_KINDS[item['kind']].upper()+when)
+            st.markdown(f"**{item['title']}**  \n{item['detail']}")
+            if item['readings']:
+                st.dataframe([{'Reading':k,'Value':v} for k,v in item['readings']],hide_index=True,width='stretch')
+            for note in item['limitations']:
+                st.caption(note)
 
 
 FOLLOW_UP_GROUP='Group (no individual)'
