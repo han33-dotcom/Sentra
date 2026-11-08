@@ -62,6 +62,10 @@ actual PR results; a local success is not a claim that CI passed.
 ## Handoff and Definition of Done
 
 - Link the same-repository GitHub issue URL in the PR description.
+  Use `[SEN-NUMBER] description` for task/PR titles. Declare one primary `Task URL:`
+  and one `Additional Task URL:` per other task implemented by that PR (maximum 10
+  total); the PR title lists every ID in declaration order, for example
+  `[SEN-28, SEN-27] fix: retry joins`. Dependencies stay in prose, not these fields.
   Explain what changed, why, validation and material limitations. For workflow
   maintenance or releases with no implementation task, explain the scope explicitly.
 - Use Related to #NUMBER, not automatic issue-closing keywords. Keep issues open

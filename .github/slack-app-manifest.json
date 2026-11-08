@@ -1,0 +1,22 @@
+{
+  "display_information": {
+    "name": "Sentra Task Updates",
+    "description": "Task-first Sentra pull-request updates",
+    "background_color": "#1f6feb"
+  },
+  "features": {
+    "bot_user": {
+      "display_name": "Sentra Task Updates",
+      "always_online": false
+    }
+  },
+  "oauth_config": {
+    "scopes": {
+      "bot": ["chat:write", "channels:history"]
+    }
+  },
+  "settings": {
+    "org_deploy_enabled": false,
+    "socket_mode_enabled": false
+  }
+}
