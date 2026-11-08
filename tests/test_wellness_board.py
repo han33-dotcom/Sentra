@@ -15,7 +15,7 @@ from sentra.errors import SentraError
 from sentra.processing import board as board_mod
 from sentra.processing.canonical import SLEEP_STAGE
 from sentra.processing.observations import google_sleep, load
-from sentra.processing.pipeline import run
+from sentra.processing.pipeline import ASSESSMENT_VERSION, run
 from sentra.shared import Limits
 from sentra.tiers import hr_tables, measurements_table, parquet_bytes, sessions_table
 
@@ -164,7 +164,7 @@ class RefreshTests(unittest.TestCase):
 
     def test_older_watermark_does_not_rebuild_an_already_newer_board(self):
         from sentra import wellness_refresh as w
-        storage = self.Storage({'source_run': '2026-10-11T00:00:00+00:00'})
+        storage = self.Storage({'source_run': '2026-10-11T00:00:00+00:00', 'assessment_version': ASSESSMENT_VERSION})
         with mock.patch.object(w, 'build', side_effect=AssertionError('Older data must not rebuild tiers')):
             result = w.refresh(self.Reader(datetime(2026, 10, 10, tzinfo=UTC)), Limits(), storage, log=lambda *_: None)
         self.assertEqual(result['status'], 'skipped')
@@ -199,12 +199,30 @@ class RefreshTests(unittest.TestCase):
     def test_skips_without_new_collection_run_and_reads_nothing(self):
         from sentra import wellness_refresh as w
         finished = datetime(2026, 10, 11, 0, 5, tzinfo=UTC)
-        storage = self.Storage({'source_run': finished.isoformat()})
+        storage = self.Storage({'source_run': finished.isoformat(), 'assessment_version': ASSESSMENT_VERSION})
         with mock.patch.object(w, 'build') as build:
             result = w.refresh(self.Reader(finished), Limits(), storage, log=lambda *_: None)
         self.assertEqual(result['status'], 'skipped')
         build.assert_not_called()
         self.assertEqual(storage.posts, {})
+
+    def test_a_board_from_older_rules_is_rebuilt_without_new_collection(self):
+        from sentra import wellness_refresh as w
+        finished = datetime(2026, 10, 11, 0, 5, tzinfo=UTC)
+        with tempfile.TemporaryDirectory() as folder:
+            write(folder, sleep_rows())
+            objects = {p.relative_to(folder).as_posix(): p.read_bytes() for p in Path(folder).rglob('*.parquet')}
+        legacy = {'source_run': finished.isoformat(), 'people': [{'id': 'p01', 'days': [{'d': '2026-10-10', 'lvl': 'green'}]}]}
+        storage = self.Storage(legacy)  # published before assessment states existed: no version
+        with mock.patch.object(w, 'build', return_value=(objects, {})) as build, mock.patch.object(w, 'publish'):
+            result = w.refresh(self.Reader(finished), Limits(), storage, now=NOW, log=lambda *_: None)
+        build.assert_called_once()
+        self.assertEqual(result['status'], 'published')
+        board = json.loads(storage.posts['board/board.json'][0])
+        self.assertEqual((board['assessment_version'], board['source_run']), (ASSESSMENT_VERSION, finished.isoformat()))
+        storage.previous = board  # the rebuilt board is current: the next run skips again
+        with mock.patch.object(w, 'build', side_effect=AssertionError('current board must not rebuild')):
+            self.assertEqual(w.refresh(self.Reader(finished), Limits(), storage, log=lambda *_: None)['status'], 'skipped')
 
     def test_publishes_tiers_then_board_with_capacity_check(self):
         from sentra import wellness_refresh as w
@@ -221,10 +239,34 @@ class RefreshTests(unittest.TestCase):
         self.assertEqual((upsert, kind, result['status']), (True, 'application/json', 'published'))
         self.assertEqual({p['id']: p['device'] for p in board['people']}, {'p01': 'Fitbit', 'p02': 'WHOOP'})
         self.assertEqual(board['source_run'], '2026-10-11T00:00:00+00:00')
-        tight = Limits(object_bytes=4_000_000 + 20_000_000 + 1, reserve_bytes=20_000_000)
-        with mock.patch.object(w, 'build', return_value=(objects, {})), mock.patch.object(w, 'publish'):
-            with self.assertRaises(Exception):
-                w.refresh(self.Reader(datetime(2026, 10, 12, tzinfo=UTC)), tight, self.Storage(), now=NOW, log=lambda *_: None)
+        # The single pre-write capacity check covers the board too, not tiers and board separately.
+        self.assertEqual(publish.call_args.kwargs['extra_bytes'], len(data))
+
+    def test_tiers_and_board_that_only_fit_separately_publish_nothing(self):
+        from sentra import wellness_refresh as w
+        from sentra.shared import CapacityStop
+        with tempfile.TemporaryDirectory() as folder:
+            write(folder, sleep_rows())
+            objects = {p.relative_to(folder).as_posix(): p.read_bytes() for p in Path(folder).rglob('*.parquet')}
+        import hashlib
+        tiers = sum(len(b) for b in objects.values())
+        report = len(json.dumps({'prefix': 'slot-a/', 'sha256': {k: hashlib.sha256(v).hexdigest() for k, v in objects.items()}},
+                                indent=2).encode())
+        # Room for the tiers and their report plus 100 bytes, but not for the (larger) board on top.
+        tight = Limits(object_bytes=4_000_000 + 20_000_000 + tiers + report + 100, reserve_bytes=20_000_000)
+        storage = self.Storage()
+        with mock.patch.object(w, 'build', return_value=(objects, {})), self.assertRaises(CapacityStop):
+            w.refresh(self.Reader(datetime(2026, 10, 11, tzinfo=UTC)), tight, storage, now=NOW, log=lambda *_: None)
+        self.assertEqual(storage.posts, {})
+
+    def test_processing_failure_publishes_neither_tiers_nor_board(self):
+        from sentra import wellness_refresh as w
+        storage = self.Storage()
+        with mock.patch.object(w, 'build', return_value=({'measurements.parquet': b'not parquet'}, {})), \
+                mock.patch.object(w, 'publish') as publish, self.assertRaises(Exception):
+            w.refresh(self.Reader(datetime(2026, 10, 11, tzinfo=UTC)), Limits(), storage, now=NOW, log=lambda *_: None)
+        publish.assert_not_called()
+        self.assertEqual(storage.posts, {})
 
     def test_collector_storage_requires_complete_credentials(self):
         from sentra import wellness_refresh as w

@@ -2,6 +2,7 @@
 import json
 import gzip
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import psycopg
 import requests
@@ -11,7 +12,8 @@ from .errors import SentraError
 from .local_store import LocalStore
 from .providers import PROVIDERS
 from .shared_backend import SharedBackend,PrivateStorage,connect_db,BUCKET
-from .shared_backup import make_backup,BackupReader,restore_backup
+from . import capacity, compaction
+from .shared_backup import make_backup,BackupReader,restore_backup,verify_backup
 from .shared_config import read_shared
 from .shared_setup import bootstrap,read_admin,set_budget
 from .shared_sync import sync_store,compare_store
@@ -25,6 +27,8 @@ def add_commands(sub):
     p.add_argument('--egress-baseline-bytes',type=int,required=True)
     sub.add_parser('shared-status')
     sub.add_parser('shared-growth')
+    p = sub.add_parser('shared-measure',help='Append an aggregate capacity/collection snapshot to .private/measurements and show growth')
+    p.add_argument('--days',type=int,default=14,help='collection-run window')
     sub.add_parser('shared-check-access')
     for name in ('shared-sync','shared-verify'):
         p = sub.add_parser(name)
@@ -34,9 +38,25 @@ def add_commands(sub):
     p.add_argument('--participant')
     p.add_argument('--provider',choices=PROVIDERS)
     p.add_argument('--dataset')
+    for name in ('shared-compact','shared-compact-verify'):
+        p = sub.add_parser(name,help='Compact dense rows into audit.series (never deletes measurements)' if name == 'shared-compact'
+                           else 'Re-check compacted series against measurement rows and report measured sizes')
+        p.add_argument('--participant',required=True)
+        p.add_argument('--provider',choices=PROVIDERS,required=True)
+        p.add_argument('--dataset',required=True)
+        if name == 'shared-compact':
+            p.add_argument('--limit',type=int,default=200,help='original responses per batch')
+            p.add_argument('--repair',action='store_true',help='rebuild compacted responses whose measurement rows changed since')
+    p = sub.add_parser('shared-backup-verify',help='Offline check of an encrypted backup: hashes, row counts, fingerprints, originals')
+    p.add_argument('backup',type=Path)
     p = sub.add_parser('shared-restore',help='Restore health-only backup into a new isolated private schema')
     p.add_argument('backup',type=Path)
     p.add_argument('--empty-audit',action='store_true',help='Operational restoration only into completely empty initialized audit tables')
+    p.add_argument('--target-project',help='project ref of the configured target; required with --empty-audit')
+
+
+def project_ref(url):
+    return (urlsplit(url).hostname or '').split('.')[0]
 
 
 def expect_denial(code, body, *, kind):
@@ -107,11 +127,22 @@ def run_command(args):
         finally: db.close()
         print('Organization egress baseline refreshed; existing reservations retained.')
         return 0
+    if args.command == 'shared-backup-verify':
+        path = args.backup.resolve()
+        if not path.is_relative_to(private/'backups'):
+            raise SentraError('Keep the encrypted backup beneath .private/backups to verify it.')
+        print(json.dumps(verify_backup(BackupReader(path,cipher)),indent=2))
+        return 0
     credentials,limits,private = read_shared(args.config,cipher)
     backend = SharedBackend(credentials,limits)
     try:
         if args.command == 'shared-status':
             print(json.dumps(backend.usage(),indent=2))
+        elif args.command == 'shared-measure':
+            log = private/'measurements'/'capacity.jsonl'
+            entry = capacity.snapshot(backend,days=max(1,min(args.days,90)))
+            capacity.append(log,entry)
+            print(json.dumps({'latest':entry,'growth':capacity.growth(log)},indent=2))
         elif args.command == 'shared-growth':
             print(json.dumps(backend.growth_report(),indent=2))
         elif args.command == 'shared-check-access':
@@ -157,10 +188,28 @@ def run_command(args):
                 require_agreement(load_connection(args.config,provider,require_client=False))
             path = make_backup(backend,private/'backups',cipher,participant=args.participant,provider=args.provider,dataset=args.dataset)
             print('Encrypted private backup manifest: '+str(path))
+        elif args.command in ('shared-compact','shared-compact-verify'):
+            scope = (args.participant,args.provider,args.dataset)
+            backend.lock()
+            try:
+                if args.command == 'shared-compact':
+                    result = compaction.compact(backend.db,backend.guard,*scope,limit=max(1,min(args.limit,2000)),repair=args.repair)
+                else:
+                    backend.reserve(1_000_000)
+                    result = {**compaction.verify(backend.db,*scope),**compaction.sizes(backend.db,*scope)}
+            finally: backend.unlock()
+            print(json.dumps(result,indent=2))
+            if result['mismatched_responses']:
+                # Not lossless evidence: stale copies need `shared-compact --repair` before any later storage step.
+                print('Compacted series differ from measurement rows for some responses; run shared-compact --repair.',flush=True)
+                return 1
         elif args.command == 'shared-restore':
             path = args.backup.resolve()
             if not path.is_relative_to(private/'backups'):
                 raise SentraError('Save the encrypted backup beneath .private/backups before restoring.')
+            if args.empty_audit and args.target_project != project_ref(credentials['url']):
+                # Confirms which project receives the rows before anything is written there.
+                raise SentraError('Name the configured target with --target-project (its project ref) before an --empty-audit restore.')
             db = connect_db(read_admin(private))
             try: result = restore_backup(BackupReader(path,cipher),backend,db,empty_audit=args.empty_audit)
             finally: db.close()

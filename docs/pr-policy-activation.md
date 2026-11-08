@@ -14,18 +14,23 @@ Individual collaborator onboarding can remain pending during this preparation.
 Use the PR template:
 - Exactly one `Project: Sentra` line.
 - Exactly one `Task URL:` line containing the canonical HTTPS GitHub issue URL from this repository.
-- Optional `Task ID:` with SEN-number when assigned; never invent an ID.
+- Zero or more `Additional Task URL:` lines for other tasks implemented by the same
+  PR (maximum 10 tasks total). Dependencies and background links stay in prose.
+- Title starts with every declared task ID in order: `[SEN-28, SEN-27] description`.
+  For one task, use `[SEN-28] description`. Native GitHub PR numbers stay separate.
+- Optional `Task ID:` matches the primary issue; never invent an ID.
 - Completed `## What & why`, `## How tested` and `## Risks / limitations` sections.
 
 HTML comments and fenced examples do not satisfy the fields. Use exactly
 `https://github.com/han33-dotcom/PROJECT/issues/NUMBER`, substituting this
-repository's name and positive issue number. No query, fragment, credentials,
+repository's name and positive issue number for every task. Duplicate declarations
+fail. No query, fragment, credentials,
 port or PR URL is accepted. The read-only checker fetches that issue from this
 repository and rejects GitHub issue endpoints that actually represent PRs.
-Optional Task ID uses the matching issue number (SEN-NUMBER / TECH-NUMBER),
+Optional Task ID uses the primary issue number (SEN-NUMBER / TECH-NUMBER),
 not a legacy imported Notion ID. Use Related to #NUMBER instead of automatic
 issue-closing keywords; merging is Implemented, and acceptance controls Done.
-The validator checks PR descriptions. Reviewers must also check closing keywords
+The validator checks PR descriptions and Sentra title prefixes. Reviewers must also check closing keywords
 in commit messages and GitHub Development links; those can close issues independently.
 
 ## Scoped exemptions
@@ -66,6 +71,8 @@ read permissions; it does not use repository integration secrets.
 - It reads current PR metadata, files and label history; it never checks out or
   executes proposed application code in the token-bearing job.
 - Stale events, metadata changes and API failures fail closed.
+- The final freshness read includes the title as well as the body, branch heads,
+  labels and state. The shared TechScout single-task/title behavior is unchanged.
 
 The first foundation PR's base does not contain the validator yet. Its `pr-policy`
 job intentionally fails with **Bootstrap pending** rather than pretending enforcement

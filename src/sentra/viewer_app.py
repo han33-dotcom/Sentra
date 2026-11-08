@@ -21,7 +21,7 @@ from .datasets import canonical
 from .viewer_style import BRAND, STYLE
 
 
-ACCESS_TTL_SECONDS=60  # consent/withdrawal changes apply within a minute
+ACCESS_TTL_SECONDS=60  # upper bound within one render; each new render rechecks access
 
 
 def load_organization_rows(email):
@@ -103,7 +103,8 @@ def open_reader():
         credentials,limits,_=runtime_settings(st.secrets,folder)
         # Consult the current decision at every read, so a refresh during an open reader applies.
         reader=ViewerReader(credentials,limits,principal,
-                            can_view=lambda participant:current_access().can_view_individual(participant))
+                            can_view=lambda participant:current_access().can_view_individual(participant),
+                            can_count=lambda participant:bool(current_access().group_contributors([participant])))
         try: yield reader
         finally: reader.close()
 
@@ -359,8 +360,150 @@ def readable_view(selection,result,name):
         private_download(st.session_state['audit_readable_csv'],f'{selection.participant}-{selection.provider}-{selection.start}-{selection.end}-readable.csv','text/csv')
 
 
+def group_scope(decision):
+    """What cached group data was fetched for: the team, or a specific contributor set."""
+    return 'team' if decision.is_team else tuple(sorted(decision.contributors))
+
+
+def team_consents():
+    """Current consent rows for the team view, refreshed like organization decisions."""
+    cached=st.session_state.get('audit_team_consents')
+    if cached and time.monotonic()-cached[0]<ACCESS_TTL_SECONDS:
+        return cached[1]
+    _,consents=load_organization_rows(current_access().email)
+    st.session_state['audit_team_consents']=(time.monotonic(),consents)
+    return consents
+
+
+def organization_overview():
+    """Group summaries and participation for the signed-in user's scope (#39)."""
+    from .access import K_ANONYMITY
+    from .organization import group_summary, latest_group_day, participation, shown_count, team_scope
+    principal()
+    with st.container(key='page-heading'):
+        st.caption('ORGANIZATION')
+        st.title('Organization overview')
+    decision=current_access()
+    reload=st.sidebar.button('Reload overview',icon=':material/refresh:')
+    if reload or st.session_state.get('audit_org_scope')!=group_scope(decision):
+        with open_reader() as reader:
+            if decision.is_team:
+                # The team catalog is the explore pages' catalog; reuse it instead of repeating the query.
+                if reload or st.session_state.get('audit_catalog_scope')!='team':
+                    st.session_state['audit_catalog']=reader.catalog()
+                    st.session_state['audit_catalog_scope']='team'
+                catalog=st.session_state['audit_catalog']
+            else:
+                catalog=reader.group_catalog()
+            st.session_state['audit_org']={'catalog':catalog,'board':reader.group_board()}
+        st.session_state['audit_org_scope']=group_scope(decision)
+    data=st.session_state['audit_org']
+    if decision.is_team:
+        # Withdrawn or closed consent leaves the team view too; pilot participants have no consent record.
+        enrolled,scope=team_scope({r['participant_id'] for r in data['catalog']}
+                                  |{p.get('id') for p in data['board']['people']},team_consents())
+    else:
+        enrolled=scope=set(decision.contributors)
+    people=[p for p in data['board']['people'] if p.get('id') in scope and decision.group_contributors([p.get('id')])]
+    catalog=[r for r in data['catalog'] if r['participant_id'] in scope and decision.group_contributors([r['participant_id']])]
+    today=datetime.now(timezone.utc).astimezone(BEIRUT).date()
+    st.caption("Wellness information for health-and-safety conversations, compared with each person's own pattern; "
+               'not a medical assessment or diagnosis.')
+    counts=participation(scope,catalog,people,today=today,
+                         assessment_version=data['board'].get('assessment_version'))
+    counts['enrolled']=len(enrolled)
+    st.subheader('Participation')
+    columns=st.columns(4)
+    for column,(label,key,help_text) in zip(columns,(
+            ('Enrolled','enrolled','Current consent in an open membership.'),
+            ('Connected','connected','At least one wearable connection authorized.'),
+            ('Recently contributing','recently_contributing',f"Measurements within the last {counts['recent_days']} days."),
+            ('Assessable','assessable',f"A complete assessment on the latest published day within the last {counts['recent_days']} days."))):
+        # Organization users see small activity counts only as '<k'; they could single out group-only people.
+        value=counts[key] if decision.is_team or key=='enrolled' else shown_count(counts[key])
+        column.metric(label,value,help=help_text)
+    st.caption('Each state is counted separately; being connected does not mean recent data arrived.')
+    if decision.is_team and (pilot:=len(scope-enrolled)):
+        st.caption(f'Team view: also includes {pilot} pilot participant(s) with data but no recorded consent. '
+                   'Withdrawn participants are excluded.')
+    st.subheader('Group summary')
+    end=latest_group_day(people)
+    if not end:
+        st.info('No processed days are published yet.')
+        return
+    through=end.isoformat()
+    period=st.radio('Period',('Latest day','Last 7 days'),horizontal=True,key='audit_org_period')
+    rows=group_summary(people,scope,end=end,days=1 if period=='Latest day' else 7)
+    st.dataframe([{'Measure':r['label'],
+                   'Device':r['device'] or '',
+                   'Group median':f"{r['value']:g} {r['unit']}" if r['status']=='available' else 'Not shown',
+                   'Contributors':shown_count(r['contributors']),
+                   'Note':r['reason'] or ''} for r in rows],hide_index=True,width='stretch')
+    st.caption(f'Published days through {through}. Each device is summarized separately, and each statistic needs at '
+               f'least {K_ANONYMITY} eligible contributors of its own; smaller groups are never shown. '
+               'Assessable counts use complete, recent assessments from the current board contract.')
+
+
+def profiles_page():
+    """Individual profiles for participants who chose individual sharing (#39)."""
+    from .organization import profile
+    principal()
+    with st.container(key='page-heading'):
+        st.caption('ORGANIZATION')
+        st.title('Profiles')
+    decision=current_access()
+    reload=st.sidebar.button('Reload profiles',icon=':material/refresh:')
+    if reload or 'audit_board' not in st.session_state or st.session_state.get('audit_board_scope')!=access_scope(decision):
+        with open_reader() as reader:
+            st.session_state['audit_board']=reader.board()
+        st.session_state['audit_board_scope']=access_scope(decision)
+    people=[p for p in st.session_state['audit_board']['people'] if decision.can_view_individual(p.get('id'))]
+    if not people:
+        st.info('No participant with published days has shared individual details with you.')
+        return
+    person=next(p for p in people if p['id']==st.selectbox('Participant ID',sorted(p['id'] for p in people)))
+    today=datetime.now(timezone.utc).astimezone(BEIRUT).date()
+    summary=profile(person,today=today)
+    through=summary['data_through']
+    st.caption(f"Device: {summary['device'] or 'Not supplied'} · Latest published day: "
+               +(f"{through.isoformat()} ({summary['days_old']} days ago)" if through else 'none')
+               +f" · Days with data in the last 7: {summary['days_with_data_last_7']}")
+    st.dataframe([{'Measure':m['label'],
+                   'Latest':'' if m['value'] is None else f"{m['value']:g} {m['unit']}",
+                   'Usual (own baseline)':'' if m['baseline'] is None else f"{m['baseline']:g} {m['unit']}",
+                   'Difference':'' if m['difference'] is None else f"{m['difference']:+g} {m['unit']}",
+                   'Note':m['note'] or ''} for m in summary['metrics']],hide_index=True,width='stretch')
+    st.caption("Compared with this person's own recent pattern; not a medical assessment. Missing values stay missing.")
+    observations_section(person,today=today,assessment_version=st.session_state['audit_board'].get('assessment_version'))
+
+
+OBSERVATION_KINDS={'wellness':'Wellness observation','assessment':'Assessment limits','collection':'Data collection'}
+
+
+def observations_section(person,*,today,assessment_version):
+    """Explained observations for one permitted person's latest published day (#41)."""
+    from .observations import observations
+    st.subheader('Observations')
+    items=observations(person,today=today,assessment_version=assessment_version)
+    if not items:
+        st.info('No observation for the latest published day.')
+    for item in items:
+        with st.container(border=True):
+            when=f" · {item['day'].isoformat()}" if item['day'] else ''
+            st.caption(OBSERVATION_KINDS[item['kind']].upper()+when)
+            st.markdown(f"**{item['title']}**  \n{item['detail']}")
+            if item['readings']:
+                st.dataframe([{'Reading':k,'Value':v} for k,v in item['readings']],hide_index=True,width='stretch')
+            for note in item['limitations']:
+                st.caption(note)
+
+
 def main():
     st.set_page_config(page_title='Sentra · Wearable explorer',page_icon='🔎',layout='wide')
+    # A sharing change, withdrawal or removed role must apply on the next render.
+    # Reuse the decision during this render to avoid repeating guarded DB reads.
+    st.session_state.pop('audit_access', None)
+    st.session_state.pop('audit_team_consents', None)
     st.html(STYLE)
     st.sidebar.html(BRAND)
     try:
@@ -386,11 +529,17 @@ def main():
             if decision and decision[0]==identity:
                 st.session_state['audit_access']=decision
             st.session_state['audit_owner']=identity
-        page=st.sidebar.radio('Explore',('Daily activity','Sleep','Workouts','Data availability','Wellness board'),
-            key='explore',label_visibility='collapsed',width='stretch')
+        page=st.sidebar.radio('Explore',('Daily activity','Sleep','Workouts','Data availability','Wellness board',
+            'Organization overview','Profiles'),key='explore',label_visibility='collapsed',width='stretch')
         st.sidebar.divider()
         if page=='Wellness board':
             wellness_board()
+            return
+        if page=='Organization overview':
+            organization_overview()
+            return
+        if page=='Profiles':
+            profiles_page()
             return
         decision=current_access()
         # Refetch when the permitted set changes; filtering a cached copy cannot add newly shared people.

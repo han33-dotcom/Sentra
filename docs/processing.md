@@ -14,7 +14,11 @@ tiers -> observations.py (metric_map.py) -> clean -> minute grid -> daily -> 28-
 > assessments and must never be presented as a diagnosis. Flags use neutral names:
 > `flag_short_sleep`, `flag_rhr_above_baseline`, `flag_sleep_hr_above_baseline`,
 > `flag_hrv_below_baseline`, `flag_sustained_high_hr`, `flag_long_inactivity_in_shift`.
-> They feed `wellness_signals` (0–4) and `wellness_level` (green/amber/red).
+> They feed `wellness_signals` (0–4) and `wellness_level` (green/amber/red/insufficient).
+> Green requires every core rule to be assessed; missing inputs or a baseline that is still
+> building give `insufficient` or a `partial` assessment instead. The full definition is in
+> [indicator-contract.md](indicator-contract.md), with literature in
+> [medical-evidence.md](medical-evidence.md).
 
 ## Running
 

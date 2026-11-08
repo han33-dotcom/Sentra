@@ -104,6 +104,52 @@ Egress is the allowance closest to its limit: 2.52 GB of the 3.5 GB guard by 11 
 - **Keep current safeguards.** The 3.5 GB stop and the weekly baseline refresh stay
   as they are.
 
+## Implementation status (#46)
+
+Phases 1 (table) and 2 (build and lossless verification) are implemented in
+`sql/009_compact_series.sql` and `src/sentra/compaction.py`. **Nothing deletes measurement
+rows.**
+
+- `audit.series` holds one row per participant, provider, dense dataset, metric and original
+  response. Fields shared by every reading are stored once. Per-reading fields (record key,
+  value, vendor value, times, civil date, vendor time, collected-at, source pointer) are
+  parallel arrays, so every column of every row is kept.
+- `audit.series_rows` re-expands it column for column like `audit.measurements`.
+- `sentra shared-compact --participant p01 --provider google_health --dataset minute_steps`
+  compacts up to 200 pending responses per run in one transaction. Before writing, it asks
+  the capacity guard for the worst case (no saving). It then compares the row count and an
+  exact per-row fingerprint with the source rows. The fingerprint uses JSON text, so numeric
+  scale, nulls, jsonb and timestamps must all match. Any difference rolls the whole batch back.
+- `sentra shared-compact-verify …` re-checks everything compacted so far and reports measured
+  sizes. A later correction to measurement rows, including a reading that moves to a newer
+  original response, shows up as a mismatch. While any copy is mismatched, both commands
+  **exit 1**, so a mismatched copy is never taken as lossless evidence.
+- `sentra shared-compact --repair …` rebuilds those stale responses from their current rows,
+  with the same lock, capacity guard and batch verification. A response with no rows left
+  loses its series copy. Measurement rows are never changed.
+
+**Measured (3 Nov 2026, local throwaway PostgreSQL 16, not Supabase):** 65 days of one
+participant's real minute step readings were loaded in the collector's exact row shape:
+20,702 rows, 64-character record keys and the vendor time JSON.
+
+| | Measurement rows | Compact series |
+| --- | --- | --- |
+| Rows | 20,702 | 65 |
+| Table with indexes | 16.4 MB | 2.4 MB (**6.8× smaller**) |
+| Row data only | 10.8 MB | 2.1 MB (5.1×) |
+| Lossless check | — | 65/65 responses, 20,702/20,702 rows, 0 mismatches |
+
+**The saving is about 7×, not the 100× estimated above.** Keeping the full per-reading
+context (vendor time JSON, hash record keys, source pointers) is what makes it lossless. The
+remaining bulk is that context, and it can be re-derived from the hash-verified originals in
+`sentra-originals`. Going further therefore needs a team decision on whether to keep that
+context only in the originals. Separately, the dense `audit.records` rows (one per minute,
+with normalized JSON) are not compacted yet and must be measured on Supabase before phase 3
+is sized.
+
+Not done here: the collector still writes per-field rows (phase 1 collector change), tiers
+still read `audit.measurements`, and phase 3 deletion stays gated as below.
+
 ## Phases and approvals
 
 | Phase | Change | Deletes data? | Approval |

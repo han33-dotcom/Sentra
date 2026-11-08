@@ -49,14 +49,15 @@ class ViewerAccessTests(unittest.TestCase):
             self.assertFalse(app.exception); self.assertFalse(app.error)
             load.assert_not_called()
 
-    def test_organization_officer_signs_in_and_decision_is_cached(self):
+    def test_organization_access_is_cached_within_render_but_rechecked_next_render(self):
         patches, load, _ = self.run_as('officer@a.test', (USERS, consents()))
         with patches[0], patches[1], patches[2]:
             app = self.app(); app.run()
             self.assertFalse(app.exception); self.assertFalse(app.error)
+            self.assertEqual(load.call_count, 1)
             app.radio[0].set_value('Sleep').run()
             self.assertFalse(app.error)
-            self.assertEqual(load.call_count, 1)
+            self.assertEqual(load.call_count, 2)
             self.assertEqual(app.session_state['audit_access'][2].individuals, {'p99'})
 
     def test_unknown_account_is_denied_before_any_protected_read(self):
@@ -69,12 +70,12 @@ class ViewerAccessTests(unittest.TestCase):
             reads.catalog.assert_not_called(); reads.board.assert_not_called()
             self.assertNotIn('audit_access', app.session_state)
 
-    def test_withdrawal_hides_the_participant_once_the_cache_expires(self):
+    def test_withdrawal_hides_the_participant_on_the_next_render(self):
         from sentra import viewer_app
         state = {'withdrawn': False}
         patches, load, _ = self.run_as('officer@a.test', (USERS, consents()))
         load.side_effect = lambda email: (USERS, consents(withdrawn=state['withdrawn']))
-        with patches[0], patches[1], patches[2], patch.object(viewer_app, 'ACCESS_TTL_SECONDS', 0):
+        with patches[0], patches[1], patches[2]:
             app = self.app(); app.run()
             self.assertFalse(app.error)
             self.assertEqual(app.selectbox[0].options, ['p99'])
@@ -83,6 +84,37 @@ class ViewerAccessTests(unittest.TestCase):
             self.assertFalse(app.exception)
             self.assertTrue(any('No participant has shared' in i.value for i in app.info))
             self.assertEqual(len(app.selectbox), 0)
+
+    def test_group_only_change_clears_cached_individual_data_on_next_render(self):
+        state = {'sharing': 'individual'}
+        patches, load, _ = self.run_as('officer@a.test', (USERS, consents()))
+        def rows(email):
+            return USERS, [{**consents()[0], 'sharing': state['sharing']}]
+        load.side_effect = rows
+        with patches[0], patches[1], patches[2]:
+            app = self.app(); app.run()
+            self.assertEqual(app.selectbox[0].options, ['p99'])
+            app.session_state['audit_readable_csv'] = b'synthetic previously prepared export'
+            state['sharing'] = 'group_only'
+            app.run()
+            self.assertFalse(app.exception); self.assertFalse(app.error)
+            self.assertTrue(any('No participant has shared' in item.value for item in app.info))
+            self.assertEqual(len(app.selectbox), 0)
+            self.assertNotIn('audit_readable_csv', app.session_state)
+
+    def test_removed_officer_is_denied_on_next_render_without_waiting(self):
+        state = {'active': True}
+        reads = Mock(wraps=FakeReader())
+        patches, load, _ = self.run_as('officer@a.test', (USERS, consents()), reads)
+        load.side_effect = lambda email: ([{**USERS[0], 'active': state['active']}], consents())
+        with patches[0], patches[1], patches[2]:
+            app = self.app(); app.run()
+            self.assertFalse(app.error)
+            state['active'] = False
+            reads.reset_mock()
+            app.run()
+            self.assertTrue(any('Access restricted' in item.value for item in app.error))
+            reads.catalog.assert_not_called(); reads.board.assert_not_called()
 
     def test_officer_sees_only_permitted_people_and_no_operator_tools(self):
         class TwoPeople(FakeReader):
@@ -137,7 +169,7 @@ class ViewerAccessTests(unittest.TestCase):
         revoked = resolve('officer@a.test', team_emails=TEAM, org_users=USERS, consents=consents(withdrawn=True))
         decisions = iter([allowed, allowed, revoked, revoked, revoked])
         captured = {}
-        def build(credentials, limits, principal, can_view):
+        def build(credentials, limits, principal, can_view, can_count=None):
             captured['reader'] = ViewerReader(credentials, Limits(), lambda: 'officer@a.test', db=Mock(),
                                               budget_db=Mock(), can_view=can_view)
             return captured['reader']
@@ -160,7 +192,7 @@ class ViewerAccessTests(unittest.TestCase):
                 return [r for r in super().catalog() if viewer_app.current_access().can_view_individual(r['participant_id'])]
         patches, load, _ = self.run_as('officer@a.test', (USERS, []), Mock(wraps=Scoped()))
         load.side_effect = lambda email: (USERS, rows())
-        with patches[0], patches[1], patches[2], patch.object(viewer_app, 'ACCESS_TTL_SECONDS', 0):
+        with patches[0], patches[1], patches[2]:
             app = self.app(); app.run()
             self.assertTrue(any('No participant has shared' in i.value for i in app.info))
             self.assertIn('Check again', [b.label for b in app.button])
