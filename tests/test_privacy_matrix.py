@@ -67,12 +67,34 @@ class EveryoneReader(FakeReader):
     group_board = board
 
 
+def _decoded(message):
+    """Text of a protobuf message with binary payloads decoded: Arrow tables (dataframes, chart data) become
+    CSV, other bytes UTF-8. Stringifying the protobuf alone escapes cell bytes and can hide an ID."""
+    import pyarrow as pa
+    from google.protobuf.message import Message
+    out = []
+    for _, value in message.ListFields():
+        single = isinstance(value, (Message, str, bytes, int, float, bool))
+        for item in ([value] if single else value):  # repeated fields are containers
+            if isinstance(item, Message):
+                out.append(_decoded(item))
+            elif isinstance(item, bytes):
+                try:
+                    out.append(pa.ipc.open_stream(item).read_all().to_pandas().to_csv())
+                except Exception:
+                    out.append(item.decode('utf-8', 'ignore'))
+            else:
+                out.append(str(item))
+    return '\n'.join(out)
+
+
 def rendered(app):
-    """Everything the page sent to the browser, as text: elements, options, table and chart data, iframes."""
+    """Everything the page sent to the browser, as text: elements, options, decoded table and chart data,
+    iframes."""
     out = []
     def walk(node):
         if getattr(node, 'proto', None) is not None:
-            out.append(str(node.proto))
+            out.append(_decoded(node.proto))
         for child in getattr(node, 'children', {}).values():
             walk(child)
     walk(app.main)
@@ -160,6 +182,35 @@ class PrivacyMatrixTests(unittest.TestCase):
         for page in PAGES:
             with self.subTest(page=page):
                 self.assertEqual(shown_ids(self.visit(app, page)), set())
+
+
+class RenderedScanTests(unittest.TestCase):
+    """The scan itself must find an ID wherever a page can put it."""
+    @staticmethod
+    def page():
+        import altair as alt
+        import pandas as pd
+        import streamlit as st
+        where = st.query_params.get('where', 'table')
+        frame = pd.DataFrame({'Participant': ['p96'], 'Value': [1]})
+        if where == 'table':
+            st.dataframe(frame)
+        elif where == 'chart':
+            st.altair_chart(alt.Chart(frame).mark_point().encode(x='Participant', y='Value'))
+        elif where == 'option':
+            st.selectbox('Pick', ['p96'])
+        else:
+            st.caption('nothing here')
+
+    def test_ids_are_found_in_table_cells_chart_data_and_options(self):
+        from streamlit.testing.v1 import AppTest
+        for where, expected in (('table', {'p96'}), ('chart', {'p96'}), ('option', {'p96'}), ('none', set())):
+            with self.subTest(where=where):
+                app = AppTest.from_function(self.page)
+                app.query_params['where'] = where
+                app.run()
+                self.assertFalse(app.exception)
+                self.assertEqual(shown_ids(rendered(app)), expected)
 
 
 class ExcludedFieldsTests(unittest.TestCase):
