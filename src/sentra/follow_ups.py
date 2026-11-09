@@ -25,7 +25,7 @@ def history(rows, events, *, shared=None):
     individual sharing: a follow-up about anyone else can take no further updates, so it is shown as
     closed rather than open forever."""
     trails = {}
-    for event in sorted(events, key=lambda e: (e['recorded_at'], e['event_id'])):
+    for event in sorted(events, key=lambda e: e['event_id']):  # the serialized write order (sql/010)
         trails.setdefault(event['follow_up_id'], []).append(event)
     items = []
     for row in rows:

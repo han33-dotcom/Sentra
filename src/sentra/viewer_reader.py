@@ -144,14 +144,14 @@ class ViewerReader:
               (select count(*) from org.follow_up_events c where c.follow_up_id=f.follow_up_id) event_count
               from org.follow_ups f cross join lateral (select e.status,e.assignee,e.note,e.recorded_at
                 from org.follow_up_events e where e.follow_up_id=f.follow_up_id
-                order by e.recorded_at desc,e.event_id desc limit 1) l
+                order by e.event_id desc limit 1) l
               {'where '+' and '.join(where) if where else ''}
               order by l.status='resolved',l.recorded_at desc,f.follow_up_id desc limit %s''',
               (*values,self.FOLLOW_UP_PAGE),allowance=self.FOLLOW_UP_PAGE*self.FOLLOW_UP_ROW_BYTES+65_536)
             events=self._rows('''select event_id,follow_up_id,recorded_at,actor,status,assignee,note from (
-              select e.*,row_number() over (partition by e.follow_up_id order by e.recorded_at desc,e.event_id desc) n
+              select e.*,row_number() over (partition by e.follow_up_id order by e.event_id desc) n
               from org.follow_up_events e where e.follow_up_id=any(%s)) x
-              where n<=%s order by follow_up_id,recorded_at,event_id''',
+              where n<=%s order by follow_up_id,event_id''',
               ([r['follow_up_id'] for r in rows],self.FOLLOW_UP_HISTORY),
               allowance=self.FOLLOW_UP_PAGE*self.FOLLOW_UP_HISTORY*self.FOLLOW_UP_ROW_BYTES+65_536)
             return rows,events

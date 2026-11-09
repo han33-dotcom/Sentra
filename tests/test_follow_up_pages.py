@@ -74,6 +74,9 @@ class FollowUpPageTests(unittest.TestCase):
         self.writer.open.assert_called_once_with('officer@a.test', 'org-a', 'p91', 'reviewer@a.test',
                                                  'Agreed to review sleep next week.')
         self.assertIn('Follow-up recorded.', [s.value for s in app.success])
+        self.assertFalse(app.error)  # the list reloads after the write instead of stopping the page
+        self.assertEqual(len(FollowUpReader.scopes), 2)
+        self.assertIn('**Follow-up 1 · Participant p91**', self.titles(app))
 
     def test_officer_updates_status_and_assignee(self):
         app = self.open('officer@a.test')
@@ -81,6 +84,9 @@ class FollowUpPageTests(unittest.TestCase):
         app.text_input[0].input('Checked in today.')
         next(b for b in app.button if b.label == 'Save update').click().run()
         self.writer.update.assert_called_once_with('officer@a.test', 4, 'ongoing', 'officer@a.test', 'Checked in today.')
+        self.assertFalse(app.error)
+        self.assertEqual(len(FollowUpReader.scopes), 2)
+        self.assertIn('Follow-up updated.', [s.value for s in app.success])
 
     def test_reviewer_and_team_read_without_recording(self):
         reviewer = self.open('reviewer@a.test')

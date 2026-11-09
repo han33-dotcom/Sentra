@@ -12,7 +12,9 @@ create table org.follow_ups (
  opened_by text not null check (opened_by = lower(opened_by) and opened_by ~ '^[^@\s]+@[^@\s]+$'),
  opened_at timestamptz not null default now()
 );
--- Append-only history: every status change, reassignment or note is a new event.
+-- Append-only history: every status change, reassignment or note is a new event. Writes to one
+-- follow-up are serialized by a row lock, so event_id is the order of events; recorded_at is the
+-- transaction's start time and is for display only.
 create table org.follow_up_events (
  event_id bigint generated always as identity primary key,
  follow_up_id bigint not null references org.follow_ups,
@@ -22,7 +24,7 @@ create table org.follow_up_events (
  assignee text not null check (assignee = lower(assignee) and assignee ~ '^[^@\s]+@[^@\s]+$'),
  note text not null check (length(btrim(note)) between 1 and 500)
 );
-create index follow_up_events_latest on org.follow_up_events(follow_up_id,recorded_at desc,event_id desc);
+create index follow_up_events_latest on org.follow_up_events(follow_up_id,event_id desc);
 create function org.reject_follow_up_change() returns trigger
 language plpgsql set search_path='' as $$
 begin
@@ -81,7 +83,7 @@ begin
   raise exception 'Follow-up not found.' using errcode='42501';
  end if;
  select e.assignee into holder from org.follow_up_events e where e.follow_up_id=fid
-  order by e.recorded_at desc, e.event_id desc limit 1;
+  order by e.event_id desc limit 1;
  -- A withdrawn or downgraded consent also stops further notes about that person.
  perform org.check_follow_up(actor, f.org_id, f.participant_id, assignee, note, holder);
  if new_status not in ('open','ongoing','resolved') then

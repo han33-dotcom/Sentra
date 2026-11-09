@@ -110,6 +110,23 @@ class FollowUpDatabaseTests(unittest.TestCase):
             self.db.execute("insert into org.consents(membership_id,participant_id,org_id,consent_version,sharing,"
                             "recorded_at) values (%s,'p901','org-a','1.0','individual',now()+interval '2 seconds')", (m,))
 
+    def test_concurrent_writes_follow_the_serialized_event_order(self):
+        from psycopg.conninfo import make_conninfo
+        fid = self.open(assignee=OFFICER)
+        a = self.psycopg.connect(make_conninfo(URL, dbname=self.name))       # transaction A starts first
+        b = self.psycopg.connect(make_conninfo(URL, dbname=self.name), autocommit=True)
+        self.addCleanup(a.close); self.addCleanup(b.close)
+        a.execute('set role sentra_followups'); a.execute('select 1')        # A's now() is fixed here
+        b.execute('set role sentra_followups')
+        b.execute('select org.update_follow_up(%s,%s,%s,%s,%s)', (OFFICER, fid, 'ongoing', REVIEWER, 'To reviewer.'))
+        a.execute('select org.update_follow_up(%s,%s,%s,%s,%s)', (OFFICER, fid, 'resolved', OFFICER, 'Back to officer.'))
+        a.commit()
+        reader, _ = self.reader()
+        current = {r['follow_up_id']: r for r in reader.follow_up_rows('org-a', ['p901'])[0]}[fid]
+        self.assertEqual((current['status'], current['assignee']), ('resolved', OFFICER))  # A wrote last
+        # The reviewer lost the assignment when A committed, despite A's earlier recorded_at.
+        self.assertTrue(self.refused(self.update, fid, 'ongoing', actor=REVIEWER, assignee=REVIEWER))
+
     def reader(self):
         from unittest.mock import Mock
         from psycopg.conninfo import make_conninfo

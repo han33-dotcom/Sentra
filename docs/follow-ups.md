@@ -47,7 +47,8 @@ or contact information. Notes are shown as plain text, never as formatted Markdo
   participants who currently share individual details, then to a page of the 50 follow-ups
   shown first (open and ongoing before resolved, most recently updated first).
 - Each follow-up's current status, assignee and note come from its latest event, read
-  separately from the history; the history shows its latest 10 events and says when more exist.
+  separately from the history. "Latest" is the event order (`event_id`), which the row lock
+  serializes; `recorded_at` is the transaction's start time, shown for display only; the history shows its latest 10 events and says when more exist.
 - Egress is reserved for each page at its maximum size (about 3 KB per row) before reading.
 
 ## Operator setup (private)

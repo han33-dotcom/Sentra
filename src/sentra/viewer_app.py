@@ -530,6 +530,7 @@ def save_follow_up(action,message):
         st.error(str(error))
         return
     st.session_state.pop('audit_follow_ups',None)
+    st.session_state.pop('audit_follow_ups_scope',None)
     st.session_state['audit_follow_up_saved']=message
     st.rerun()
 
@@ -544,12 +545,14 @@ def follow_ups_page():
         st.title('Follow-ups')
     decision=current_access()
     reload=st.sidebar.button('Reload follow-ups',icon=':material/refresh:')
-    if reload or st.session_state.get('audit_follow_ups_scope')!=access_scope(decision):
+    # Two organizations can have the same permitted participants, so the scope includes the organization.
+    scope=(decision.org_id,access_scope(decision))
+    if reload or 'audit_follow_ups' not in st.session_state or st.session_state.get('audit_follow_ups_scope')!=scope:
         with open_reader() as reader:
             # Scope first, then the page limit: other organizations' records never push these out.
             st.session_state['audit_follow_ups']=(reader.follow_up_rows() if decision.is_team else
                 reader.follow_up_rows(decision.org_id,sorted(decision.individuals)))
-        st.session_state['audit_follow_ups_scope']=access_scope(decision)
+        st.session_state['audit_follow_ups_scope']=scope
     if saved:=st.session_state.pop('audit_follow_up_saved',None):
         st.success(saved)
     st.caption('Follow-ups record what was observed and agreed in health-and-safety conversations. '
