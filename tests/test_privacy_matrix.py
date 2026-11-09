@@ -5,8 +5,8 @@ database scoping had failed. Each page must still show only what that user may s
 looks at everything rendered (text, tables, options, chart data and the embedded board), not
 only at one widget. Synthetic identities and rows only.
 
-Pages added by later tasks join `PAGES` when they merge (trends #40, follow-ups #31); then this
-matrix is rerun with them included.
+Pages added by later tasks join `PAGES` when they merge, and the matrix is rerun with them: Trends
+(#40) is included in both views; Follow-ups (#31) joins when it merges.
 """
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -21,8 +21,9 @@ from test_organization_pages import User
 from test_viewer_app import FakeReader
 
 TEAM = ['team@example.test']
+# 'Page · View' also selects a view inside the page.
 PAGES = ('Daily activity', 'Sleep', 'Workouts', 'Data availability', 'Wellness board',
-         'Organization overview', 'Profiles')
+         'Organization overview', 'Profiles', 'Trends · One person', 'Trends · Group')
 USERS = [{'org_id': 'org-a', 'email': 'officer@a.test', 'role': 'officer', 'active': True},
          {'org_id': 'org-a', 'email': 'reviewer@a.test', 'role': 'reviewer', 'active': True},
          {'org_id': 'org-a', 'email': 'removed@a.test', 'role': 'officer', 'active': False},
@@ -125,7 +126,10 @@ class PrivacyMatrixTests(unittest.TestCase):
         return app
 
     def visit(self, app, page):
-        app.radio(key='explore').set_value(page).run()
+        name, _, view = page.partition(' · ')
+        app.radio(key='explore').set_value(name).run()
+        if view:
+            app.radio(key='audit_trend_view').set_value(view).run()
         self.assertFalse(app.exception, page)
         return rendered(app)
 
