@@ -37,6 +37,17 @@ therefore still target the live project.
 3. Copy only the encrypted backup folder into the rehearsal checkout's `.private/backups/`.
    On the same Windows account, both checkouts read the same local key from the OS vault.
    Elsewhere, recover the key securely, never by chat or email.
+4. After `shared-bootstrap`, apply the organization, enrollment and follow-up migrations the
+   backup needs, using the same private operator process as for the live project:
+   - always `sql/007` and `sql/008` for a full backup;
+   - also `sql/010` (Follow-ups, SEN-31) when the live `shared-backup-verify` lists
+     `org.follow_ups` and `org.follow_up_events` under `tables`. When they appear under
+     `not_installed` instead, the source never had them and 010 is not needed.
+
+   The restore checks this before writing anything and stops if a table in the backup has no
+   counterpart on the target. It also resets the participant-number and identity sequences, which
+   needs the admin role used by `shared-restore` to own them; otherwise it stops with a
+   permission error and rolls back.
 
 ## Steps
 
@@ -69,7 +80,8 @@ differs. The original responses are uploaded into the rehearsal project's own
 | Item | Expected | Actual |
 | --- | --- | --- |
 | Backup created at / selection | full, after collection paused | |
-| `shared-backup-verify` | `verified`, 7 tables, N originals | |
+| `shared-backup-verify` | `verified`, N originals, `not_covered` empty. `tables`: the 7 audit tables plus each installed organization, enrollment and follow-up table (15 with Follow-ups installed, 13 without) | |
+| Inventory reconciled with the source | every table installed in the live project is under `tables`; `not_installed` lists only tables it lacks (both follow-up tables before `sql/010`). Check against the migrations applied to the live project | |
 | Restore result | `restored_and_verified` | |
 | Row counts per table | equal to the manifest | |
 | Table fingerprints | equal to the manifest | |
@@ -81,14 +93,14 @@ After an `--empty-audit` restore, membership and consent ids continue after the 
 and enrollment's participant-number allocator moves past the highest restored `pNNN`. A new
 participant therefore never collides with a restored one. If the restored IDs already reach the
 allocator's maximum (p9999), it is kept at that bound: the restore still succeeds, and new
-enrollment reports that capacity is exhausted. Record a synthetic test enrollment
-after the rehearsal if the enrollment service is deployed against the target.
+enrollment reports that capacity is exhausted. These sequence changes are part of the restore
+transaction: if the restore stops for any reason, they roll back with the rows and the target's
+allocators stay where they were. Record a synthetic test enrollment after the rehearsal if the
+enrollment service is deployed against the target.
 
 ## Not covered (record as unverified)
 
 - Enrollment browser sessions and rate limits, which are short-lived and excluded on purpose.
-  The rehearsal target needs sql/007 and sql/008 applied (after `shared-bootstrap`), or the
-  restore stops before writing the organization and enrollment tables.
 - Provider credentials, storage accounts and keys. They are excluded on purpose, so after
   a real loss participants must reconnect and keys come from secure recovery.
 - Parquet tiers and the board. They are derived and rebuilt from the restored audit data.
