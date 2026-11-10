@@ -4,7 +4,7 @@ import unittest
 
 from sentra.access import resolve
 from sentra.errors import SentraError
-from sentra.follow_ups import assignees, can_record, can_update, clean_note, history, shared_pairs, visible
+from sentra.follow_ups import assignees, can_record, can_update, clean_note, history, visible
 
 USERS = [{'org_id': 'org-a', 'email': 'officer@a.test', 'role': 'officer', 'active': True},
          {'org_id': 'org-a', 'email': 'reviewer@a.test', 'role': 'reviewer', 'active': True},
@@ -18,14 +18,15 @@ def at(hour):
     return datetime(2026, 11, 4, hour, tzinfo=timezone.utc)
 
 
-def row(fid, org, pid, status, assignee='reviewer@a.test', count=1):
+def row(fid, org, pid, status, assignee='reviewer@a.test', count=1, ended=False, latest=None):
     return {'follow_up_id': fid, 'org_id': org, 'participant_id': pid, 'status': status, 'assignee': assignee,
-            'note': f'note {fid}', 'updated_at': at(10), 'event_count': count}
+            'note': f'note {fid}', 'updated_at': at(10), 'event_count': count, 'sharing_ended': ended,
+            'latest_event_id': latest if latest is not None else fid}
 
 
-ROWS = [row(1, 'org-a', 'p91', 'ongoing', 'officer@a.test', count=2),
+ROWS = [row(1, 'org-a', 'p91', 'ongoing', 'officer@a.test', count=2, latest=20),
         row(2, 'org-a', None, 'resolved'),
-        row(3, 'org-a', 'p92', 'open'),        # sharing since reduced to group_only
+        row(3, 'org-a', 'p92', 'open', ended=True),  # sharing since reduced to group_only (flagged by the reader)
         row(4, 'org-b', None, 'open', 'officer@b.test')]
 EVENTS = [{'event_id': 2, 'follow_up_id': 1, 'recorded_at': at(10), 'status': 'ongoing', 'assignee': 'officer@a.test', 'note': 'b'},
           {'event_id': 1, 'follow_up_id': 1, 'recorded_at': at(9), 'status': 'open', 'assignee': 'reviewer@a.test', 'note': 'a'}]
@@ -42,11 +43,14 @@ class FollowUpTests(unittest.TestCase):
         self.assertEqual([e['event_id'] for e in {i['follow_up_id']: i for i in history(ROWS, EVENTS)}[1]['events']], [1, 2])
 
     def test_follow_ups_about_people_who_stopped_sharing_are_closed(self):
-        items = {i['follow_up_id']: i for i in history(ROWS, EVENTS, shared=shared_pairs(CONSENTS))}
+        items = {i['follow_up_id']: i for i in history(ROWS, EVENTS)}
         self.assertEqual((items[3]['status'], items[3]['closed_reason']),
                          ('resolved', 'Sharing ended; no further updates are possible.'))
         self.assertEqual((items[1]['status'], items[1]['closed_reason']), ('ongoing', None))
         self.assertIsNone(items[4]['closed_reason'])  # group follow-ups are unaffected
+
+    def test_open_and_ongoing_come_first_then_the_most_recently_updated(self):
+        self.assertEqual([i['follow_up_id'] for i in history(ROWS, EVENTS)], [1, 4, 3, 2])
 
     def test_notes_follow_organization_and_sharing_boundaries(self):
         items = history(ROWS, EVENTS)

@@ -158,6 +158,50 @@ class FollowUpDatabaseTests(unittest.TestCase):
         self.assertGreaterEqual(reserved[1], reader.FOLLOW_UP_PAGE * reader.FOLLOW_UP_HISTORY * 2_000)  # 500 4-byte chars
         self.assertEqual(len(reader.follow_up_rows()[0]), reader.FOLLOW_UP_PAGE)  # team: all, still bounded
 
+    def test_status_filter_applies_before_the_page_limit(self):
+        done = self.open(pid=None, note='Group check-in done.')
+        self.update(done, 'resolved', note='Closed after review.')
+        for i in range(55):  # more open items than one page, all newer than the resolved one
+            self.open(pid=None, note=f'open {i}')
+        reader, _ = self.reader()
+        resolved, events = reader.follow_up_rows('org-a', ['p901'], statuses=('resolved',))
+        self.assertIn(done, [r['follow_up_id'] for r in resolved])
+        self.assertTrue(all(r['status'] == 'resolved' for r in resolved))
+        self.assertTrue(all(e['follow_up_id'] in {r['follow_up_id'] for r in resolved} for e in events))
+        active, _ = reader.follow_up_rows('org-a', ['p901'], statuses=('open', 'ongoing'))
+        self.assertEqual(len(active), reader.FOLLOW_UP_PAGE)
+        self.assertTrue(all(r['status'] in ('open', 'ongoing') for r in active))
+
+    def test_follow_ups_about_people_who_stopped_sharing_count_as_resolved(self):
+        m = self.db.execute("insert into org.memberships(participant_id,org_id,joined_on) values ('p903','org-a',"
+                            "'2026-11-01') returning membership_id").fetchone()[0]
+        consent = ("insert into org.consents(membership_id,participant_id,org_id,consent_version,sharing) "
+                   "values (%s,'p903','org-a','1.0',%s)")
+        self.db.execute(consent, (m, 'individual'))
+        fid = self.open(pid='p903', note='Asked about rest days.')
+        self.db.execute(consent, (m, 'group_only'))  # sharing reduced; the follow-up stays open in the database
+        reader, _ = self.reader()
+        resolved = {r['follow_up_id']: r for r in reader.follow_up_rows(statuses=('resolved',))[0]}
+        self.assertEqual((resolved[fid]['status'], resolved[fid]['sharing_ended']), ('open', True))
+        self.assertNotIn(fid, [r['follow_up_id'] for r in reader.follow_up_rows(statuses=('open', 'ongoing'))[0]])
+
+    def test_current_state_and_history_come_from_one_snapshot(self):
+        from unittest.mock import Mock
+        fid = self.open(pid=None, note='Snapshot check.')
+        reader, budget = self.reader()
+        calls = []
+        def reserve(*args):
+            calls.append(args)
+            if len(calls) == 2:  # another session commits while the page is being read
+                self.update(fid, 'ongoing', note='Changed meanwhile.')
+            return Mock()
+        budget.execute.side_effect = reserve
+        rows, events = reader.follow_up_rows('org-a', ['p901'], statuses=('open', 'ongoing'))
+        current = {r['follow_up_id']: r for r in rows}[fid]
+        trail = [e for e in events if e['follow_up_id'] == fid]
+        self.assertEqual((current['status'], current['event_count']), (trail[-1]['status'], len(trail)))
+        self.assertEqual(current['assignee'], trail[-1]['assignee'])
+
     def test_history_is_append_only_and_roles_stay_narrow(self):
         fid = self.open()
         for sql in ('update org.follow_up_events set note=%s where follow_up_id=%s',

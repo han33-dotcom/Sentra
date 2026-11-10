@@ -633,6 +633,7 @@ def trends_page():
 
 
 FOLLOW_UP_GROUP='Group (no individual)'
+FOLLOW_UP_FILTERS={'Open and ongoing':('open','ongoing'),'Resolved':('resolved',),'All':None}
 
 
 def save_follow_up(action,message):
@@ -656,32 +657,37 @@ def save_follow_up(action,message):
 def follow_ups_page():
     """Brief follow-ups with an assigned reviewer and open/ongoing/resolved history (#31)."""
     from .follow_ups import (GUIDANCE, NOTE_LIMIT, STATUSES, assignees, can_record, can_update, clean_note, history,
-                             shared_pairs, visible)
+                             visible)
     principal()
     with st.container(key='page-heading'):
         st.caption('ORGANIZATION')
         st.title('Follow-ups')
     decision=current_access()
     reload=st.sidebar.button('Reload follow-ups',icon=':material/refresh:')
-    # Two organizations can have the same permitted participants, so the scope includes the organization.
-    scope=(decision.org_id,access_scope(decision))
-    if reload or 'audit_follow_ups' not in st.session_state or st.session_state.get('audit_follow_ups_scope')!=scope:
-        with open_reader() as reader:
-            # Scope first, then the page limit: other organizations' records never push these out.
-            st.session_state['audit_follow_ups']=(reader.follow_up_rows() if decision.is_team else
-                reader.follow_up_rows(decision.org_id,sorted(decision.individuals)))
-        st.session_state['audit_follow_ups_scope']=scope
     if saved:=st.session_state.pop('audit_follow_up_saved',None):
         st.success(saved)
     st.caption('Follow-ups record what was observed and agreed in health-and-safety conversations. '
                'They are not medical records or diagnoses.')
+    record_area=st.container()  # the recording form stays above the filter it does not depend on
+    shown=st.radio('Show',tuple(FOLLOW_UP_FILTERS),horizontal=True,key='audit_follow_up_filter')
+    # Two organizations can have the same permitted participants, so the scope includes the organization;
+    # each filter is its own bounded page.
+    scope=(decision.org_id,access_scope(decision),shown)
+    if reload or 'audit_follow_ups' not in st.session_state or st.session_state.get('audit_follow_ups_scope')!=scope:
+        with open_reader() as reader:
+            # Scope and status first, then the page limit: other organizations' records, or follow-ups with
+            # another status, never push the requested ones out.
+            st.session_state['audit_follow_ups']=(
+                reader.follow_up_rows(statuses=FOLLOW_UP_FILTERS[shown]) if decision.is_team else
+                reader.follow_up_rows(decision.org_id,sorted(decision.individuals),statuses=FOLLOW_UP_FILTERS[shown]))
+        st.session_state['audit_follow_ups_scope']=scope
     rows,events=st.session_state['audit_follow_ups']
     # The team sees every follow-up; one about someone who stopped sharing is shown as closed.
-    items=visible(history(rows,events,shared=shared_pairs(team_consents()) if decision.is_team else None),decision)
+    items=visible(history(rows,events),decision)
     recorder=can_record(decision)
     people=assignees(load_organization_rows(decision.email)[0],decision.org_id) if decision.org_id else []
     if recorder:
-        with st.form('audit_follow_up_new',clear_on_submit=True):
+        with record_area, st.form('audit_follow_up_new',clear_on_submit=True):
             st.subheader('Record a follow-up')
             about=st.selectbox('About',[FOLLOW_UP_GROUP]+sorted(decision.individuals),
                                help='Only participants who share individual details with your organization are listed.')
@@ -692,11 +698,10 @@ def follow_ups_page():
                 save_follow_up(lambda w:w.open(decision.email,decision.org_id,None if about==FOLLOW_UP_GROUP else about,
                                                assignee,clean_note(note)),'Follow-up recorded.')
     elif decision.is_team:
-        st.caption('Team operators can read follow-ups; organization officers record and update them.')
+        record_area.caption('Team operators can read follow-ups; organization officers record and update them.')
     else:
-        st.caption('Officers record follow-ups; you can update the ones assigned to you.')
-    shown=st.radio('Show',('Open and ongoing','Resolved','All'),horizontal=True,key='audit_follow_up_filter')
-    items=[i for i in items if shown=='All' or (i['status']=='resolved')==(shown=='Resolved')]
+        record_area.caption('Officers record follow-ups; you can update the ones assigned to you.')
+    items=[i for i in items if FOLLOW_UP_FILTERS[shown] is None or i['status'] in FOLLOW_UP_FILTERS[shown]]
     if not items:
         st.info('No follow-ups to show.')
         return
@@ -721,11 +726,17 @@ def follow_ups_page():
                     columns=st.columns(2)
                     status=columns[0].selectbox('Status',STATUSES,index=STATUSES.index(item['status']))
                     assignee=columns[1].selectbox('Assign to',people,
-                                                  index=people.index(item['assignee']) if item['assignee'] in people else 0)
+                                                  index=people.index(item['assignee']) if item['assignee'] in people else None,
+                                                  placeholder='Choose an active officer or reviewer')
+                    if item['assignee'] not in people:
+                        st.caption('The current assignee is no longer active here; choose who takes it over.')
                     note=st.text_input('Update note',max_chars=NOTE_LIMIT,help=GUIDANCE)
                     if st.form_submit_button('Save update'):
-                        save_follow_up(lambda w,i=item['follow_up_id'],s=status,a=assignee,n=note:
-                                       w.update(decision.email,i,s,a,clean_note(n)),'Follow-up updated.')
+                        if assignee is None:
+                            st.error('Choose who the follow-up is assigned to.')
+                        else:
+                            save_follow_up(lambda w,i=item['follow_up_id'],s=status,a=assignee,n=note:
+                                           w.update(decision.email,i,s,a,clean_note(n)),'Follow-up updated.')
 
 
 def main():

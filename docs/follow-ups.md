@@ -43,13 +43,22 @@ or contact information. Notes are shown as plain text, never as formatted Markdo
 
 ## Reading
 
-- Scope comes first: an organization user's read is limited to their organization and to
-  participants who currently share individual details, then to a page of the 50 follow-ups
-  shown first (open and ongoing before resolved, most recently updated first).
-- Each follow-up's current status, assignee and note come from its latest event, read
-  separately from the history. "Latest" is the event order (`event_id`), which the row lock
-  serializes; `recorded_at` is the transaction's start time, shown for display only; the history shows its latest 10 events and says when more exist.
-- Egress is reserved for each page at its maximum size (about 3 KB per row) before reading.
+- Scope and status come first: an organization user's read is limited to their organization and to
+  participants who currently share individual details, and every read to the selected filter (open and
+  ongoing, resolved, or all). Only then is the page limited to the 50 follow-ups shown first (open and
+  ongoing before resolved, most recently updated first). Each filter is its own page, so many open items
+  never hide the resolved ones.
+- A follow-up about someone who no longer shares individual details with that organization is flagged by
+  the database read itself (`sharing_ended`) and counts as resolved, shown as "Sharing ended".
+- Each follow-up's current status, assignee and note come from its latest event. "Latest" is the event
+  order (`event_id`), which the row lock serializes; `recorded_at` is the transaction's start time, shown
+  for display only; the history shows its latest 10 events and says when more exist.
+- The page and its history are read in one repeatable-read, read-only transaction, so a change committed
+  meanwhile cannot show an older status next to newer history.
+- Egress is reserved for the page and the history at their maximum size (about 3 KB per row) before
+  reading, outside that transaction.
+- If the current assignee is no longer active, the update form asks who takes it over instead of picking
+  someone.
 
 ## Operator setup (private)
 

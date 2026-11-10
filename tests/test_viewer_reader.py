@@ -49,7 +49,8 @@ class ViewerReaderTests(unittest.TestCase):
     def test_follow_up_rows_fall_back_to_none_without_migration_010(self):
         import psycopg
         m=self.module()
-        db=Mock()
+        from unittest.mock import MagicMock
+        db=MagicMock()
         db.cursor.return_value.__enter__=Mock(return_value=Mock(execute=Mock(side_effect=psycopg.errors.UndefinedTable('absent'))))
         db.cursor.return_value.__exit__=Mock(return_value=False)
         reader=m.ViewerReader({},Limits(),lambda:'officer@a.test',db=db,budget_db=Mock())

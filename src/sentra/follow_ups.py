@@ -17,13 +17,13 @@ GUIDANCE = ('Wellness wording only: what was observed and what was agreed. No di
             'names or contact information.')
 
 
-def history(rows, events, *, shared=None):
+def history(rows, events):
     """Follow-ups with their authoritative current state and their latest events, oldest first.
 
-    `rows` already carry the latest event's status, assignee, note and time (fetched separately from the
-    history page). `shared`, when given, is the set of (participant, organization) pairs with current
-    individual sharing: a follow-up about anyone else can take no further updates, so it is shown as
-    closed rather than open forever."""
+    `rows` already carry the latest event's status, assignee, note and time, read in the same snapshot as the
+    history page (`ViewerReader.follow_up_rows`). A row flagged `sharing_ended` is about someone who no longer
+    shares individual details with the organization: it can take no further updates, so it is shown as closed
+    rather than open forever. Order: open and ongoing first, then resolved; most recently updated first."""
     trails = {}
     for event in sorted(events, key=lambda e: e['event_id']):  # the serialized write order (sql/010)
         trails.setdefault(event['follow_up_id'], []).append(event)
@@ -32,11 +32,10 @@ def history(rows, events, *, shared=None):
         trail = trails.get(row['follow_up_id'], [])
         item = {**row, 'events': trail, 'history_complete': len(trail) >= row.get('event_count', len(trail)),
                 'closed_reason': None}
-        if (shared is not None and row.get('participant_id') and row['status'] != 'resolved'
-                and (row['participant_id'], row.get('org_id')) not in shared):
+        if row.get('sharing_ended') and row['status'] != 'resolved':
             item.update(status='resolved', closed_reason='Sharing ended; no further updates are possible.')
         items.append(item)
-    return sorted(items, key=lambda i: (STATUSES.index(i['status']), -i['follow_up_id']))
+    return sorted(items, key=lambda i: (i['status'] == 'resolved', -i.get('latest_event_id', 0), -i['follow_up_id']))
 
 
 def visible(items, access):
@@ -56,12 +55,6 @@ def can_update(access, item):
     """Officers update any visible follow-up; the current assignee updates their own."""
     return (access.org_id is not None and item.get('org_id') == access.org_id and item.get('closed_reason') is None
             and (access.role == 'officer' or item.get('assignee') == access.email))
-
-
-def shared_pairs(consents):
-    """(participant, organization) pairs with current individual sharing, from `org.current_consent` rows."""
-    return {(c.get('participant_id'), c.get('org_id')) for c in consents if c.get('sharing') == 'individual'
-            and c.get('withdrawn') is False and c.get('membership_open') is True}
 
 
 def assignees(org_users, org_id):
