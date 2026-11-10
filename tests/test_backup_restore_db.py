@@ -183,6 +183,44 @@ class BackupRestoreDatabaseTests(unittest.TestCase):
         finally:
             self.source.execute("delete from audit.participants where participant_id='p9999'")
 
+    def allocators(self, db):
+        """(last_value, is_called) of every sequence a restore moves: participant numbers and identities."""
+        names = ['enrollment_private.participant_number'] + [
+            db.execute('select pg_get_serial_sequence(%s,%s)', (table, column)).fetchone()[0]
+            for table, column in sorted(m.IDENTITY_TABLES.items())]
+        return {name: db.execute(f'select last_value,is_called from {name}').fetchone() for name in names}
+
+    def test_failed_restore_leaves_every_allocator_where_it_was(self):
+        # The allocators move as their tables land, before later tables are written and verified. If a
+        # later step fails, they must roll back with the rows: both when they advance normally (p150)
+        # and when they stop at the bound (p9999).
+        for extra in (None, 'p9999'):
+            with self.subTest(highest=extra or 'p150'):
+                if extra:
+                    self.source.execute('insert into audit.participants values (%s)', (extra,))
+                try:
+                    target, _ = self.database()
+                    try:
+                        # enrollment_private.identities is restored last, after every allocator has moved.
+                        target.execute("""create function public.stop_restore() returns trigger language plpgsql
+                            as $$ begin raise exception 'synthetic failure after the allocators moved'; end $$;
+                            create trigger stop_restore before insert on enrollment_private.identities
+                            for each row execute function public.stop_restore()""")
+                        before = self.allocators(target)
+                        with tempfile.TemporaryDirectory() as folder:
+                            reader = self.backup(folder, self.admin)
+                            with self.assertRaises(self.psycopg.errors.RaiseException):
+                                m.restore_backup(reader, self.Backend(self.source), target, empty_audit=True)
+                        self.assertEqual(target.execute('select count(*) from audit.participants').fetchone()[0], 0)
+                        self.assertEqual(self.allocators(target), before)
+                        # The next enrollment gets the target's own first number, not one past the failed archive.
+                        self.assertEqual(target.execute("select nextval('enrollment_private.participant_number')").fetchone()[0], 100)
+                    finally:
+                        target.close()
+                finally:
+                    if extra:
+                        self.source.execute('delete from audit.participants where participant_id=%s', (extra,))
+
 
 if __name__ == '__main__':
     unittest.main()

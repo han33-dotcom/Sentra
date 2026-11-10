@@ -277,6 +277,24 @@ def restore_estimate(info):
     return sum(i['bytes'] for name,i in info['files'].items() if not name.startswith('raw-')) + 16_000_000
 
 
+def restart_sequence(db, sequence, value, *, used=False):
+    """Make `value` the sequence's next number, or with used=True its last one, already handed out.
+
+    ALTER SEQUENCE ... RESTART gives the sequence new storage inside the current transaction, so a
+    restore that fails later rolls this back together with its rows. setval() would not: PostgreSQL
+    never undoes setval() or nextval(), which left a failed restore's empty target with its
+    allocators advanced. A nextval() on the new storage is discarded with it.
+
+    Unlike setval(), which needs only UPDATE, this needs ownership of the sequence. Migrations applied
+    through the admin connection are owned by it; if another role owns a sequence, the restore stops
+    with a permission error and rolls back rather than restoring with a stale allocator."""
+    schema, name = db.execute("""select n.nspname, c.relname from pg_class c join pg_namespace n on n.oid=c.relnamespace
+        where c.oid=%s::regclass""", (sequence,)).fetchone()
+    db.execute(sql.SQL('alter sequence {} restart with {}').format(sql.Identifier(schema, name), sql.Literal(value)))
+    if used:
+        db.execute('select nextval(%s::regclass)', (sequence,))
+
+
 def advance_participant_numbers(db):
     """Move enrollment's participant-number allocator past every restored pNNN id, never backwards.
 
@@ -293,9 +311,9 @@ def advance_participant_numbers(db):
     if following > maximum:
         # Exhausted (e.g. p9999 restored): keep it at its bound so recovery still succeeds; new
         # enrollment then reports capacity exhaustion on its own instead of blocking the restore.
-        db.execute("select setval('enrollment_private.participant_number',%s,true)", (maximum,))
+        restart_sequence(db, 'enrollment_private.participant_number', maximum, used=True)
     else:
-        db.execute("select setval('enrollment_private.participant_number',%s,false)", (following,))
+        restart_sequence(db, 'enrollment_private.participant_number', following)
 
 
 def restore_backup(reader, backend, admin_db, *, empty_audit=False):
@@ -345,8 +363,9 @@ def restore_backup(reader, backend, admin_db, *, empty_audit=False):
                         pending = 0
                 if empty_audit and table in IDENTITY_TABLES:
                     column = IDENTITY_TABLES[table]
-                    admin_db.execute(sql.SQL("select setval(pg_get_serial_sequence({},{}),coalesce(max({}),0)+1,false) from {}").format(
-                        sql.Literal(table),sql.Literal(column),sql.Identifier(column),relation(table)))
+                    sequence, following = admin_db.execute(sql.SQL('select pg_get_serial_sequence({},{}),coalesce(max({}),0)+1 from {}').format(
+                        sql.Literal(table),sql.Literal(column),sql.Identifier(column),relation(table))).fetchone()
+                    restart_sequence(admin_db, sequence, following)
                 if empty_audit and table == 'participants':
                     advance_participant_numbers(admin_db)
                 count = admin_db.execute(sql.SQL('select count(*) from {}').format(target(table))).fetchone()[0]
