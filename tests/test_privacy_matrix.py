@@ -36,6 +36,10 @@ CONSENT = {'p91': ('org-a', 'individual', False), 'p92': ('org-a', 'group_only',
            'p97': ('org-a', 'individual', True)}
 EVERYONE = [f'p9{i}' for i in range(1, 9)]
 CAN_SEE = {'officer@a.test': {'p91'}, 'reviewer@a.test': {'p91'}, 'officer@b.test': {'p96'}}
+# Pages that list permitted individuals: the permitted person must appear there, so an empty page
+# cannot pass the "only permitted participants" check by showing nobody.
+INDIVIDUAL_PAGES = ('Daily activity', 'Sleep', 'Workouts', 'Data availability', 'Wellness board', 'Profiles',
+                    'Trends · One person')
 
 
 def consents(overrides=None):
@@ -126,11 +130,15 @@ class PrivacyMatrixTests(unittest.TestCase):
         return app
 
     def visit(self, app, page):
+        """Open a page and require a usable view. The viewer turns a failed render into an on-screen error
+        ("Viewer request stopped") rather than an exception, so a stopped page must fail here too; otherwise
+        it would pass every "nothing restricted is shown" check by showing nothing at all."""
         name, _, view = page.partition(' · ')
         app.radio(key='explore').set_value(name).run()
         if view:
             app.radio(key='audit_trend_view').set_value(view).run()
         self.assertFalse(app.exception, page)
+        self.assertEqual([e.value for e in app.error], [], page)
         return rendered(app)
 
     def test_organization_users_see_only_permitted_participants_on_every_page(self):
@@ -138,9 +146,11 @@ class PrivacyMatrixTests(unittest.TestCase):
             app = self.open(email, consents())
             for page in PAGES:
                 with self.subTest(user=email, page=page):
-                    text = self.visit(app, page)
-                    self.assertFalse(app.error, page)
-                    self.assertLessEqual(shown_ids(text), allowed)
+                    shown = shown_ids(self.visit(app, page))
+                    if page in INDIVIDUAL_PAGES:
+                        self.assertEqual(shown, allowed)
+                    else:
+                        self.assertEqual(shown, set())  # group pages never name anyone
 
     def test_unknown_and_removed_accounts_see_nothing(self):
         for email in ('stranger@example.test', 'removed@a.test'):
@@ -153,6 +163,9 @@ class PrivacyMatrixTests(unittest.TestCase):
 
     def test_team_operator_keeps_full_operator_access(self):
         app = self.open('team@example.test', consents())
+        for page in PAGES:
+            with self.subTest(page=page):
+                self.visit(app, page)  # every page renders for operators, without an error
         self.visit(app, 'Profiles')
         self.assertEqual(app.selectbox[0].options, EVERYONE)  # operators run, audit and recover the system
 

@@ -60,6 +60,17 @@ Last updated: November 9, 2026, from `develop` at `a535719`.
 | Lossless storage | Compact without information loss; measured savings | Compact series with re-expansion; about 7× smaller in a local test | #59; [storage plan](storage-plan.md) | Yes | Migration 009 not applied |
 | Growth forecast | Measured costs and a recommendation for the next batch | Measurement log implemented | #60; [capacity measurements](capacity-measurements.md) | Yes | Measurements pending collection restart |
 
+## How the matrix counts a pass
+
+`tests/test_privacy_matrix.py` gives every page a reader that returns every synthetic participant,
+as if database scoping had failed. A page passes only if it renders a usable view (no exception and
+no on-screen error such as "Viewer request stopped"), pages that list individuals show exactly the
+permitted participant, and group pages name nobody. So a page that stops or shows nothing cannot
+pass the "nothing restricted is shown" checks. Checked by sabotage on November 10: making Profiles
+stop for an officer without individual access fails the withdrawal and downgrade checks (the
+earlier version passed it); emptying Profiles fails the isolation check; removing its filter fails
+the matrix.
+
 ## Retests after dependencies merge
 
 Some rows are verified only for what has merged so far. They are retested when their
