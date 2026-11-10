@@ -62,11 +62,11 @@ class OrganizationPageTests(unittest.TestCase):
         from streamlit.testing.v1 import AppTest
         @contextmanager
         def reader(): yield OrgReader()
-        self.patches = [patch.object(viewer_app.st, 'user', User(email)),
-                        patch.object(viewer_app, 'open_reader', reader),
-                        patch.object(viewer_app, 'load_organization_rows', Mock(return_value=(USERS, consents)))]
-        for p in self.patches: p.start()
-        self.addCleanup(lambda: [p.stop() for p in self.patches])
+        for p in (patch.object(viewer_app.st, 'user', User(email)),
+                  patch.object(viewer_app, 'open_reader', reader),
+                  patch.object(viewer_app, 'load_organization_rows', Mock(return_value=(USERS, consents)))):
+            p.start()
+            self.addCleanup(p.stop)  # per patch, so a second open() in one test cannot leak the first
         OrgReader.catalog_calls = 0
         app = AppTest.from_file(Path(__file__).resolve().parents[1] / 'viewer' / 'app.py', default_timeout=10)
         app.secrets['viewer'] = {'allowed_emails': TEAM}
@@ -159,6 +159,60 @@ class OrganizationPageTests(unittest.TestCase):
         next(r for r in app.radio if r.label == 'Period').set_value('Last 7 days').run()
         self.assertFalse(app.exception)
         self.assertEqual(self.table(app)['Sleep']['Contributors'], '5')
+
+    def test_personal_trends_list_only_individually_permitted_people(self):
+        app = self.open('officer@a.test', 'Trends')
+        self.assertEqual(app.selectbox(key='audit_trend_person').options, ['p91'])
+        metrics = {m.label: m.value for m in app.metric}
+        self.assertEqual(metrics['Days with data'], '1 of 7')
+        self.assertEqual(metrics['Usual (own baseline)'], '410 min')
+        self.assertEqual(len(app.get('vega_lite_chart')), 1)
+
+    def test_group_trends_show_only_days_with_enough_contributors(self):
+        app = self.open('officer@a.test', 'Trends')
+        app.radio(key='audit_trend_view').set_value('Group').run()
+        rows = {r['Device']: r for r in app.dataframe[0].value.to_dict('records')}
+        self.assertEqual((rows['Fitbit']['Days shown'], rows['Fitbit']['Most contributors on a day']), (1, '5'))
+        self.assertNotIn('Days hidden (fewer than 5)', rows['Fitbit'])  # organization users get no hidden counts
+        app.selectbox(key='audit_trend_metric').set_value('Resting heart rate').run()
+        self.assertFalse(app.exception)
+        self.assertEqual(len(app.dataframe), 0)  # a device below 5 on every day is not listed at all
+        self.assertIn('nothing is shown', ' '.join(i.value for i in app.info))
+
+    def test_suppressed_readings_never_move_the_window_or_the_empty_state(self):
+        def group_view(extra, metric):
+            consents = CONSENTS + [{'participant_id': 'p97', 'org_id': 'org-a', 'sharing': 'group_only',
+                                    'withdrawn': False, 'membership_open': True}]
+            board = {**BOARD, 'people': list(BOARD['people']) + extra}
+            with patch.object(OrgReader, 'group_board', lambda self: board):
+                app = self.open('officer@a.test', 'Trends', consents=consents)
+                app.radio(key='audit_trend_view').set_value('Group').run()
+                app.selectbox(key='audit_trend_metric').set_value(metric).run()
+            self.assertFalse(app.exception)
+            return ([i.value for i in app.info], [c.value for c in app.caption][-1:], len(app.dataframe))
+        lone = [{'id': 'p97', 'name': 'p97', 'device': 'WHOOP', 'days': [{'d': '2026-10-08', 'sleep': 300, 'rec': 40}]}]
+        for metric in ('Sleep', 'WHOOP recovery'):
+            with self.subTest(metric=metric):
+                # One group-only WHOOP reading a day later changes nothing an officer can see.
+                self.assertEqual(group_view(lone, metric), group_view([], metric))
+        sleep = group_view(lone, 'Sleep')
+        self.assertIn('Days through 2026-10-07', sleep[1][0])
+
+    def test_team_group_trends_keep_device_detail(self):
+        app = self.open('team@example.test', 'Trends')
+        app.radio(key='audit_trend_view').set_value('Group').run()
+        app.selectbox(key='audit_trend_metric').set_value('Heart rate variability').run()
+        self.assertFalse(app.exception)
+        self.assertIn('No eligible contributor', ' '.join(i.value for i in app.info))
+
+    def test_switching_between_permitted_people_keeps_working(self):
+        both = [{**c, 'sharing': 'individual'} if c['participant_id'] == 'p92' else c for c in CONSENTS]
+        app = self.open('officer@a.test', 'Trends', consents=both)
+        app.selectbox(key='audit_trend_person').set_value('p92').run()
+        self.assertFalse(app.exception)
+        self.assertFalse(app.error)
+        self.assertEqual({m.label: m.value for m in app.metric}['Days with data'], '1 of 7')
+        self.assertIn('older rules', ' '.join(c.value for c in app.caption))  # BOARD has no assessment_version
 
     def test_profile_explains_observations_for_permitted_people_only(self):
         today = datetime.now(timezone.utc).astimezone(ZoneInfo('Asia/Beirut')).date().isoformat()
