@@ -77,8 +77,10 @@ produce green.** Missing values are never filled or treated as zero.
 
 - One row per date and `device` (`Fitbit` or `WHOOP`). Readings from different devices are
   **never pooled**, matching the organization overview: the same name is not the same
-  measurement across devices (see below). A participant without a known device contributes
-  to no group statistic.
+  measurement across devices (see below). A participant contributes only with exactly one
+  known device. Processing combines a person's readings per day without keeping their
+  provider, so someone with readings from both devices, or from no known device, contributes
+  to no group statistic. The board shows them as `Unknown`.
 - Only usable days count. A group row is shown only when at least 5 people of that device have
   usable data (`suppressed`), and **each statistic** additionally needs 5 of them who supplied
   its input.
@@ -99,7 +101,10 @@ processing, the board payload and the organization overview. The tests check tha
   the overview;
 - the overview's assessable count equals the number of `complete` assessments;
 - an `insufficient` day has no level in the board and never counts as calm;
-- devices are never pooled, and unknown devices never contribute.
+- devices are never pooled, and unknown devices never contribute;
+- a participant with both Fitbit and WHOOP readings (tiers to cohort) changes no device's
+  statistic;
+- the read API refuses a `cohort_daily` written before device separation.
 
 ## Board payload
 

@@ -25,7 +25,7 @@ which enforces their organization, sharing choices and withdrawal.
 | `GET /api/v1/metadata` | Wellness notice, `assessment_version` of the processed outputs, thresholds and their status (`v0 — pending medical expert sign-off`), covered days |
 | `GET /api/v1/subjects` | Pseudonymous participant IDs (`p01` …) |
 | `GET /api/v1/daily?subject=p01&since=YYYY-MM-DD&limit=500` | Daily wellness features plus the notice |
-| `GET /api/v1/cohort?since=YYYY-MM-DD` | k-anonymous group statistics, one row per date and `device` (`Fitbit`, `WHOOP`; never pooled); rows below k are suppressed and each statistic carries its eligible count `n_<statistic>` ([contract](indicator-contract.md#group-statistics-cohort_daily)) |
+| `GET /api/v1/cohort?since=YYYY-MM-DD` | k-anonymous group statistics, one row per date and `device` (`Fitbit`, `WHOOP`; never pooled); rows below k are suppressed and each statistic carries its eligible count `n_<statistic>` ([contract](indicator-contract.md#group-statistics-cohort_daily)). A `cohort_daily` from before device separation returns HTTP 503 until the processing job rebuilds it |
 
 Only IDs matching `p[0-9]{2,4}` are accepted or returned. The API has no database,
 storage or provider credentials. It reads the processed volume mounted read-only.

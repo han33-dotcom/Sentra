@@ -261,8 +261,8 @@ def cohort(df: pd.DataFrame, devices: dict | None = None) -> pd.DataFrame:
     """Group statistics per date and device. `devices` maps pseudonym -> provider (as for the board).
 
     Fitbit and WHOOP measure sleep, resting heart rate and HRV differently, so their readings are
-    never pooled; a participant without a known device contributes to no group statistic, matching
-    the organization overview (sentra.organization)."""
+    never pooled. A participant contributes only with exactly one known device (see
+    observations.devices), matching the organization overview (sentra.organization)."""
     k = TH['cohort_k_anonymity']
     devices = devices or {}
     d = df[df.usable_day].copy()

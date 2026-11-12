@@ -227,6 +227,32 @@ class GroupStatisticConsistencyTests(unittest.TestCase):
                 self.assertEqual(row['status'] == 'available', pd.notna(c.loc[row['device'], column]), (key, row['device']))
         self.assertEqual({r['device'] for r in summary if r['key'] == 'sleep'}, {'Fitbit', 'WHOOP'})
 
+    def test_a_participant_with_two_providers_never_enters_a_device_statistic(self):
+        start, end = datetime(2026, 10, 9, 20, tzinfo=UTC), datetime(2026, 10, 10, 3, tzinfo=UTC)
+        rows = [m(f'p0{i}', 'google_health', 'sleep', f'p0{i}-s', '/sleep/summary/minutesAsleep', minutes, ts=start, end=end)
+                for i, minutes in enumerate([360, 370, 380, 390, 400, 410], 1)]
+        # p01 also has WHOOP sleep; processing merges a person's day without keeping its provider.
+        rows += [m('p01', 'whoop', 'sleep', 'p01-w', metric, 160 * 60000, ts=start, end=end)
+                 for metric in ('/score/stage_summary/total_light_sleep_time_milli',
+                                '/score/stage_summary/total_slow_wave_sleep_time_milli',
+                                '/score/stage_summary/total_rem_sleep_time_milli')]
+        with tempfile.TemporaryDirectory() as folder:
+            write_tiers(folder, rows=rows)
+            mapping = devices(folder)
+            _, d, c, _ = pipeline.run(load(folder), Path(folder) / 'out', log=lambda *_: None, devices=mapping)
+        self.assertNotIn('p01', mapping)
+        self.assertEqual(c.device.tolist(), ['Fitbit'])  # no WHOOP row from p01's WHOOP sleep either
+        self.assertEqual((c.workers.iloc[0], c.n_median_sleep_h.iloc[0]), (5, 5))
+        self.assertAlmostEqual(c.median_sleep_h.iloc[0], 390 / 60)  # p02-p06 Fitbit sleep only
+        board = payload(d, mapping, built_at='2026-10-11T00:00:00+00:00')
+        self.assertEqual(next(p['device'] for p in board['people'] if p['id'] == 'p01'), 'Unknown')
+
+    def test_heart_rate_tiers_also_identify_a_participants_provider(self):
+        raw = [('p07', 'whoop', datetime(2026, 10, 10, 8, tzinfo=UTC), Decimal('61'))]
+        with tempfile.TemporaryDirectory() as folder:
+            write_tiers(folder, raw=raw)
+            self.assertEqual(devices(folder), {'p07': 'whoop'})
+
     def test_only_complete_assessments_count_as_assessable_everywhere(self):
         board = payload(self.daily, self.devices, built_at='2026-10-04T00:00:00+00:00')
         counts = organization.participation(set(self.devices) | {'p21'}, [], board['people'], today=date(2026, 10, 3),

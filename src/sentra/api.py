@@ -107,5 +107,9 @@ def daily(subject: str | None = None, since: str | None = Query(None, descriptio
 
 @app.get('/api/v1/cohort', dependencies=[Depends(require_key)])
 def cohort(since: str | None = Query(None, description='YYYY-MM-DD')):
-    c = _since(_table('cohort_daily'), since)
+    c = _table('cohort_daily')
+    if 'device' not in c.columns:
+        # Written before per-device group statistics; its pooled rows must not be served.
+        raise HTTPException(503, 'cohort_daily predates per-device group statistics; rerun the processing job to rebuild it')
+    c = _since(c, since)
     return {'notice': _metadata().get('notice'), 'rows': _records(c)}

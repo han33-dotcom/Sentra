@@ -62,6 +62,17 @@ class ApiTests(unittest.TestCase):
         self.assertTrue(cohort['suppressed'])
         self.assertEqual(cohort['device'], 'Fitbit')
 
+    def test_a_pooled_cohort_from_before_device_separation_is_not_served(self):
+        from sentra import api
+        folder = Path(os.environ['SENTRA_PROCESSED_DIR'])
+        pd.DataFrame({'date': pd.to_datetime(['2026-10-02']), 'workers': [7], 'median_sleep_h': [6.5],
+                      'n_median_sleep_h': [7], 'suppressed': [False]}).to_parquet(folder / 'cohort_daily.parquet')
+        api._cache.clear()
+        response = self.client.get('/api/v1/cohort', headers={'X-API-Key': KEY})
+        self.assertEqual(response.status_code, 503)
+        self.assertIn('rerun the processing job', response.json()['detail'])
+        self.assertNotIn('6.5', response.text)
+
     def test_no_write_routes_exist(self):
         from sentra import api
         methods = {m for route in api.app.routes for m in getattr(route, 'methods', set())}
