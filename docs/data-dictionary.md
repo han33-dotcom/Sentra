@@ -1,4 +1,4 @@
-# Wearable metric dictionary and private Notion inventory
+# Wearable metric dictionary and private inventory
 
 The executable provider/dataset/path dictionary is
 [metric_dictionary.py](../src/sentra/metric_dictionary.py), verified against
@@ -17,8 +17,8 @@ all inputs exist and are scored. Session elapsed duration uses physical instants
 including pauses; no civil date is converted into an invented instant.
 WHOOP recovery joins sleep by `sleep_id`, with no date-based substitution.
 
-Copy this structure into a private Notion database. Record definitions from official
-provider documentation and distinguish them from observed API behavior. Keep
+Use this structure in the restricted metric inventory. Record definitions from
+official provider documentation and distinguish them from observed API behavior. Keep
 participant agreement, credentials, health files and identifying information out
 of this repository. Use participant IDs and private manifest/extract references.
 

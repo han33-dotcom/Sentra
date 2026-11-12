@@ -66,10 +66,19 @@ not to the 28-day baseline, because baselines use daily values.
   .venv/Scripts/sentra.exe shared-backup-verify .private/backups/<id>/manifest.enc
   ```
 
-- **Known gap:** backups cover the `audit` schema only. The `org` consent and membership
-  tables (sql/007) and the enrollment tables (sql/008) are not included yet. They must be
-  added before any participant enrolled through them is affected by a destructive step.
-  Credentials are excluded on purpose.
+- **Coverage:** a full backup also includes the consent history and organization tables
+  (`org.organizations`, `org.org_users`, `org.memberships`, `org.consents`), the follow-up
+  history (`org.follow_ups`, `org.follow_up_events`, once sql/010 is installed), and the enrollment
+  invitations and provider identities (`enrollment_private.invites`, `identities`). Tables not yet
+  installed are listed by `shared-backup-verify` as `not_installed` and hold nothing. They are read
+  by the admin role inside the same database snapshot as the audit tables, so the full backup
+  needs `.private/supabase-admin.json`. Excluded on purpose: credentials, enrollment browser
+  sessions and rate limits. Partial (`--participant`/`--provider`/`--dataset`) and `--audit-only`
+  backups contain the audit tables only, and `shared-backup-verify` lists what they do not cover
+  (`not_covered`). Only a full backup with an empty `not_covered` satisfies the gates below.
+  These tables force row-level security, so the backup reads them with `row_security = off`.
+  An admin connection without bypass rights therefore stops the backup with an error, instead
+  of silently backing up no rows.
 - Supabase Free's own backups are not relied on; this was not verified.
 
 ## Gates before any destructive storage step (#46)
