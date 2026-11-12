@@ -28,6 +28,7 @@ have the final say on it. Sources are in [retention-evidence.md](retention-evide
 | Encrypted backups | offline, in a private location held by the custodian, plus a second separate copy | latest 3 verified backups, at most **90 days** each | — | expire | 3-2-1 rule [19]; deletions reach backups within a known window [16] |
 | Authorized downloads / exports | the recipient's private location | as needed | — | the recipient deletes them within 30 days | downloads cannot be recalled |
 | Provider credentials | `collector_private` | while connected | — | disabled at withdrawal (already transactional) | no longer needed |
+| Follow-up notes and history (append-only, free text about individuals or groups) | `org.follow_ups`, `org.follow_up_events` (#31) | whole project | — | delete at project close; a person's individual follow-ups are deleted with their data after withdrawal (below) | needed to track open reviews; among the most sensitive records, as they are free text |
 
 The 30-day detail window and the 90-day backup life are set again after the compaction
 measurements in #46 and #50. The window is sized to the correction and reprocessing window,
@@ -39,6 +40,10 @@ not to the 28-day baseline, because baselines use daily values.
   group statistics (already implemented, #33 and #52).
 - **Within 30 days, after a preview:** an admin deletes the person's detailed series and
   original responses, and removes their daily features from published outputs.
+- **Follow-ups:** hidden from the organization immediately and shown as closed to operators
+  (#31). Within 30 days, after the same preview, an admin deletes that person's individual
+  follow-ups (the tables are append-only, so this is a deliberate admin step). Group
+  follow-ups stay.
 - **Kept:** the consent and withdrawal record, which is required [12]. Group statistics
   already published from 5 or more people are not recomputed. Using GDPR Art. 17(3)(d) to
   keep anything else needs the consent form to say so and IRB approval [15].
@@ -61,10 +66,19 @@ not to the 28-day baseline, because baselines use daily values.
   .venv/Scripts/sentra.exe shared-backup-verify .private/backups/<id>/manifest.enc
   ```
 
-- **Known gap:** backups cover the `audit` schema only. The `org` consent and membership
-  tables (sql/007) and the enrollment tables (sql/008) are not included yet. They must be
-  added before any participant enrolled through them is affected by a destructive step.
-  Credentials are excluded on purpose.
+- **Coverage:** a full backup also includes the consent history and organization tables
+  (`org.organizations`, `org.org_users`, `org.memberships`, `org.consents`), the follow-up
+  history (`org.follow_ups`, `org.follow_up_events`, once sql/010 is installed), and the enrollment
+  invitations and provider identities (`enrollment_private.invites`, `identities`). Tables not yet
+  installed are listed by `shared-backup-verify` as `not_installed` and hold nothing. They are read
+  by the admin role inside the same database snapshot as the audit tables, so the full backup
+  needs `.private/supabase-admin.json`. Excluded on purpose: credentials, enrollment browser
+  sessions and rate limits. Partial (`--participant`/`--provider`/`--dataset`) and `--audit-only`
+  backups contain the audit tables only, and `shared-backup-verify` lists what they do not cover
+  (`not_covered`). Only a full backup with an empty `not_covered` satisfies the gates below.
+  These tables force row-level security, so the backup reads them with `row_security = off`.
+  An admin connection without bypass rights therefore stops the backup with an error, instead
+  of silently backing up no rows.
 - Supabase Free's own backups are not relied on; this was not verified.
 
 ## Gates before any destructive storage step (#46)
