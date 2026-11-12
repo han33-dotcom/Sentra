@@ -14,7 +14,7 @@ from urllib.parse import parse_qs, urlsplit
 from cryptography.fernet import Fernet
 from pglast import parse_sql
 
-from sentra.enrollment import EnrollmentError, EnrollmentSettings, ProviderLogin, scopes
+from sentra.enrollment import GOOGLE_EMAIL_SCOPE, EnrollmentError, EnrollmentSettings, ProviderLogin, digest, scopes
 from sentra.cloud_run import configured_connections, connection_targets
 
 HAS_API = all(importlib.util.find_spec(m) for m in ('fastapi', 'httpx'))
@@ -31,6 +31,22 @@ def settings(**kwargs):
 
 
 class EnrollmentProtocolTests(unittest.TestCase):
+    def test_link_cli_uses_private_prompt_and_issues_no_signup_invite(self):
+        from sentra.enrollment import main
+        config = settings()
+        store = MagicMock()
+        output = StringIO()
+        with patch('sentra.enrollment.EnrollmentSettings.from_env', return_value=config), \
+                patch('sentra.enrollment_store.open_store') as opened, \
+                patch('getpass.getpass', return_value='synthetic.user@gmail.com'), redirect_stdout(output):
+            opened.return_value.__enter__.return_value = store
+            self.assertEqual(main(['--organization', 'synthetic-pilot', '--link-fitbit', 'p9990']), 0)
+        invite = parse_qs(urlsplit(output.getvalue().strip()).fragment)['invite'][0]
+        store.invite_fitbit_link.assert_called_once_with(digest(invite), 'synthetic-pilot', 'p9990',
+            config.fitbit_email_hash('synthetic.user@gmail.com'), 7)
+        store.invite.assert_not_called()
+        self.assertNotIn('synthetic.user@gmail.com', output.getvalue())
+
     def test_summary_cli_reads_counts_without_creating_an_invitation(self):
         from sentra.enrollment import main
         store = MagicMock()
@@ -74,6 +90,39 @@ class EnrollmentProtocolTests(unittest.TestCase):
         self.assertNotIn(pending['verifier'], url)
         self.assertIn('openid', query['scope'][0].split())
         self.assertNotIn('email', query['scope'][0].split())
+        self.assertNotIn(GOOGLE_EMAIL_SCOPE, query['scope'][0].split())
+
+    def test_fitbit_link_checks_verified_gmail_and_returns_only_subject_identity(self):
+        config = settings()
+        login = ProviderLogin(config)
+        email = 'synthetic.user@gmail.com'
+        url, pending = login.begin('google_health', fitbit_email_hash=config.fitbit_email_hash(email))
+        self.assertIn(GOOGLE_EMAIL_SCOPE, parse_qs(urlsplit(url).query)['scope'][0].split())
+        self.assertNotIn(email, url)
+        self.assertNotIn(pending['fitbit_email_hash'], url)
+        response = MagicMock()
+        response.__enter__.return_value = response
+        response.status_code = 200
+        granted = {'access_token': 'fake-access', 'refresh_token': 'fake-refresh',
+                   'token_type': 'Bearer', 'expires_in': 3600,
+                   'scope': scopes('google_health', fitbit_link=True)}
+        with patch('sentra.enrollment.PrivateOAuthSession') as session, \
+                patch('sentra.enrollment.requests.get', return_value=response):
+            session.return_value.fetch_token.return_value = granted
+            for address, verified in (('other@gmail.com', True), (email, False), (email, 'true'),
+                                      ('synthetic.user@example.invalid', True)):
+                response.iter_content.return_value = [json.dumps(
+                    {'sub': 'synthetic-sub', 'email': address, 'email_verified': verified}).encode()]
+                with self.subTest(address=address, verified=verified), self.assertRaises(EnrollmentError):
+                    login.finish(pending, 'synthetic-code')
+            response.iter_content.return_value = [json.dumps(
+                {'sub': 'synthetic-sub', 'email': email, 'email_verified': True}).encode()]
+            identity, token = login.finish(pending, 'synthetic-code')
+            self.assertEqual(identity, config.identity('google_health', 'synthetic-sub'))
+            self.assertNotIn(email, json.dumps(token))
+            session.return_value.fetch_token.return_value = {**granted, 'scope': scopes('google_health')}
+            with self.assertRaises(EnrollmentError):
+                login.finish(pending, 'synthetic-code')
 
     def test_identity_is_stable_provider_separated_and_not_plaintext(self):
         config = settings()

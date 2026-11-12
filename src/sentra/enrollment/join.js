@@ -59,7 +59,9 @@
     el("save").hidden = !account || !state.enrolled;
     el("withdraw").hidden = !account || !state.enrolled;
     el("providers").hidden = account && !state.enrolled;
-    el("connect-label").textContent = account ? "Connect or reconnect a wearable" : state.joining ? "Connect your wearable" : "Sign in with your connected wearable";
+    el("connect-label").textContent = account ? "Connect or reconnect a wearable" :
+      state.linking_fitbit ? "Connect the Google account you originally used for Fitbit" :
+      state.joining ? "Connect your wearable" : "Sign in with your connected wearable";
     if (account) {
       document.querySelector(`input[name="sharing"][value="${state.sharing}"]`).checked = true;
       el("demonstration").checked = state.demonstration;

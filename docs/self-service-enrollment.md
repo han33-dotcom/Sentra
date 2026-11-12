@@ -69,8 +69,8 @@ Its fixed UserInfo endpoint supplies a stable `sub`. WHOOP additionally requests
 are discarded immediately; only a provider-specific HMAC of the identifier is
 persisted. This is authentication, not a new wearable-data collection category.
 Keep the identity HMAC key stable across replicas and restarts, and separate from
-the encryption key. Existing legacy accounts are not silently linked to a newly
-authenticated identity; verifying/linking those needs an explicit operator migration.
+the encryption key. A manually connected Fitbit account needs a
+[private Fitbit link](#link-an-existing-fitbit-participant) to start hosted participation.
 
 Sources checked November 3, 2026: [Google UserInfo and subject identifiers](https://developers.google.com/identity/openid-connect/reference),
 [WHOOP OAuth](https://developer.whoop.com/docs/developing/oauth/),
@@ -155,6 +155,40 @@ collection. Before distributing real invitations:
    authorization, mobile behavior and withdrawal against the hosted origin before
    advertising it as operational. Private provider app configuration, live OAuth,
    deployed access enforcement and real-device timing need separate verification.
+
+## Link an existing Fitbit participant
+
+Use this flow for a manually connected Fitbit participant who has an existing
+Google Health credential and has never had a hosted membership or identity link.
+Before issuing a link, the operator verifies the existing participant ID, original
+Gmail account and intended organization from private pilot records and confirms
+that the participant is eligible to make the hosted consent choices. If the
+operator cannot verify the original account or the participant withdrew, stop.
+
+Apply [migration 010](../sql/010_fitbit_link_invites.sql) after 008 using the
+reviewed deployment procedure, then deploy the updated enrollment service.
+Verify that the Google OAuth client can request the Google Account email scope
+before issuing a live link. With the same private enrollment configuration used
+by the service, run this from a private terminal:
+
+```text
+python -m sentra.enrollment --organization YOUR_ORG_ID --link-fitbit EXISTING_PARTICIPANT_ID --days 1
+```
+
+Enter the verified Gmail address at the private prompt and share the resulting
+single-use link only with the participant. The participant opens it, reviews and
+accepts the hosted sharing choices, and signs in with the original Fitbit Google
+account. This flow requests a verified Gmail address from Google and checks it
+against the operator's keyed digest. Returning sign-in uses the Google subject
+link and the normal scopes. See [Google's account ownership guidance](https://developers.google.com/identity/sign-in/web/backend-auth).
+
+The callback records one membership and consent on the original participant ID,
+preserves existing history, and updates the existing encrypted Fitbit credential.
+An incorrect account, expired or used link, or a participant whose eligibility
+changed fails without committing enrollment changes. A successful link consumes
+the invitation. The participant can then sign in again from the ordinary account
+page. Use an approved participant and a reviewed rollout to verify the live flow.
+Collection remains paused through the existing controls.
 
 ## Collection integration
 

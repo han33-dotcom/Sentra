@@ -39,9 +39,12 @@ DSN = os.environ.get('SENTRA_TEST_ENROLLMENT_DSN')
 class SyntheticLogin(ProviderLogin):
     exchanges = 0
 
-    def begin(self, provider):
+    def begin(self, provider, *, fitbit_email_hash=None):
         state = secrets.token_urlsafe(32)
-        return 'https://synthetic.invalid/authorize?state=' + state, {'state': state, 'provider': provider, 'started': time.time()}
+        pending = {'state': state, 'provider': provider, 'started': time.time()}
+        if fitbit_email_hash:
+            pending['fitbit_email_hash'] = fitbit_email_hash
+        return 'https://synthetic.invalid/authorize?state=' + state, pending
 
     def finish(self, pending, code):
         self.exchanges += 1
@@ -73,7 +76,8 @@ class EnrollmentPostgresTests(unittest.TestCase):
                 create table storage.objects(bucket_id text,metadata jsonb);''')
             for filename in ('001_foundation.sql', '002_permissions.sql', '003_numeric_precision.sql',
                     '004_daily_collection.sql', '005_viewer_status.sql', '006_parquet_tiers.sql',
-                    '007_organization_access.sql', '008_self_service_enrollment.sql'):
+                    '007_organization_access.sql', '008_self_service_enrollment.sql',
+                    '010_fitbit_link_invites.sql'):
                 migration = Path('sql', filename).read_text(encoding='utf-8')
                 # Fixture roles are cluster-wide; grants remain scoped to this new database.
                 migration = re.sub(r'create role (sentra_[a-z]+) login[^;]+;',
@@ -112,6 +116,22 @@ class EnrollmentPostgresTests(unittest.TestCase):
         token = secrets.token_urlsafe(32)
         with open_store(self.config) as store:
             store.invite(digest(token), org, seats, 7)
+        return token
+
+    def legacy_fitbit(self, status='active'):
+        with self.admin_db() as db:
+            pid = 'p' + str(db.execute("select nextval('enrollment_private.participant_number')").fetchone()[0])
+            db.execute('insert into audit.participants(participant_id) values (%s)', (pid,))
+            old_token = token_state({'access_token': 'old-access', 'refresh_token': 'old-refresh', 'expires_in': 3600})
+            body = self.login.envelope('google_health', pid, old_token)
+            TokenRepository(db).insert(pid, 'google_health', body, status)
+        return pid
+
+    def fitbit_link(self, pid):
+        token = secrets.token_urlsafe(32)
+        with open_store(self.config) as store:
+            store.invite_fitbit_link(digest(token), self.org, pid,
+                                    self.config.fitbit_email_hash('synthetic.user@gmail.com'), 7)
         return token
 
     def start(self, client=None, invite=None):
@@ -164,6 +184,106 @@ class EnrollmentPostgresTests(unittest.TestCase):
         self.assertEqual(returning['participant_id'], original['participant_id'])
         with self.admin_db() as db:
             self.assertEqual(db.execute('select count(*) from org.consents where participant_id=%s', (original['participant_id'],)).fetchone()[0], before)
+
+    def test_fitbit_link_and_returning_sign_in_keep_the_existing_participant(self):
+        pid = self.legacy_fitbit()
+        link = self.fitbit_link(pid)
+        with self.admin_db() as db:
+            sequence_before = db.execute('select last_value from enrollment_private.participant_number').fetchone()[0]
+            self.assertIsNone(db.execute('select 1 from enrollment_private.invites where invite_hash=%s',
+                                         (digest(link),)).fetchone())
+        state = self.start(self.client, link)
+        self.assertEqual(state['providers_available'], ['google_health'])
+        self.assertTrue(state['linking_fitbit'])
+        self.assertNotIn(pid, json.dumps(state))
+        headers = {**self.headers, 'X-CSRF-Token': state['csrf']}
+        self.assertEqual(self.client.post('/api/connect', json={'provider': 'whoop', 'accepted': True},
+                                         headers=headers).status_code, 403)
+        self.assertEqual(self.client.post('/api/connect', json={'provider': 'google_health'},
+                                         headers=headers).status_code, 400)
+        stale_browser = self.browser()
+        stale_pending = self.pending(stale_browser, self.start(stale_browser, link), 'google_health')
+        pending = self.pending(self.client, state, 'google_health')
+        response = self.client.get('/oauth/google_health/callback', params={'state': pending, 'code': self.code})
+        self.assertEqual(response.headers['location'], '/account')
+        status = self.client.get('/api/status').json()
+        self.assertEqual(status['participant_id'], pid)
+        self.assertTrue(status['collection_paused'])
+        replay = stale_browser.get('/oauth/google_health/callback',
+                                   params={'state': stale_pending, 'code': 'different-subject'})
+        self.assertEqual(replay.headers['location'], '/join?connection=failed')
+        self.assertEqual(self.browser().post('/api/session', json={'invite': link},
+                                             headers=self.headers).status_code, 410)
+        returning = self.complete(self.browser(), provider='google_health')
+        self.assertEqual(returning['participant_id'], pid)
+        with self.admin_db() as db:
+            self.assertEqual(db.execute('select last_value from enrollment_private.participant_number').fetchone()[0],
+                             sequence_before)
+            self.assertEqual(db.execute('select count(*) from org.memberships where participant_id=%s',
+                                        (pid,)).fetchone()[0], 1)
+            self.assertEqual(db.execute('select count(*) from org.consents where participant_id=%s',
+                                        (pid,)).fetchone()[0], 1)
+            self.assertEqual(db.execute('select remaining from enrollment_private.invites where invite_hash=%s',
+                                        (digest(self.invite),)).fetchone()[0], 5)
+
+    def test_fitbit_link_rejects_an_already_linked_google_identity_without_consuming(self):
+        original = self.complete(invite=self.invite, provider='google_health')
+        pid = self.legacy_fitbit()
+        link = self.fitbit_link(pid)
+        other = self.browser()
+        pending = self.pending(other, self.start(other, link), 'google_health')
+        response = other.get('/oauth/google_health/callback', params={'state': pending, 'code': self.code})
+        self.assertEqual(response.headers['location'], '/join?connection=failed')
+        with self.admin_db() as db:
+            self.assertIsNone(db.execute('select 1 from org.memberships where participant_id=%s', (pid,)).fetchone())
+            self.assertIsNotNone(db.execute('select 1 from enrollment_private.fitbit_link_invites where invite_hash=%s',
+                                            (digest(link),)).fetchone())
+        recovered = self.complete(other, invite=link, code='correct-legacy-subject', provider='google_health')
+        self.assertEqual(recovered['participant_id'], pid)
+        self.assertNotEqual(recovered['participant_id'], original['participant_id'])
+
+    def test_two_fitbit_links_cannot_create_two_memberships_for_one_participant(self):
+        pid = self.legacy_fitbit()
+        attempts = []
+        for _ in range(2):
+            client = self.browser()
+            link = self.fitbit_link(pid)
+            state = self.pending(client, self.start(client, link), 'google_health')
+            attempts.append((client, state, uuid4().hex))
+
+        def redeem(attempt):
+            client, state, code = attempt
+            return client.get('/oauth/google_health/callback', params={'state': state, 'code': code}).headers['location']
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            self.assertCountEqual(pool.map(redeem, attempts), ['/account', '/join?connection=failed'])
+        with self.admin_db() as db:
+            for table in ('org.memberships', 'org.consents', 'enrollment_private.identities'):
+                count = db.execute(sql.SQL('select count(*) from {} where participant_id=%s').format(
+                    sql.Identifier(*table.split('.'))), (pid,)).fetchone()[0]
+                self.assertEqual(count, 1, table)
+
+    def test_fitbit_link_rechecks_existing_credential_and_membership_at_redemption(self):
+        for changed in ('withdrawn', 'enrolled'):
+            with self.subTest(changed=changed):
+                pid = self.legacy_fitbit()
+                link = self.fitbit_link(pid)
+                other = self.browser()
+                pending = self.pending(other, self.start(other, link), 'google_health')
+                with self.admin_db() as db:
+                    if changed == 'withdrawn':
+                        db.execute("update collector_private.provider_credentials set refresh_status='withdrawn' "
+                                   "where participant_id=%s", (pid,))
+                    else:
+                        db.execute('insert into org.memberships(participant_id,org_id,joined_on) values (%s,%s,current_date)',
+                                   (pid, self.org))
+                response = other.get('/oauth/google_health/callback',
+                                     params={'state': pending, 'code': 'late-change-subject'})
+                self.assertEqual(response.headers['location'], '/join?connection=failed')
+                with self.admin_db() as db:
+                    self.assertIsNone(db.execute('select 1 from org.consents where participant_id=%s', (pid,)).fetchone())
+                    self.assertIsNone(db.execute('select 1 from enrollment_private.identities where participant_id=%s',
+                                                 (pid,)).fetchone())
 
     def test_state_wrong_provider_expiry_and_replay_do_not_exchange(self):
         value = self.start(self.client, self.invite); pending = self.pending(self.client, value)
@@ -300,8 +420,10 @@ class EnrollmentPostgresTests(unittest.TestCase):
         for role in ('anon', 'authenticated', 'sentra_viewer'):
             with self.admin_db() as db:
                 db.execute(sql.SQL('set role {}').format(sql.Identifier(role)))
-                with self.subTest(role=role), self.assertRaises(psycopg.errors.InsufficientPrivilege):
-                    db.execute('select * from enrollment_private.sessions')
+                for table in ('sessions', 'fitbit_link_invites'):
+                    with self.subTest(role=role, table=table), self.assertRaises(psycopg.errors.InsufficientPrivilege):
+                        db.execute(sql.SQL('select 1 from {} limit 0').format(
+                            sql.Identifier('enrollment_private', table)))
 
     def test_invitation_expiring_during_authorization_rolls_back_enrollment(self):
         first = self.start(self.client, self.invite); pending = self.pending(self.client, first)
