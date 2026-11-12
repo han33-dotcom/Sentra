@@ -42,7 +42,13 @@ therefore still target the live project.
    - always `sql/007` and `sql/008` for a full backup;
    - also `sql/010` (Follow-ups, SEN-31) when the live `shared-backup-verify` lists
      `org.follow_ups` and `org.follow_up_events` under `tables`. When they appear under
-     `not_installed` instead, the source never had them and 010 is not needed.
+     `not_installed` instead, the source never had them and 010 is not needed;
+   - also `sql/011` (Fitbit sign-in links, SEN-28) whenever it is applied to the live project,
+     after 010 if both apply. Hosted sign-ins for linked Fitbit participants are stored in
+     `enrollment_private.identities` with a `fitbit-link:` prefix that only 011's check
+     constraint accepts. 011 also adds the trigger that protects their operator-managed
+     credential. Without it the restore stops on that constraint and rolls back. The
+     `fitbit_link_invites` table itself is not backed up; issue new links after recovery.
 
    The restore checks this before writing anything and stops if a table in the backup has no
    counterpart on the target. It also resets the participant-number and identity sequences, which

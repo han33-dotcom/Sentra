@@ -13,7 +13,7 @@ Two kinds of verification are kept apart:
 "Pending" means not yet recorded, not failed. A task is Done only when a teammate verifies its
 acceptance on the issue; this table does not close anything.
 
-Last updated: November 12, 2026, from `develop` at `464222e`.
+Last updated: November 12, 2026, from `develop` at `5b011cd`.
 
 ## Privacy and access (SEN-27, SEN-26, SEN-32)
 
@@ -52,12 +52,12 @@ Last updated: November 12, 2026, from `develop` at `464222e`.
 
 | Item | Expected | Actual (recorded) | Evidence | Tests | Real/hosted |
 | --- | --- | --- | --- | --- | --- |
-| Incomplete assessments | Missing inputs or short history never read as calm; states consistent everywhere | "Partial" and "Not enough information" states; versioned board | #56; [indicator contract](indicator-contract.md) | Yes | Pending (board rebuild after release) |
+| Incomplete assessments | Missing inputs or short history never read as calm; states consistent everywhere | "Partial" and "Not enough information" states; versioned board. Group statistics in processing and the read API are per device, as in the overview, with matching contributor counts; mixed-device participants enter no device statistic; the API refuses a pooled pre-device snapshot | #56, #79; [indicator contract](indicator-contract.md#consistency-checks); `test_processing.py::GroupStatisticConsistencyTests` | Yes | Pending (board rebuild and one wellness refresh after release) |
 | Indicator definitions | Agreed names, states and meanings; expert package; provisional until reviewed | Contract and evidence documents merged | #56; [medical evidence](medical-evidence.md) | — | Team agreement and expert review pending |
-| Consistent updates | Failed processing keeps the previous complete view | Each published tier set and board is complete. An interrupted board upload can leave tiers one run ahead until the next refresh repairs the board | #57, #80; [publication consistency](wellness-board.md#publication-consistency-48) | Yes | Pending |
+| Consistent updates | Changed information refreshed efficiently; repeated runs safe; failed processing keeps the previous complete view | Repeated runs without new data read and write nothing. Each published tier set and board is complete. An interrupted board upload can leave tiers one run ahead until the next refresh repairs the board. A refresh with new data still rebuilds every tier (incremental partitions pending, #46) | #57, #80; [publication consistency](wellness-board.md#publication-consistency-48) | Yes | Pending |
 | Backup readiness | Policy agreed; fresh verified backup; destructive steps gated | Policy proposed. Full encrypted backups include consent, enrollment and installed follow-up tables, with offline verification | #58, #67, #72; [retention policy](retention-policy.md) | Yes | Fresh verified backup pending (operator) |
 | Recovery rehearsal | Restore into an isolated project; counts and fingerprints match | Verified isolated restore with synthetic data, including follow-up history and rollback of allocator changes after failure | #58, #67; `test_backup_restore_db.py`; [recovery rehearsal](recovery-rehearsal.md) | Yes (throwaway PostgreSQL) | Pending (operator) |
-| Lossless storage | Compact without information loss; measured savings | Compact series with re-expansion; about 7× smaller in a local test | #59; [storage plan](storage-plan.md) | Yes | Migration 009 not applied |
+| Lossless storage | Compact without information loss; measured savings | Compact series with re-expansion; about 7× smaller in a local test. Tiers read a compact reading only when its per-field row is gone and its record still names the same response, so removing verified rows cannot change published tiers | #59, #81; [storage plan](storage-plan.md#implementation-status-46); `test_compaction_db.py` | Yes (throwaway PostgreSQL) | Migration 009 not applied |
 | Growth forecast | Measured costs and a recommendation for the next batch | Measurement log implemented | #60; [capacity measurements](capacity-measurements.md) | Yes | Measurements pending collection restart |
 
 ## How the matrix counts a pass
