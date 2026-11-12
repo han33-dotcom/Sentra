@@ -11,6 +11,11 @@ from pathlib import Path
 import pandas as pd
 
 from .pipeline import ASSESSMENT_VERSION, DEVICES, NOTICE, TH
+
+# Bump when the board's content changes meaning outside the assessment rules. The refresh then
+# rebuilds an older board from existing data, as for ASSESSMENT_VERSION. board-2: a participant is
+# labelled with a device only when all their readings come from one provider (#45).
+BOARD_VERSION = 'board-2'
 FIELDS = {  # board key -> daily_features column, decimals
     'sleep': ('sleep_min', 0), 'rhr': ('rhr', 0), 'hrv': ('daily_hrv_rmssd', 1),
     'br': ('daily_respiratory_rate', 1), 'temp': ('nightly_skin_temp_c', 1), 'steps': ('steps', 0),
@@ -58,7 +63,7 @@ def payload(daily, devices, *, built_at, source_run=None):
         people.append({'id': str(pid), 'name': str(pid), 'device': DEVICES.get(devices.get(pid), 'Unknown'), 'days': days})
     latest = max((p['days'][-1]['d'] for p in people if p['days']), default=None)
     return {'built_at': built_at, 'source_run': source_run, 'data_through': latest, 'notice': NOTICE,
-            'thresholds_status': TH['_status'], 'assessment_version': ASSESSMENT_VERSION, 'people': people}
+            'thresholds_status': TH['_status'], 'assessment_version': ASSESSMENT_VERSION, 'board_version': BOARD_VERSION, 'people': people}
 
 
 def render(board):

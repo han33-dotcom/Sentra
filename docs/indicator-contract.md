@@ -120,6 +120,14 @@ published under another version from the existing data, even when no new collect
 arrived. Boards from before this contract carry no version, so the first refresh after
 deployment replaces their misleading greens.
 
+`board_version` (`BOARD_VERSION` in `processing/board.py`) works the same way for changes in
+meaning outside the assessment rules. `board-2` labels a participant with a device only when all
+their readings come from one provider. A board from before it, which may label a mixed-device
+participant as Fitbit, is rebuilt on the next refresh even at an unchanged watermark.
+Until that refresh runs, the published board keeps its old labels. While the daily wellness
+schedule is off, run the wellness workflow once after deploying this change, before relying on
+the overview and the read API counts together.
+
 ## Provider differences (preserved, not merged)
 
 | Input | Fitbit (Google Health) | WHOOP |

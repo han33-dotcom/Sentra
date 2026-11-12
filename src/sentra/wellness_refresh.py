@@ -17,7 +17,7 @@ from urllib.parse import urlsplit
 
 
 from .errors import SentraError
-from .processing.board import payload
+from .processing.board import BOARD_VERSION, payload
 from .processing.job import runtime_config as viewer_config
 from .processing.observations import devices as participant_devices, load
 from .processing.pipeline import ASSESSMENT_VERSION, run
@@ -69,8 +69,10 @@ def refresh(reader, limits, storage, *, force=False, now=None, log=print):
     if not force:
         before = previous_board(storage) if source is not None else {}
         previous = before.get('source_run')
-        # A board built under older assessment rules is rebuilt even without new collection data.
-        current_rules = before.get('assessment_version') == ASSESSMENT_VERSION
+        # A board built under older assessment rules or an older board format (for example device
+        # labels before #45) is rebuilt from existing data even without new collection data.
+        current_rules = (before.get('assessment_version') == ASSESSMENT_VERSION
+                         and before.get('board_version') == BOARD_VERSION)
         if source is None or (current_rules and previous and datetime.fromisoformat(source) <= datetime.fromisoformat(previous)):
             log('No changed collection data or rules since the last board; tiers not read or published.')
             return {'status': 'skipped', 'source_run': source}
