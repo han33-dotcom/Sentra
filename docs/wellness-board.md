@@ -41,6 +41,40 @@ All outputs are wellness indicators, not medical assessments. Thresholds stay
 **v0 — pending medical expert sign-off**, and the board stays internal to the team until
 then.
 
+## Publication consistency (#48)
+
+What a refresh guarantees, and the synthetic test that checks it
+(`tests/test_wellness_board.py::PublicationConsistencyTests`). The test runs the real slot
+publisher, `fetch` and `refresh` against an in-memory bucket.
+
+| Situation | Published result |
+| --- | --- |
+| Repeated run, no new collection | Skipped: no tier read, no write, bucket unchanged |
+| Processing fails | Nothing published; previous tiers and board stay |
+| Tier upload interrupted part-way | `size_report.json` still names the previous slot; readers and the board keep the previous complete set |
+| Tiers switch, board upload fails | Board keeps its previous complete version; the next run sees an older `source_run` and rebuilds it |
+| Corrected reading (same record, new value, newer collection run) | The next run republishes it; tiers and board both show the corrected value, and the run after that skips |
+
+Corrections reach Sentra because the collector rechecks recent days. For a changed record,
+`put_records` replaces the record and its measurements under the same record key, and updates
+the record's `collected_at`. That moves the durable-write watermark, and the full rebuild
+picks up the corrected reading. The original responses in `sentra-originals` are never
+rewritten.
+
+Limitations:
+
+- Each refresh with new data rebuilds every tier in full. Incremental monthly partitions
+  are phase 4 of [storage-plan.md](storage-plan.md) and depend on the compact storage
+  work (#46).
+- Publication is ordered (tiers, then report, then board) but not one atomic step. Between a
+  tier switch and a failed board upload, the tiers can be one run newer than the board until
+  the next run.
+- The workflow's `sentra-wellness` concurrency group serializes scheduled and manual
+  refreshes. A manual `sentra tiers-build` upload is outside that group: run it only while no
+  refresh is running, or two writers can share the unused slot. `fetch` then refuses the
+  mixed set ("Tiers kept changing…") until the next complete publication.
+- Not yet exercised against the shared bucket: collection and the daily refresh stay paused.
+
 ## Data used
 
 | Board field | Source |

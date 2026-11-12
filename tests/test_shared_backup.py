@@ -117,6 +117,27 @@ class BackupTests(unittest.TestCase):
                     shared_cli.run_command(args(ref))
             connect.assert_not_called()
 
+    def test_full_backup_uses_the_admin_role_and_partial_backups_do_not(self):
+        from argparse import Namespace
+        from unittest import mock
+        from sentra import shared_cli
+        private = Path('.private').resolve()
+        args = lambda **kw: Namespace(command='shared-backup', config=Path('config/local.toml'),
+                                      **{'participant': None, 'provider': None, 'dataset': None, 'audit_only': False, **kw})
+        admin = mock.Mock()
+        with mock.patch.object(shared_cli, 'local_cipher'), mock.patch.object(shared_cli, 'require_agreement'), \
+                mock.patch.object(shared_cli, 'load_connection', return_value=SimpleNamespace(private_dir=private)), \
+                mock.patch.object(shared_cli, 'read_shared', return_value=({}, None, private)), \
+                mock.patch.object(shared_cli, 'SharedBackend'), mock.patch.object(shared_cli, 'read_admin'), \
+                mock.patch.object(shared_cli, 'connect_db', return_value=admin), mock.patch('builtins.print'), \
+                mock.patch.object(shared_cli, 'make_backup', return_value=private / 'b' / 'manifest.enc') as backup:
+            shared_cli.run_command(args())
+            self.assertIs(backup.call_args.kwargs['admin_db'], admin)
+            admin.close.assert_called_once()
+            for partial in ({'participant': 'p01'}, {'audit_only': True}):
+                shared_cli.run_command(args(**partial))
+                self.assertIsNone(backup.call_args.kwargs['admin_db'])
+
     def test_incomplete_inventory_refused_before_cloud_changes(self):
         m=self.module(); cipher=Fernet(Fernet.generate_key())
         with tempfile.TemporaryDirectory() as directory:
