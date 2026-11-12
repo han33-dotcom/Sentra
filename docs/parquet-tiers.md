@@ -2,6 +2,9 @@
 
 `sentra tiers-build` derives compact, rebuildable zstd parquet copies of the shared audit
 tables. It does not change `audit.*` rows or the original responses in `sentra-originals`.
+Measurement tiers also read the lossless compact copy (`audit.series_rows`, sql/009) for any
+dense reading whose per-field row was removed, so they do not change when those rows are
+([storage-plan.md](storage-plan.md#implementation-status-46)).
 The tiers exist so that data volume can grow beyond the 400 MB database ceiling. Retention
 decisions (for example, removing old minute rows from PostgreSQL) are **not** part of this
 change and need a separate, reviewed decision.

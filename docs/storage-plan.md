@@ -147,8 +147,29 @@ context only in the originals. Separately, the dense `audit.records` rows (one p
 with normalized JSON) are not compacted yet and must be measured on Supabase before phase 3
 is sized.
 
-Not done here: the collector still writes per-field rows (phase 1 collector change), tiers
-still read `audit.measurements`, and phase 3 deletion stays gated as below.
+**Tiers read the compact copy (phase 1).** Where `sql/009` is installed, each measurement tier
+reads `audit.measurements` plus the `audit.series_rows` readings that meet two conditions:
+their per-field row no longer exists, **and** their record in `audit.records` still names the
+same original response. Nothing is read twice, and a per-field row always wins, including a
+later correction not yet repaired in the compact copy. A newer response that omits a reading
+replaces the record and drops that reading's per-field row. Its obsolete compact copy is then
+never published.
+
+**Phase 3 must therefore keep `audit.records`.** A record's `source_response_id` is the
+proof that a compact reading is still current. If records are ever compacted or removed
+too, an equivalent marker must be kept first. Published tiers, and therefore the board, stay the same
+when verified per-field dense rows are removed. The opt-in PostgreSQL tests in
+`tests/test_compaction_db.py` cover three cases: removal, a later correction, and a reading
+omitted by a newer response, written through the collector's `put_records`. Without `sql/009`, tiers read
+`audit.measurements` as before.
+
+Still open before phase 3:
+- The collector still writes per-field rows (phase 1 collector change, coordinated with the
+  collection owner, #47).
+- The private viewer's dataset catalog and measurement queries still read
+  `audit.measurements` only.
+- Egress `purpose` attribution is not added yet.
+- Phase 3 deletion stays gated as below.
 
 ## Phases and approvals
 
