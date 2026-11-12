@@ -23,9 +23,10 @@ Streamlit viewer "Wellness board" page      ->  reads board/board.json, renders 
      including partial runs whose counters omit already committed pages.
      Paused and unchanged attempts do not advance the watermark. Without new changes,
      only metadata and the previous board are checked; tier reads and publication are skipped,
-     **unless** the previous board was built under a different `assessment_version` (or none).
-     Then it is rebuilt from the existing data so new assessment rules apply without restarting
-     collection.
+     **unless** the previous board was built under a different `assessment_version` or
+     `board_version` (or none). Then it is rebuilt from the existing data, so new assessment
+     rules or board meaning (for example single-provider device labels, #45) apply without
+     restarting collection.
   2. Otherwise it rebuilds the tiers and runs processing **before publishing anything**.
      A processing failure leaves the previous tiers and board unchanged.
   3. It then publishes the tiers into the unused slot (see

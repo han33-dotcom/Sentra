@@ -9,6 +9,7 @@ from pathlib import Path
 import re
 
 import pandas as pd
+import pyarrow.parquet as pq
 
 from .canonical import SLEEP_STAGE
 from .metric_map import GOOGLE_STAGE_CODES, GOOGLE_STAGE_MINUTES, MAPPING, WHOOP_ASLEEP_PARTS
@@ -131,6 +132,27 @@ def from_measurements(m):
                         'resolution': m.resolution, 'raw_ref': m.record_key.astype(str)})
     # A value whose day cannot be placed (missing interval or civil date) is not guessed.
     return out[out.t.notna()].reset_index(drop=True)
+
+
+def devices(tiers):
+    """Pseudonym -> provider for participants whose readings come from exactly one provider.
+
+    Processing combines a participant's readings per day without keeping their provider, so a
+    participant with readings from two providers has no single device. They are left out, which
+    keeps them out of every per-device group statistic and shows them as an unknown device."""
+    tiers, seen = Path(tiers), {}
+    path = tiers / 'measurements.parquet'
+    if path.is_file():
+        m = pd.read_parquet(path, columns=['participant', 'provider']).drop_duplicates()
+        for pid, provider in m.itertuples(index=False):
+            seen.setdefault(str(pid), set()).add(str(provider))
+    for folder in ('hr_raw', 'hr_minute'):
+        for path in sorted((tiers / folder).glob('p*.parquet')):
+            if 'provider' not in pq.read_schema(path).names:
+                continue  # an older tier without provider names adds no evidence either way
+            providers = pd.read_parquet(path, columns=['provider']).provider.dropna().astype(str)
+            seen.setdefault(path.stem, set()).update(providers.unique())
+    return {pid: next(iter(providers)) for pid, providers in seen.items() if len(providers) == 1}
 
 
 def load(tiers):

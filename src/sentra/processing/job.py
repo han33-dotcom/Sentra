@@ -18,7 +18,7 @@ from ..shared import Limits
 from ..shared_backend import PrivateStorage, connect_db
 from ..shared_config import validate_credentials
 from ..tiers import TIER_BUCKET, AuditReader, fetch
-from .observations import load
+from .observations import devices, load
 from .pipeline import run
 
 
@@ -48,7 +48,7 @@ def once(out):
             storage = PrivateStorage(credentials, AuditReader(db, limits).reserve, bucket=TIER_BUCKET)
             tiers = Path(folder) / 'tiers'
             report = fetch(storage, tiers)
-            run(load(tiers), out)
+            run(load(tiers), out, devices=devices(tiers))
             print(f'processed tiers built at {report.get("built_at")}', flush=True)
         finally:
             db.close()
