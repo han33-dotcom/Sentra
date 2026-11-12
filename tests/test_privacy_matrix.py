@@ -5,8 +5,8 @@ database scoping had failed. Each page must still show only what that user may s
 looks at everything rendered (text, tables, options, chart data and the embedded board), not
 only at one widget. Synthetic identities and rows only.
 
-Pages added by later tasks join `PAGES` when they merge, and the matrix is rerun with them: Trends
-(#40) is included in both views; Follow-ups (#31) joins when it merges.
+Pages added by later tasks join `PAGES` when they merge. Trends (#40) covers both views, and
+Follow-ups (#31) checks current and historical note text as well as participant IDs.
 """
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -17,13 +17,14 @@ from unittest.mock import Mock, patch
 from zoneinfo import ZoneInfo
 
 from sentra.processing.pipeline import ASSESSMENT_VERSION
+from test_follow_up_pages import row as follow_up_row
 from test_organization_pages import User
 from test_viewer_app import FakeReader
 
 TEAM = ['team@example.test']
 # 'Page · View' also selects a view inside the page.
 PAGES = ('Daily activity', 'Sleep', 'Workouts', 'Data availability', 'Wellness board',
-         'Organization overview', 'Profiles', 'Trends · One person', 'Trends · Group')
+         'Organization overview', 'Profiles', 'Trends · One person', 'Trends · Group', 'Follow-ups')
 USERS = [{'org_id': 'org-a', 'email': 'officer@a.test', 'role': 'officer', 'active': True},
          {'org_id': 'org-a', 'email': 'reviewer@a.test', 'role': 'reviewer', 'active': True},
          {'org_id': 'org-a', 'email': 'removed@a.test', 'role': 'officer', 'active': False},
@@ -39,7 +40,10 @@ CAN_SEE = {'officer@a.test': {'p91'}, 'reviewer@a.test': {'p91'}, 'officer@b.tes
 # Pages that list permitted individuals: the permitted person must appear there, so an empty page
 # cannot pass the "only permitted participants" check by showing nobody.
 INDIVIDUAL_PAGES = ('Daily activity', 'Sleep', 'Workouts', 'Data availability', 'Wellness board', 'Profiles',
-                    'Trends · One person')
+                    'Trends · One person', 'Follow-ups')
+FOLLOW_UP_NOTES = {pid: f'Individual note marker {i}' for i, pid in enumerate(EVERYONE)}
+FOLLOW_UP_HISTORY = {pid: f'History note marker {i}' for i, pid in enumerate(EVERYONE)}
+GROUP_NOTE = 'Synthetic organization group note.'
 
 
 def consents(overrides=None):
@@ -70,6 +74,18 @@ class EveryoneReader(FakeReader):
     group_catalog = catalog
     def board(self): return board()
     group_board = board
+
+    def follow_up_rows(self, org_id=None, participants=None, statuses=None):
+        rows = [follow_up_row(i, CONSENT.get(pid, ('org-a',))[0], pid, status='ongoing')
+                for i, pid in enumerate(EVERYONE, 1)]
+        for row in rows:
+            row['note'] = FOLLOW_UP_NOTES[row['participant_id']]
+        rows.append(dict(follow_up_row(100, 'org-a', None, status='ongoing'), note=GROUP_NOTE))
+        events = [{'event_id': row['follow_up_id'], 'follow_up_id': row['follow_up_id'],
+                   'recorded_at': row['opened_at'], 'actor': row['opened_by'], 'status': 'open',
+                   'assignee': row['assignee'], 'note': FOLLOW_UP_HISTORY.get(row['participant_id'], GROUP_NOTE)}
+                  for row in rows]
+        return rows, events
 
 
 def _decoded(message):
@@ -146,7 +162,12 @@ class PrivacyMatrixTests(unittest.TestCase):
             app = self.open(email, consents())
             for page in PAGES:
                 with self.subTest(user=email, page=page):
-                    shown = shown_ids(self.visit(app, page))
+                    text = self.visit(app, page)
+                    shown = shown_ids(text)
+                    if page == 'Follow-ups':
+                        for notes in (FOLLOW_UP_NOTES, FOLLOW_UP_HISTORY):
+                            self.assertEqual({pid for pid, note in notes.items() if note in text}, allowed)
+                        self.assertEqual(GROUP_NOTE in text, email.endswith('@a.test'))
                     if page in INDIVIDUAL_PAGES:
                         self.assertEqual(shown, allowed)
                     else:
@@ -199,6 +220,21 @@ class PrivacyMatrixTests(unittest.TestCase):
         for page in PAGES:
             with self.subTest(page=page):
                 self.assertEqual(shown_ids(self.visit(app, page)), set())
+
+
+    def test_follow_up_notes_disappear_on_the_same_page_after_consent_changes(self):
+        for sharing, withdrawn in (('individual', True), ('group_only', False)):
+            with self.subTest(sharing=sharing, withdrawn=withdrawn):
+                app = self.open('officer@a.test', consents())
+                before = self.visit(app, 'Follow-ups')
+                for note in (FOLLOW_UP_NOTES['p91'], FOLLOW_UP_HISTORY['p91'], GROUP_NOTE):
+                    self.assertIn(note, before)
+                self.state['rows'] = consents({'p91': ('org-a', sharing, withdrawn)})
+                after = self.visit(app, 'Follow-ups')
+                self.assertEqual(shown_ids(after), set())
+                self.assertIn(GROUP_NOTE, after)
+                for note in (FOLLOW_UP_NOTES['p91'], FOLLOW_UP_HISTORY['p91']):
+                    self.assertNotIn(note, after)
 
 
 class RenderedScanTests(unittest.TestCase):
