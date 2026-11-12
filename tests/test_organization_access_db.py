@@ -102,12 +102,14 @@ class OrganizationAccessDatabaseTests(unittest.TestCase):
             self.db.execute('set local role sentra_viewer')
             cursor = self.db.cursor(row_factory=self.psycopg.rows.dict_row)
             users = cursor.execute('select org_id,email,role,active from org.org_users').fetchall()
-            consents = cursor.execute('select participant_id,org_id,sharing,withdrawn,membership_open '
+            # The same columns as ViewerReader.organization_rows, including demonstration (#42).
+            consents = cursor.execute('select participant_id,org_id,sharing,withdrawn,membership_open,demonstration '
                                       'from org.current_consent').fetchall()
         access = resolve('officer@b.test', team_emails=[], org_users=users, consents=consents)
         self.assertTrue(access.can_view_individual('p903'))
         self.assertFalse(access.can_view_individual('p904'))
         self.assertEqual(access.group_contributors(['p903', 'p904']), {'p903'})
+        self.assertEqual(access.demonstrators, frozenset())  # the column defaults to no agreement
 
     def test_viewer_reads_only_and_other_roles_see_nothing(self):
         for statement in ("insert into org.organizations values ('evil','Evil')",

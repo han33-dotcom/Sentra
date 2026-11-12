@@ -67,14 +67,19 @@ def decide(email, consents=CONSENTS):
     return resolve(email, team_emails=TEAM, org_users=USERS, consents=consents)
 
 
-def build(email, consents=CONSENTS, *, board=BOARD, days=7, include=EVERYONE):
+def build(email, consents=CONSENTS, *, board=BOARD, days=7, include=EVERYONE, demonstration=None):
     decision = decide(email, consents)
     scope = EVERYONE if decision.is_team else set(decision.contributors)
     report = reports.build(decision, board=board, group_people=board['people'], scope=scope, enrolled=set(scope),
                            catalog=CATALOG, include=include, days=days, today=TODAY,
                            generated_at=datetime(2026, 11, 11, 9, tzinfo=timezone.utc).isoformat(),
-                           follow_ups=FOLLOW_UPS)
+                           follow_ups=FOLLOW_UPS, demonstration=demonstration)
     return report, reports.markdown(report)
+
+
+def agreed(*pids):
+    """CONSENTS with `demonstration` set for the given people only."""
+    return [dict(c, demonstration=c['participant_id'] in pids) for c in CONSENTS]
 
 
 class ReportBoundaryTests(unittest.TestCase):
@@ -152,6 +157,52 @@ class ReportBoundaryTests(unittest.TestCase):
         self.assertNotIn(later, text)
         _, team_text = build('team@example.test', board=board)
         self.assertIn(f'Published data through: {later}', team_text)
+
+
+class DemonstrationCopyTests(unittest.TestCase):
+    def test_only_people_who_agreed_appear_even_in_group_figures(self):
+        rows = agreed('p92', 'p93', 'p94', 'p95', 'p96')  # five group-only people agreed; p91 did not
+        decision = decide('officer@a.test', rows)
+        report, text = build('officer@a.test', rows, demonstration=decision.demonstrators)
+        self.assertTrue(report['demonstration'])
+        self.assertIn('Demonstration copy', text)
+        self.assertEqual(report['individuals'], [])  # p91 shares individually but did not agree
+        self.assertNotIn('p91', text)
+        sleep = next(r for r in report['group_summary'] if r['key'] == 'sleep')
+        self.assertEqual(sleep['contributors'], 5)
+        self.assertEqual(report['participation']['enrolled'], '5')
+        self.assertEqual(report['follow_ups'], {'open': 0, 'ongoing': 0, 'resolved': 1})  # group follow-up only
+
+    def test_fewer_than_k_who_agreed_shows_no_group_figure(self):
+        rows = agreed('p91', 'p92')
+        report, text = build('officer@a.test', rows, demonstration=decide('officer@a.test', rows).demonstrators)
+        self.assertEqual([p['id'] for p in report['individuals']], ['p91'])
+        self.assertEqual(report['group_summary'], [])
+        self.assertEqual(report['group_trends'], [])
+        self.assertEqual(report['participation']['connected'], '<5')
+        self.assertNotIn('p92', text)
+
+    def test_a_demonstration_set_cannot_widen_the_users_own_decision(self):
+        rows = agreed('p91')
+        report, text = build('officer@a.test', rows, demonstration=EVERYONE)  # caller passes too much
+        self.assertEqual([p['id'] for p in report['individuals']], ['p91'])
+        self.assertEqual(report['participation']['enrolled'], '1')
+        for pid in EVERYONE - {'p91'}:
+            self.assertNotIn(pid, text)
+
+    def test_team_demonstration_copy_uses_the_agreed_consents(self):
+        from sentra.access import demonstration_ids
+        rows = agreed('p91', 'p97')
+        report, text = build('team@example.test', rows, demonstration=demonstration_ids(rows))
+        self.assertEqual(sorted(p['id'] for p in report['individuals']), ['p91', 'p97'])
+        self.assertEqual(report['participation']['enrolled'], '2')
+        for pid in EVERYONE - {'p91', 'p97'}:
+            self.assertNotIn(pid, text)
+
+    def test_normal_reports_are_not_marked(self):
+        report, text = build('officer@a.test')
+        self.assertFalse(report['demonstration'])
+        self.assertNotIn('Demonstration copy', text)
 
 
 class ReportContentTests(unittest.TestCase):

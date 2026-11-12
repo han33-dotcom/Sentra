@@ -67,17 +67,29 @@ def _individual(person, *, days, today, assessment_version):
 
 
 def build(decision, *, board, group_people, scope, enrolled, catalog, include, days, today, generated_at,
-          follow_ups=()):
+          follow_ups=(), demonstration=None):
     """The report for `decision` over the last `days` published days.
 
     `group_people`, `scope`, `enrolled` and `catalog` are the overview's group inputs (`organization_data`);
     `board` is the individually scoped board; `include` the participant IDs the user chose for individual
-    sections; `follow_ups` the items the user may read (`follow_ups.visible`)."""
+    sections; `follow_ups` the items the user may read (`follow_ups.visible`).
+
+    `demonstration`: None for a normal report, or the participants who agreed to internal demonstrations
+    for a demonstration copy (`Access.demonstrators`; the team passes `access.demonstration_ids`). A
+    demonstration copy uses nobody else, in group figures as well as individual sections."""
     if days not in PERIODS:
         raise ValueError(f'Period must be one of {PERIODS} days.')
     team = decision.is_team
-    group_people = [p for p in group_people if isinstance(p, dict) and decision.group_contributors([p.get('id')])]
-    scope = decision.group_contributors(scope)
+    if demonstration is not None and not team:
+        demonstration = set(demonstration) & decision.demonstrators  # never wider than the user's own decision
+
+    def keep(pid):
+        return demonstration is None or pid in demonstration
+
+    group_people = [p for p in group_people if isinstance(p, dict) and decision.group_contributors([p.get('id')])
+                    and keep(p.get('id'))]
+    scope = {pid for pid in decision.group_contributors(scope) if keep(pid)}
+    enrolled = {pid for pid in enrolled if keep(pid)}
     version = board.get('assessment_version')
     counts = participation(scope, catalog, group_people, today=today, assessment_version=version)
     counts['enrolled'] = len(enrolled & scope) if not team else len(enrolled)
@@ -85,11 +97,13 @@ def build(decision, *, board, group_people, scope, enrolled, catalog, include, d
              for k, v in counts.items() if k != 'recent_days'}
     end = latest_group_day(group_people) if team else publishable_end(group_people, scope)
     people = [p for p in board.get('people', ()) if isinstance(p, dict) and p.get('id') in include
-              and decision.can_view_individual(p.get('id'))]
-    items = [i for i in follow_ups if team or (i.get('org_id') == decision.org_id and (
-        i.get('participant_id') is None or decision.can_view_individual(i['participant_id'])))]
+              and decision.can_view_individual(p.get('id')) and keep(p.get('id'))]
+    items = [i for i in follow_ups if (team or (i.get('org_id') == decision.org_id and (
+        i.get('participant_id') is None or decision.can_view_individual(i['participant_id']))))
+        and (i.get('participant_id') is None or keep(i['participant_id']))]
     return {
         'organization': TEAM_LABEL if team else decision.org_id, 'role': decision.role,
+        'demonstration': demonstration is not None,
         'generated_at': generated_at, 'days': days, 'today': today,
         # The board's own date covers every organization; organization users get only their scoped dates.
         'data_through': board.get('data_through') if team else None, 'board_built_at': board.get('built_at'),
@@ -129,6 +143,9 @@ def markdown(report):
         out.append(f"- Published data through: {report['data_through']}")
     if report['board_built_at']:
         out.append(f"- Daily board built: {report['board_built_at']}")
+    if report['demonstration']:
+        out += ['', '**Demonstration copy.** Includes only participants who agreed to internal project '
+                'demonstrations, in group figures as well as individual sections. Not for public material.']
     out += ['', "Wellness information compared with each person's own pattern; not a medical assessment or diagnosis.",
            '', '## Participation', '']
     p = report['participation']
