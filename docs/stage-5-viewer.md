@@ -150,14 +150,14 @@ A stale/missing/exhausted baseline stops reads/downloads and directs the operato
 verify organization usage. The app reports snapshots from the last load, not live
 billing. No silent deletions, quota increases, upgrades or paid subscriptions.
 
-## Notion documentation
+## Viewer documentation
 
-Keep the viewer link on the private Sentra project page; linking it does not grant
-access. Add links to this guide and the [data dictionary template](data-dictionary.md).
+Keep the viewer link in restricted team operating materials; linking it does not
+grant access. Use this guide and the [data dictionary template](data-dictionary.md).
 Document metric/provider/dataset, vendor name/definition, standardized/vendor units,
 value kind, timing basis, requested/observed resolution, supported history, observed
 coverage/delay, source endpoint and interpretation limits. Link a source manifest ID
-or approved private extract rather than copying health records into Notion. Keep
+or approved private extract rather than copying health records into team docs. Keep
 findings labelled preliminary; the three-day observation has not started.
 
 ## Verification evidence
