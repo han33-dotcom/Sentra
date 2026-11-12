@@ -9,6 +9,7 @@ import unittest
 from sentra.access import resolve
 from sentra.processing.pipeline import ASSESSMENT_VERSION
 from sentra import reports
+from test_privacy_matrix import pdf_text
 
 TEAM = ['team@example.test']
 USERS = [{'org_id': 'org-a', 'email': 'officer@a.test', 'role': 'officer', 'active': True},
@@ -203,6 +204,34 @@ class DemonstrationCopyTests(unittest.TestCase):
         report, text = build('officer@a.test')
         self.assertFalse(report['demonstration'])
         self.assertNotIn('Demonstration copy', text)
+
+
+class PdfTests(unittest.TestCase):
+    def test_pdf_carries_the_same_boundaries_as_the_markdown(self):
+        for email, allowed in (('officer@a.test', {'p91'}), ('officer@b.test', {'p97'})):
+            with self.subTest(email=email):
+                report, _ = build(email)
+                data = reports.pdf(report)
+                self.assertTrue(data.startswith(b'%PDF-'))
+                self.assertEqual({pid for pid in EVERYONE if pid in pdf_text(data)}, allowed)
+                self.assertNotIn(b'marker', data)  # no follow-up note text
+
+    def test_pdf_text_is_readable_and_reproducible(self):
+        report, _ = build('officer@a.test')
+        data = reports.pdf(report)
+        self.assertEqual(data, reports.pdf(report))  # no timestamps or random IDs
+        self.assertNotIn(b'/FlateDecode', data)  # uncompressed, so the privacy matrix can read it
+        text = pdf_text(data)
+        self.assertIn('| Fewer than 5'[2:], text)
+        self.assertIn('<5', text)  # escaped for layout, shown as written
+        self.assertIn('—', text)
+        for line in reports.LIMITATIONS[:3]:
+            self.assertIn(line.split(';')[0], text)
+
+    def test_demonstration_copy_is_marked_in_the_pdf(self):
+        rows = agreed('p91')
+        report, _ = build('officer@a.test', rows, demonstration=decide('officer@a.test', rows).demonstrators)
+        self.assertIn(b'Demonstration copy.', reports.pdf(report))
 
 
 class ReportContentTests(unittest.TestCase):

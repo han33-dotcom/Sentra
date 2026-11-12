@@ -7,6 +7,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from test_organization_pages import BOARD, CONSENTS, OrgReader, USERS, User
+from test_privacy_matrix import pdf_text
 
 TEAM = ['team@example.test']
 
@@ -16,15 +17,26 @@ class ReportReader(OrgReader):
         return [], []
 
 
-def downloads(app):
-    """Decoded bytes of every download link the page rendered."""
+def files(app):
+    """{file name: bytes} for every download link the page rendered."""
     html = ''.join(str(e.proto) for e in app.get('iframe'))
-    return [base64.b64decode(m).decode('utf-8') for m in re.findall(r'base64,([A-Za-z0-9+/=]+)', html)]
+    found = re.findall(r'download=\\?"([^"\\]+)\\?" href=\\?"data:[^;]+;base64,([A-Za-z0-9+/=]+)', html)
+    return {name: base64.b64decode(data) for name, data in found}
+
+
+def downloads(app):
+    """The Markdown download(s), as text."""
+    return [data.decode('utf-8') for name, data in files(app).items() if name.endswith('.md')]
+
+
+def pdf_download(app):
+    [data] = [data for name, data in files(app).items() if name.endswith('.pdf')]
+    return data
 
 
 def filename(app):
-    html = ''.join(str(e.proto) for e in app.get('iframe'))
-    return re.search(r'download=\\?"([^"\\]+)', html).group(1)
+    [name] = [name for name in files(app) if name.endswith('.md')]
+    return name
 
 
 class ReportPageTests(unittest.TestCase):
@@ -67,6 +79,8 @@ class ReportPageTests(unittest.TestCase):
                 self.assertNotIn(pid, shown)
         self.assertIn('Organization: org-a', text)
         self.assertIn('| Sleep | Fitbit | 403 min | 5 |', text)
+        data = pdf_download(app)  # the same content as a PDF
+        self.assertEqual({pid for pid in ('p91', 'p92', 'p93', 'p94', 'p95', 'p96') if pid in pdf_text(data)}, {'p91'})
 
     def test_the_download_is_the_previewed_markdown(self):
         app = self.open('officer@a.test')
@@ -74,6 +88,8 @@ class ReportPageTests(unittest.TestCase):
         self.assertIn('# Sentra wellness report', text)
         self.assertIn('## Limitations', text)
         self.assertRegex(filename(app), r'^sentra-report-org-a-\d{4}-\d{2}-\d{2}-7d\.md$')
+        self.assertEqual(sorted(files(app)), sorted([filename(app), filename(app)[:-3] + '.pdf']))
+        self.assertTrue(pdf_download(app).startswith(b'%PDF-'))
 
     def test_withdrawal_removes_the_person_on_the_next_render(self):
         app = self.open('officer@a.test')
@@ -86,6 +102,7 @@ class ReportPageTests(unittest.TestCase):
                 self.check(app)
                 self.assertEqual(app.multiselect(key='audit_report_people').value, [])
                 self.assertNotIn('p91', downloads(app)[0])
+                self.assertNotIn('p91', pdf_text(pdf_download(app)))
                 self.assertNotIn('p91', self.preview(app))
                 self.state['consents'] = CONSENTS
                 app.run()
@@ -102,6 +119,7 @@ class ReportPageTests(unittest.TestCase):
         self.assertIn('| 2 |', text)  # enrolled: the two who agreed
         self.assertIn('No group statistic can be shown', text)  # fewer than 5 agreed
         self.assertRegex(filename(app), r'-7d-demo\.md$')
+        self.assertIn('Demonstration copy', pdf_text(pdf_download(app)))
 
     def test_saving_a_follow_up_refreshes_the_report_counts(self):
         from sentra import viewer_app

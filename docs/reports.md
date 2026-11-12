@@ -2,8 +2,17 @@
 
 Task: [#42](https://github.com/han33-dotcom/Sentra/issues/42). The **Reports** page in the
 private viewer produces a selected-period report for authorized colleagues. It is previewed on
-the page and downloaded as a Markdown (`.md`) file. Everything in it is wellness information
-compared with each person's own pattern, not a medical assessment.
+the page and downloaded as a Markdown (`.md`) or PDF file. Everything in it is wellness
+information compared with each person's own pattern, not a medical assessment.
+
+## Formats
+
+Both files are rendered from the same list of report sections (`sentra.reports.blocks`), so the
+PDF never carries anything the Markdown does not. The PDF is A4 with ReportLab's standard fonts
+([ReportLab](https://pypi.org/project/reportlab/) 5.0.1, BSD license). It is pure Python, and
+its only dependencies (Pillow, charset-normalizer) were already in the hosted viewer's pinned
+requirements. Its pages are left uncompressed and the output is reproducible, so the privacy
+matrix can read the downloaded PDF's text.
 
 ## What a report contains
 
@@ -30,8 +39,8 @@ never moves it. Each individual section ends on that person's own latest publish
   download link on the next load.
 - The builder (`sentra.reports.build`) re-checks every input against the access decision, so a
   caller passing too much cannot widen a report. The [privacy matrix](privacy-checks.md) renders
-  Reports with a reader that returns everyone, selects every offered person and decodes the
-  downloaded file as well as the page.
+  Reports with a reader that returns everyone, selects every offered person, and checks the page,
+  the Markdown file and the PDF's drawn text each on its own.
 - Organization users never see the board's own "data through" date, because it covers every
   organization. They see only the dates within their scope.
 - Team operators get the same report across all organizations, with exact counts and hidden-day
@@ -59,8 +68,7 @@ reading of the consent and is open to the team's review.
 
 ## Limitations
 
-- Markdown only. No PDF, which would need a new library; the browser's print to PDF works on the
-  preview.
+- The PDF uses standard fonts (Western European characters), which covers all report text today.
 - Follow-up counts cover the latest 50 follow-ups the user may read, open and ongoing first.
 - No department comparisons (no departments in the schema), and no reports through the read
   API, whose key has no organization scope.

@@ -192,7 +192,7 @@ Use Python **3.11**. From the repository root in Windows PowerShell:
 python -m venv .venv
 .venv/Scripts/python.exe -m pip install -r requirements-windows.txt
 .venv/Scripts/python.exe -m pip install --no-deps -e ".[dev,viewer]"
-.venv/Scripts/python.exe -m pip install "streamlit[auth]==1.65.0" "Authlib==1.8.0" -r requirements-api.txt httpx pytest pre-commit
+.venv/Scripts/python.exe -m pip install "streamlit[auth]==1.65.0" "Authlib==1.8.0" "reportlab==5.0.1" -r requirements-api.txt httpx pytest pre-commit
 .venv/Scripts/python.exe -m pip check
 .venv/Scripts/pre-commit.exe install
 .venv/Scripts/python.exe -m pytest

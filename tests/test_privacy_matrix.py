@@ -124,8 +124,36 @@ def rendered(app):
     walk(app.sidebar)
     text = '\n'.join(out)
     # Downloads travel as base64 data URIs inside an iframe; decode them so their contents are scanned too.
-    files = [base64.b64decode(m).decode('utf-8', 'ignore') for m in re.findall(r'base64,([A-Za-z0-9+/=]+)', text)]
+    files = [file_text(base64.b64decode(m)) for m in re.findall(r'base64,([A-Za-z0-9+/=]+)', text)]
     return '\n'.join([text, *files])
+
+
+def _pdf_string(raw):
+    """A PDF literal string's bytes with escapes resolved, as WinAnsi text."""
+    return re.sub(rb'\\([0-7]{1,3}|.)', lambda m: bytes([int(m.group(1), 8)]) if m.group(1)[:1].isdigit()
+                  else m.group(1), raw).decode('cp1252', 'replace')
+
+
+def pdf_text(data):
+    """Text drawn in an uncompressed PDF, rebuilt per text object. A generator may split one word into
+    several strings (ReportLab writes '<5' as '(<) Tj (5) Tj'), so searching the raw bytes can miss an ID."""
+    lines = []
+    for block in re.findall(rb'\bBT\b(.*?)\bET\b', data, re.S):
+        parts = [('\n' if t.group(0) == b'T*' else _pdf_string(t.group(1)))
+                 for t in re.finditer(rb'\(((?:\\.|[^\\)])*)\)\s*Tj|T\*', block)]
+        lines.append(''.join(parts))
+    return '\n'.join(lines)
+
+
+def file_text(data):
+    return pdf_text(data) if data.startswith(b'%PDF-') else data.decode('utf-8', 'ignore')
+
+
+def download_files(app):
+    """{file name: bytes} of every download link on the page."""
+    html = ''.join(str(e.proto) for e in app.get('iframe'))
+    found = re.findall(r'download=\\?"([^"\\]+)\\?" href=\\?"data:[^;]+;base64,([A-Za-z0-9+/=]+)', html)
+    return {name: base64.b64decode(data) for name, data in found}
 
 
 def shown_ids(text):
@@ -179,6 +207,9 @@ class PrivacyMatrixTests(unittest.TestCase):
                     if page == 'Reports':  # reports carry follow-up counts, never note text
                         for note in [*FOLLOW_UP_NOTES.values(), *FOLLOW_UP_HISTORY.values(), GROUP_NOTE]:
                             self.assertNotIn(note, text)
+                        # Each downloaded file on its own names exactly the permitted people.
+                        for name, data in download_files(app).items():
+                            self.assertEqual(shown_ids(file_text(data)), allowed, name)
                     if page in INDIVIDUAL_PAGES:
                         self.assertEqual(shown, allowed)
                     else:
@@ -280,12 +311,24 @@ class RenderedScanTests(unittest.TestCase):
         elif where == 'download':
             from sentra.viewer_data import inline_download
             st.iframe(inline_download(b'| p96 | 1 |', 'report.md', 'text/markdown'), height=70)
+        elif where == 'pdf':
+            from io import BytesIO
+            from reportlab.pdfgen import canvas
+            from sentra.viewer_data import inline_download
+            buffer = BytesIO()
+            page = canvas.Canvas(buffer, pageCompression=0)
+            text = page.beginText(72, 720)
+            text.textOut('p9')  # one ID split across two strings, as ReportLab may write it
+            text.textOut('6')
+            page.drawText(text)
+            page.save()
+            st.iframe(inline_download(buffer.getvalue(), 'report.pdf', 'application/pdf'), height=70)
         else:
             st.caption('nothing here')
 
     def test_ids_are_found_in_table_cells_chart_data_options_and_downloads(self):
         from streamlit.testing.v1 import AppTest
-        for where, expected in (('table', {'p96'}), ('chart', {'p96'}), ('option', {'p96'}), ('download', {'p96'}),
+        for where, expected in (('table', {'p96'}), ('chart', {'p96'}), ('option', {'p96'}), ('download', {'p96'}), ('pdf', {'p96'}),
                                 ('none', set())):
             with self.subTest(where=where):
                 app = AppTest.from_function(self.page)

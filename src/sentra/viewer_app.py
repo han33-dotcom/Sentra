@@ -747,7 +747,7 @@ def reports_page():
     also applies to the preview and the download link on the next page load."""
     from .access import demonstration_ids
     from .follow_ups import history, visible
-    from .reports import build, markdown
+    from .reports import build, markdown, pdf
     from .trends import PERIODS
     principal()
     with st.container(key='page-heading'):
@@ -786,8 +786,12 @@ def reports_page():
                  include=set(include),days=days,today=now.date(),generated_at=now.isoformat(timespec='minutes'),
                  follow_ups=items,demonstration=demonstration)
     text=markdown(report)
-    name=f"sentra-report-{decision.org_id or 'team'}-{now:%Y-%m-%d}-{days}d{'-demo' if demo else ''}.md"
-    private_download(text.encode('utf-8'),name,'text/markdown')
+    name=f"sentra-report-{decision.org_id or 'team'}-{now:%Y-%m-%d}-{days}d{'-demo' if demo else ''}"
+    # Both files come from the same report; the PDF adds no content the Markdown does not have.
+    for column,(payload,suffix,mime) in zip(st.columns(2),((text.encode('utf-8'),'.md','text/markdown'),
+                                                           (pdf(report),'.pdf','application/pdf'))):
+        with column:
+            private_download(payload,name+suffix,mime)
     st.caption('Downloads cannot be recalled. Share only with authorized colleagues; recipients delete copies '
                'within 30 days.')
     with st.container(border=True):
