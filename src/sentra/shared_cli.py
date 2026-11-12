@@ -35,6 +35,7 @@ def add_commands(sub):
         p.add_argument('provider',choices=[*PROVIDERS,'all'])
         if name == 'shared-verify': p.add_argument('--originals',action='store_true')
     p = sub.add_parser('shared-backup')
+    p.add_argument('--audit-only',action='store_true',help='skip organization and enrollment tables (no admin connection)')
     p.add_argument('--participant')
     p.add_argument('--provider',choices=PROVIDERS)
     p.add_argument('--dataset')
@@ -186,7 +187,14 @@ def run_command(args):
         elif args.command == 'shared-backup':
             for provider in PROVIDERS:
                 require_agreement(load_connection(args.config,provider,require_client=False))
-            path = make_backup(backend,private/'backups',cipher,participant=args.participant,provider=args.provider,dataset=args.dataset)
+            # A full backup also covers consent and enrollment tables, which only the admin role can read.
+            full = not (args.participant or args.provider or args.dataset or args.audit_only)
+            admin = connect_db(read_admin(private)) if full else None
+            try:
+                path = make_backup(backend,private/'backups',cipher,participant=args.participant,provider=args.provider,
+                                   dataset=args.dataset,admin_db=admin)
+            finally:
+                if admin is not None: admin.close()
             print('Encrypted private backup manifest: '+str(path))
         elif args.command in ('shared-compact','shared-compact-verify'):
             scope = (args.participant,args.provider,args.dataset)
