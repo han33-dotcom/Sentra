@@ -6,6 +6,8 @@ Tasks belong in [GitHub Issues](https://github.com/han33-dotcom/Sentra/issues); 
 
 ## Sprint evidence and handover (SEN-32)
 
+- [Architecture](architecture.md): components, hosting, database roles, migrations and privacy boundaries.
+- [Operator handover](handover.md): which procedure to follow in each operating situation, and the open gates.
 - [Evaluation table](evaluation.md): expected vs actual for every sprint acceptance item, with evidence.
 - [Known limitations](limitations.md): one list collected from every merged PR.
 - [Privacy checks](privacy-checks.md): the hosted access and withdrawal procedure and its results.
@@ -16,12 +18,14 @@ Tasks belong in [GitHub Issues](https://github.com/han33-dotcom/Sentra/issues); 
 
 ## Documents
 
+- [architecture](architecture.md)
 - [collaborator setup](collaborator-setup.md)
 - [collection restart readiness](collection-restart-readiness.md)
 - [data dictionary](data-dictionary.md)
 - [dashboard restoration](dashboard-restoration.md)
 - [evaluation](evaluation.md)
 - [follow-ups](follow-ups.md)
+- [handover](handover.md)
 - [limitations](limitations.md)
 - [observations](observations.md)
 - [operating guide](operating-guide.md)
