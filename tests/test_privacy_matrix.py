@@ -8,6 +8,7 @@ only at one widget. Synthetic identities and rows only.
 Pages added by later tasks join `PAGES` when they merge. Trends (#40) covers both views, and
 Follow-ups (#31) checks current and historical note text as well as participant IDs.
 """
+import base64
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -24,7 +25,7 @@ from test_viewer_app import FakeReader
 TEAM = ['team@example.test']
 # 'Page · View' also selects a view inside the page.
 PAGES = ('Daily activity', 'Sleep', 'Workouts', 'Data availability', 'Wellness board',
-         'Organization overview', 'Profiles', 'Trends · One person', 'Trends · Group', 'Follow-ups')
+         'Organization overview', 'Profiles', 'Trends · One person', 'Trends · Group', 'Follow-ups', 'Reports')
 USERS = [{'org_id': 'org-a', 'email': 'officer@a.test', 'role': 'officer', 'active': True},
          {'org_id': 'org-a', 'email': 'reviewer@a.test', 'role': 'reviewer', 'active': True},
          {'org_id': 'org-a', 'email': 'removed@a.test', 'role': 'officer', 'active': False},
@@ -40,15 +41,16 @@ CAN_SEE = {'officer@a.test': {'p91'}, 'reviewer@a.test': {'p91'}, 'officer@b.tes
 # Pages that list permitted individuals: the permitted person must appear there, so an empty page
 # cannot pass the "only permitted participants" check by showing nobody.
 INDIVIDUAL_PAGES = ('Daily activity', 'Sleep', 'Workouts', 'Data availability', 'Wellness board', 'Profiles',
-                    'Trends · One person', 'Follow-ups')
+                    'Trends · One person', 'Follow-ups', 'Reports')  # Reports: every offered person selected
 FOLLOW_UP_NOTES = {pid: f'Individual note marker {i}' for i, pid in enumerate(EVERYONE)}
 FOLLOW_UP_HISTORY = {pid: f'History note marker {i}' for i, pid in enumerate(EVERYONE)}
 GROUP_NOTE = 'Synthetic organization group note.'
 
 
-def consents(overrides=None):
+def consents(overrides=None, demonstration=()):
     rows = dict(CONSENT, **(overrides or {}))
-    return [{'participant_id': pid, 'org_id': org, 'sharing': sharing, 'withdrawn': withdrawn, 'membership_open': True}
+    return [{'participant_id': pid, 'org_id': org, 'sharing': sharing, 'withdrawn': withdrawn, 'membership_open': True,
+             'demonstration': pid in demonstration}
             for pid, (org, sharing, withdrawn) in rows.items()]
 
 
@@ -120,7 +122,10 @@ def rendered(app):
             walk(child)
     walk(app.main)
     walk(app.sidebar)
-    return '\n'.join(out)
+    text = '\n'.join(out)
+    # Downloads travel as base64 data URIs inside an iframe; decode them so their contents are scanned too.
+    files = [base64.b64decode(m).decode('utf-8', 'ignore') for m in re.findall(r'base64,([A-Za-z0-9+/=]+)', text)]
+    return '\n'.join([text, *files])
 
 
 def shown_ids(text):
@@ -153,6 +158,9 @@ class PrivacyMatrixTests(unittest.TestCase):
         app.radio(key='explore').set_value(name).run()
         if view:
             app.radio(key='audit_trend_view').set_value(view).run()
+        if name == 'Reports':  # include every person the page offers, so the report names all it may
+            people = app.multiselect(key='audit_report_people')
+            people.set_value(people.options).run()
         self.assertFalse(app.exception, page)
         self.assertEqual([e.value for e in app.error], [], page)
         return rendered(app)
@@ -168,6 +176,9 @@ class PrivacyMatrixTests(unittest.TestCase):
                         for notes in (FOLLOW_UP_NOTES, FOLLOW_UP_HISTORY):
                             self.assertEqual({pid for pid, note in notes.items() if note in text}, allowed)
                         self.assertEqual(GROUP_NOTE in text, email.endswith('@a.test'))
+                    if page == 'Reports':  # reports carry follow-up counts, never note text
+                        for note in [*FOLLOW_UP_NOTES.values(), *FOLLOW_UP_HISTORY.values(), GROUP_NOTE]:
+                            self.assertNotIn(note, text)
                     if page in INDIVIDUAL_PAGES:
                         self.assertEqual(shown, allowed)
                     else:
@@ -221,6 +232,20 @@ class PrivacyMatrixTests(unittest.TestCase):
             with self.subTest(page=page):
                 self.assertEqual(shown_ids(self.visit(app, page)), set())
 
+    def test_demonstration_copy_names_only_people_who_agreed(self):
+        # p92 (group-only) and p96 (org-b) agreeing must not matter to org-a's individual sections.
+        for agreed, expected in ((('p91', 'p92', 'p96'), {'p91'}), (('p92', 'p96'), set())):
+            with self.subTest(agreed=agreed):
+                app = self.open('officer@a.test', consents(demonstration=agreed))
+                self.visit(app, 'Reports')
+                app.toggle(key='audit_report_demo').set_value(True).run()
+                people = app.multiselect(key='audit_report_people')
+                people.set_value(people.options).run()
+                self.assertFalse(app.exception)
+                self.assertEqual([e.value for e in app.error], [])
+                text = rendered(app)
+                self.assertIn('Demonstration copy', text)
+                self.assertEqual(shown_ids(text), expected)
 
     def test_follow_up_notes_disappear_on_the_same_page_after_consent_changes(self):
         for sharing, withdrawn in (('individual', True), ('group_only', False)):
@@ -252,12 +277,16 @@ class RenderedScanTests(unittest.TestCase):
             st.altair_chart(alt.Chart(frame).mark_point().encode(x='Participant', y='Value'))
         elif where == 'option':
             st.selectbox('Pick', ['p96'])
+        elif where == 'download':
+            from sentra.viewer_data import inline_download
+            st.iframe(inline_download(b'| p96 | 1 |', 'report.md', 'text/markdown'), height=70)
         else:
             st.caption('nothing here')
 
-    def test_ids_are_found_in_table_cells_chart_data_and_options(self):
+    def test_ids_are_found_in_table_cells_chart_data_options_and_downloads(self):
         from streamlit.testing.v1 import AppTest
-        for where, expected in (('table', {'p96'}), ('chart', {'p96'}), ('option', {'p96'}), ('none', set())):
+        for where, expected in (('table', {'p96'}), ('chart', {'p96'}), ('option', {'p96'}), ('download', {'p96'}),
+                                ('none', set())):
             with self.subTest(where=where):
                 app = AppTest.from_function(self.page)
                 app.query_params['where'] = where
