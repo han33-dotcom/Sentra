@@ -29,9 +29,9 @@ Start with the [documentation index](README.md). Keep one authoritative copy of 
 document. If Wiki decisions affect code, summarize the technical consequences in
 the relevant repository document through a PR. Agents consult Wiki context when
 needed; ordinary code clones do not include the separate Wiki repository.
-Existing Notion reports and original tasks remain available as historical records;
-new software tasks belong in GitHub. Private attachments and participant material
-must not be published in public Issues, Wiki pages or repository documentation.
+Notion was retired from the project. Software tasks belong in GitHub.
+Keep private attachments and participant material out of public Issues, Wiki pages
+and repository documentation.
 
 ## Everyday handoff
 
