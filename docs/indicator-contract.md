@@ -75,13 +75,31 @@ produce green.** Missing values are never filled or treated as zero.
 
 ## Group statistics (`cohort_daily`)
 
-- Only usable days count. A group day is shown only when at least 5 people have usable data
-  (`suppressed`), and **each statistic** additionally needs 5 people who supplied its input.
+- One row per date and `device` (`Fitbit` or `WHOOP`). Readings from different devices are
+  **never pooled**, matching the organization overview: the same name is not the same
+  measurement across devices (see below). A participant without a known device contributes
+  to no group statistic.
+- Only usable days count. A group row is shown only when at least 5 people of that device have
+  usable data (`suppressed`), and **each statistic** additionally needs 5 of them who supplied
+  its input.
 - `pct_wellness_amber_or_red` counts only assessed days (`green`, `amber`, `red`); an
   `insufficient` day is not a calm day.
 - Each statistic publishes its eligible contributor count as `n_<statistic>` (for example
   `n_pct_wellness_amber_or_red`), so dashboards and reports show "not available — 3 of 5
   needed" without recomputing it.
+- `metadata.json` and `GET /api/v1/metadata` carry `assessment_version`, as the board does, so
+  every consumer can tell which rules produced the outputs.
+
+### Consistency checks
+
+`tests/test_processing.py::GroupStatisticConsistencyTests` runs one synthetic day through
+processing, the board payload and the organization overview. The tests check that:
+
+- per-device contributor counts and suppression agree between `cohort_daily` (read API) and
+  the overview;
+- the overview's assessable count equals the number of `complete` assessments;
+- an `insufficient` day has no level in the board and never counts as calm;
+- devices are never pooled, and unknown devices never contribute.
 
 ## Board payload
 

@@ -85,7 +85,7 @@ def health():
 @app.get('/api/v1/metadata', dependencies=[Depends(require_key)])
 def metadata():
     meta = _metadata()
-    return {'notice': meta.get('notice'), 'thresholds_status': (meta.get('thresholds') or {}).get('_status'),
+    return {'notice': meta.get('notice'), 'assessment_version': meta.get('assessment_version'), 'thresholds_status': (meta.get('thresholds') or {}).get('_status'),
             'thresholds': meta.get('thresholds'), 'days': meta.get('days'), 'subjects': meta.get('subjects')}
 
 

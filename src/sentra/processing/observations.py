@@ -133,6 +133,15 @@ def from_measurements(m):
     return out[out.t.notna()].reset_index(drop=True)
 
 
+def devices(tiers):
+    """Pseudonym -> provider from the measurements tier (first provider per participant), as the board uses."""
+    path = Path(tiers) / 'measurements.parquet'
+    if not path.is_file():
+        return {}
+    m = pd.read_parquet(path, columns=['participant', 'provider'])
+    return {str(p): str(v) for p, v in m.drop_duplicates('participant').itertuples(index=False)}
+
+
 def load(tiers):
     tiers = Path(tiers)
     path = tiers / 'measurements.parquet'

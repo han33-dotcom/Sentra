@@ -10,9 +10,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from .pipeline import ASSESSMENT_VERSION, NOTICE, TH
-
-DEVICES = {'google_health': 'Fitbit', 'whoop': 'WHOOP'}
+from .pipeline import ASSESSMENT_VERSION, DEVICES, NOTICE, TH
 FIELDS = {  # board key -> daily_features column, decimals
     'sleep': ('sleep_min', 0), 'rhr': ('rhr', 0), 'hrv': ('daily_hrv_rmssd', 1),
     'br': ('daily_respiratory_rate', 1), 'temp': ('nightly_skin_temp_c', 1), 'steps': ('steps', 0),
