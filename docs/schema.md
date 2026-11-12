@@ -121,11 +121,11 @@ excludes withdrawn or closed episodes. Withdrawal marks credentials `withdrawn`
 transactionally, preventing subsequent provider requests without deleting history.
 Collection discovery is opt-in and does not change existing activation controls.
 
-Migration [010](../sql/010_fitbit_link_invites.sql) adds a separate private table
+Migration [011](../sql/011_fitbit_link_invites.sql) adds a separate private table
 for single-use Fitbit links. Each link carries a hashed invitation, its target
 participant and organization, a keyed digest of the expected Gmail address and
 an expiry. Only the enrollment role can use it. Separating it from signup
-invitations also makes a link invalid on a deployment predating migration 010.
+invitations also makes a link invalid on a deployment predating migration 011.
 Redemption removes the link in the transaction that adds hosted membership and
 consent to the existing participant. Issue new links after recovery as needed.
 

@@ -77,7 +77,7 @@ class EnrollmentPostgresTests(unittest.TestCase):
             for filename in ('001_foundation.sql', '002_permissions.sql', '003_numeric_precision.sql',
                     '004_daily_collection.sql', '005_viewer_status.sql', '006_parquet_tiers.sql',
                     '007_organization_access.sql', '008_self_service_enrollment.sql',
-                    '010_fitbit_link_invites.sql'):
+                    '011_fitbit_link_invites.sql'):
                 migration = Path('sql', filename).read_text(encoding='utf-8')
                 # Fixture roles are cluster-wide; grants remain scoped to this new database.
                 migration = re.sub(r'create role (sentra_[a-z]+) login[^;]+;',

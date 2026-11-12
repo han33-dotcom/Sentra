@@ -165,8 +165,9 @@ Gmail account and intended organization from private pilot records and confirms
 that the participant is eligible to make the hosted consent choices. If the
 operator cannot verify the original account or the participant withdrew, stop.
 
-Apply [migration 010](../sql/010_fitbit_link_invites.sql) after 008 using the
-reviewed deployment procedure, then deploy the updated enrollment service.
+Apply [migration 011](../sql/011_fitbit_link_invites.sql) after 008 using the
+reviewed deployment procedure. If the release includes Follow-ups, apply 010
+before 011. Then deploy the updated enrollment service.
 Verify that the Google OAuth client can request the Google Account email scope
 before issuing a live link. With the same private enrollment configuration used
 by the service, run this from a private terminal:
