@@ -156,6 +156,7 @@ class TierTests(unittest.TestCase):
                 if compact:  # same snapshot, same filter for both parts, per-field rows win
                     self.assertIn('union all', size_query)
                     self.assertIn('not exists (select 1 from audit.measurements m', size_query)
+                    self.assertIn('r.source_response_id=c.source_response_id', size_query)  # still the current response
             # The installed-migration check runs once per reader, not once per tier.
             self.assertEqual(sum('to_regclass' in q for q in db.statements), 1)
         query, values = tier_query('hr_minute', series=True)

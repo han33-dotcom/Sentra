@@ -148,11 +148,19 @@ with normalized JSON) are not compacted yet and must be measured on Supabase bef
 is sized.
 
 **Tiers read the compact copy (phase 1).** Where `sql/009` is installed, each measurement tier
-reads `audit.measurements` plus the `audit.series_rows` readings whose per-field row no longer
-exists. Nothing is read twice, and a per-field row always wins, including a later correction
-not yet repaired in the compact copy. Published tiers, and therefore the board, stay the same
+reads `audit.measurements` plus the `audit.series_rows` readings that meet two conditions:
+their per-field row no longer exists, **and** their record in `audit.records` still names the
+same original response. Nothing is read twice, and a per-field row always wins, including a
+later correction not yet repaired in the compact copy. A newer response that omits a reading
+replaces the record and drops that reading's per-field row. Its obsolete compact copy is then
+never published.
+
+**Phase 3 must therefore keep `audit.records`.** A record's `source_response_id` is the
+proof that a compact reading is still current. If records are ever compacted or removed
+too, an equivalent marker must be kept first. Published tiers, and therefore the board, stay the same
 when verified per-field dense rows are removed. The opt-in PostgreSQL tests in
-`tests/test_compaction_db.py` check both cases. Without `sql/009`, tiers read
+`tests/test_compaction_db.py` cover three cases: removal, a later correction, and a reading
+omitted by a newer response, written through the collector's `put_records`. Without `sql/009`, tiers read
 `audit.measurements` as before.
 
 Still open before phase 3:

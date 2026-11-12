@@ -90,6 +90,28 @@ class CompactionDatabaseTests(unittest.TestCase):
         self.db.execute('delete from audit.measurements where source_response_id=%s', (RESPONSE,))
         self.assertEqual(self.tier_rows(), before)
 
+    def collector(self):
+        """The real collector write path on this throwaway database; capacity checks are not under test."""
+        from sentra.shared_backend import SharedBackend
+        backend = SharedBackend.__new__(SharedBackend)
+        backend.db, backend.guard, backend.reserve = self.db, lambda **_: None, lambda amount: None
+        return backend
+
+    def test_a_reading_omitted_by_a_newer_response_is_not_republished(self):
+        self.rows(RESPONSE, ['12', '13'])
+        compaction.compact(self.db, self.guard, 'p01', 'google_health', 'minute_steps')
+        # A newer response replaces the first record and no longer contains its reading.
+        self.collector().put_records([{'participant_id': 'p01', 'provider': 'google_health', 'dataset': 'minute_steps',
+            'record_key': f'{RESPONSE[:4]}-0000', 'source_response_id': 'b' * 64,
+            'collected_at': '2026-10-02T00:00:00Z', 'measurements': [], 'session_type': None}])
+        current = self.db.execute("select count(*) from audit.measurements where record_key=%s",
+                                  (f'{RESPONSE[:4]}-0000',)).fetchone()[0]
+        self.assertEqual(current, 0)
+        self.assertEqual([str(r[5]) for r in self.tier_rows()], ['13'])  # the obsolete 12 stays unpublished
+        # The untouched second record is still published from its compact copy once its row is removed.
+        self.db.execute('delete from audit.measurements where source_response_id=%s', (RESPONSE,))
+        self.assertEqual([str(r[5]) for r in self.tier_rows()], ['13'])
+
     def test_a_per_field_correction_wins_over_a_stale_compact_copy(self):
         self.rows(RESPONSE, ['12', '13'])
         compaction.compact(self.db, self.guard, 'p01', 'google_health', 'minute_steps')

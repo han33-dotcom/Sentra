@@ -51,10 +51,15 @@ MEASUREMENT_TIERS = {
 }
 SESSIONS_QUERY = '''select participant_id,provider,dataset,record_key,session_type,started_at,ended_at,
     score_state,provisional from audit.sessions'''
-# A compact row is used only when its per-field row is gone, so nothing is read twice and a
-# per-field row (including a later correction) always wins over a possibly stale compact copy.
+# A compact reading is published only when (1) its per-field row is gone, so nothing is read
+# twice and a per-field row (including a later correction) always wins, and (2) the record still
+# names the same original response. A newer response that omits the reading replaces the record
+# and drops its per-field row; the obsolete compact copy must not bring it back. Phase 3 therefore
+# keeps audit.records: the record's source_response_id is the proof that a compact reading is current.
 COMPACT_ONLY = '''not exists (select 1 from audit.measurements m where (m.participant_id,m.provider,m.dataset,
-    m.record_key,m.metric)=(c.participant_id,c.provider,c.dataset,c.record_key,c.metric))'''
+    m.record_key,m.metric)=(c.participant_id,c.provider,c.dataset,c.record_key,c.metric))
+    and exists (select 1 from audit.records r where (r.participant_id,r.provider,r.dataset,r.record_key)=
+    (c.participant_id,c.provider,c.dataset,c.record_key) and r.source_response_id=c.source_response_id)'''
 
 
 def tier_query(name, *, series):
