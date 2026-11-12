@@ -275,6 +275,90 @@ class RefreshTests(unittest.TestCase):
                 w.collector_storage()
 
 
+
+class Bucket:
+    """In-memory private tier bucket: GET/POST by key, optional failure on one upload."""
+
+    def __init__(self):
+        self.objects, self.fail = {}, None
+
+    def request(self, method, key, data=None, maximum=None, upsert=None, content_type=None):
+        if method == 'GET':
+            return (200, self.objects[key]) if key in self.objects else (404, b'')
+        if key == self.fail:
+            return 500, b''
+        self.objects[key] = data
+        return 200, b''
+
+
+class PublicationConsistencyTests(unittest.TestCase):
+    """#48: repeated, corrected and interrupted refreshes against the real slot publisher and reader."""
+
+    def tiers(self, asleep):
+        rows = sleep_rows()
+        rows[-1] = row('p01', 'google_health', 'sleep', 's1', '/sleep/summary/minutesAsleep', value=asleep)
+        with tempfile.TemporaryDirectory() as folder:
+            write(folder, rows)
+            return {p.relative_to(folder).as_posix(): p.read_bytes() for p in Path(folder).rglob('*.parquet')}
+
+    def refresh(self, bucket, finished, asleep):
+        from sentra import wellness_refresh as w
+        reader = RefreshTests.Reader(finished)
+        objects = self.tiers(asleep)
+        report = {'built_at': finished.isoformat(), 'objects': {k: len(v) for k, v in objects.items()}}
+        with mock.patch.object(w, 'build', return_value=(objects, report)):
+            return w.refresh(reader, Limits(), bucket, now=NOW, log=lambda *_: None)
+
+    @staticmethod
+    def board(bucket):
+        board = json.loads(bucket.objects['board/board.json'])
+        return board['source_run'], {d['d']: d.get('sleep') for p in board['people'] for d in p['days']}
+
+    @staticmethod
+    def published_asleep(bucket):
+        """minutesAsleep from the tier set readers currently fetch."""
+        from sentra.tiers import fetch
+        with tempfile.TemporaryDirectory() as folder:
+            fetch(bucket, Path(folder) / 'tiers')
+            m = pd.read_parquet(Path(folder) / 'tiers' / 'measurements.parquet')
+        return float(m[m.metric == '/sleep/summary/minutesAsleep'].value.iloc[0])
+
+    def test_repeated_corrected_and_interrupted_refreshes_keep_tiers_and_board_consistent(self):
+        bucket = Bucket()
+        first, correction = datetime(2026, 10, 11, 0, 5, tzinfo=UTC), datetime(2026, 10, 12, 0, 5, tzinfo=UTC)
+        self.assertEqual(self.refresh(bucket, first, 400)['status'], 'published')
+        self.assertEqual(self.board(bucket), (first.isoformat(), {'2026-10-10': 400}))
+        self.assertEqual(self.published_asleep(bucket), 400)
+        slot = json.loads(bucket.objects['size_report.json'])['prefix']
+
+        # Repeating the run without new collection data changes nothing and reads no tiers.
+        before = dict(bucket.objects)
+        self.assertEqual(self.refresh(bucket, first, 999)['status'], 'skipped')
+        self.assertEqual(bucket.objects, before)
+
+        # A tier upload interrupted part-way keeps readers and the board on the previous complete set.
+        bucket.fail = ('slot-b/' if slot == 'slot-a/' else 'slot-a/') + 'sessions.parquet'
+        with self.assertRaises(SentraError):
+            self.refresh(bucket, correction, 380)
+        self.assertEqual(json.loads(bucket.objects['size_report.json'])['prefix'], slot)
+        self.assertEqual(self.published_asleep(bucket), 400)
+        self.assertEqual(self.board(bucket), (first.isoformat(), {'2026-10-10': 400}))
+
+        # Tiers switch but the board upload fails: the board stays complete and the next run repairs it.
+        bucket.fail = 'board/board.json'
+        with self.assertRaises(SentraError):
+            self.refresh(bucket, correction, 380)
+        self.assertEqual(self.published_asleep(bucket), 380)
+        self.assertEqual(self.board(bucket), (first.isoformat(), {'2026-10-10': 400}))
+        bucket.fail = None
+        self.assertEqual(self.refresh(bucket, correction, 380)['status'], 'published')
+
+        # The corrected reading (same record, new value) now reaches both published outputs.
+        self.assertEqual(self.published_asleep(bucket), 380)
+        self.assertEqual(self.board(bucket), (correction.isoformat(), {'2026-10-10': 380}))
+        self.assertEqual(self.refresh(bucket, correction, 380)['status'], 'skipped')
+
+
 class ViewerBoardTests(unittest.TestCase):
     def test_missing_board_is_an_empty_board_not_an_error(self):
         from sentra.viewer_reader import ViewerReader
