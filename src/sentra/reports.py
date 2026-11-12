@@ -199,7 +199,8 @@ def markdown(report):
     f = report['follow_ups']
     out += ['## Follow-ups', '']
     out += _table(('Open', 'Ongoing', 'Resolved'), [(f['open'], f['ongoing'], f['resolved'])])
-    out += ['', 'Counts of follow-ups you may read; note text is not included in reports.', '',
+    out += ['', 'Counts of the follow-ups you may read (the latest 50, open and ongoing first); note text is not '
+            'included in reports.', '',
             '## Limitations', '']
     out += [f'- {line}' for line in report['limitations']]
     return '\n'.join(out) + '\n'

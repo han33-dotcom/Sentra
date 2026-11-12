@@ -739,6 +739,60 @@ def follow_ups_page():
                                            w.update(decision.email,i,s,a,clean_note(n)),'Follow-up updated.')
 
 
+def reports_page():
+    """A selected-period report within the signed-in user's permissions, previewed and downloaded as Markdown (#42).
+
+    The report is rebuilt from the current access decision on every render, so a sharing change or withdrawal
+    also applies to the preview and the download link on the next page load."""
+    from .access import demonstration_ids
+    from .follow_ups import history, visible
+    from .reports import build, markdown
+    from .trends import PERIODS
+    principal()
+    with st.container(key='page-heading'):
+        st.caption('ORGANIZATION')
+        st.title('Reports')
+    decision=current_access()
+    reload=st.sidebar.button('Reload report data',icon=':material/refresh:')
+    st.caption("Wellness information for authorized colleagues, compared with each person's own pattern; not a "
+               'medical assessment or diagnosis. A report follows the same access rules as the other pages.')
+    days=st.radio('Period',PERIODS,format_func=lambda n:f'Last {n} days',horizontal=True,key='audit_report_period')
+    demo=st.toggle('Demonstration copy',key='audit_report_demo',
+                   help='Only participants who agreed to internal project demonstrations, in group figures too.')
+    data,enrolled,scope,people,catalog=organization_data(decision,reload)
+    if reload or 'audit_board' not in st.session_state or st.session_state.get('audit_board_scope')!=access_scope(decision):
+        with open_reader() as reader:
+            st.session_state['audit_board']=reader.board()
+        st.session_state['audit_board_scope']=access_scope(decision)
+    board=st.session_state['audit_board']
+    follow_up_scope=(decision.org_id,access_scope(decision))
+    if reload or st.session_state.get('audit_report_follow_ups_scope')!=follow_up_scope:
+        with open_reader() as reader:
+            st.session_state['audit_report_follow_ups']=(reader.follow_up_rows() if decision.is_team else
+                reader.follow_up_rows(decision.org_id,sorted(decision.individuals)))
+        st.session_state['audit_report_follow_ups_scope']=follow_up_scope
+    items=visible(history(*st.session_state['audit_report_follow_ups']),decision)
+    demonstration=None
+    if demo:
+        demonstration=demonstration_ids(team_consents()) if decision.is_team else decision.demonstrators
+    choices=sorted(p['id'] for p in board['people'] if decision.can_view_individual(p.get('id'))
+                   and (demonstration is None or p.get('id') in demonstration))
+    include=st.multiselect('Individual sections',choices,key='audit_report_people',
+                           help='Only people who share individual details with you are listed'
+                                +(' and who agreed to demonstrations.' if demo else '.'))
+    now=datetime.now(timezone.utc).astimezone(BEIRUT)
+    report=build(decision,board=board,group_people=people,scope=scope,enrolled=enrolled,catalog=catalog,
+                 include=set(include),days=days,today=now.date(),generated_at=now.isoformat(timespec='minutes'),
+                 follow_ups=items,demonstration=demonstration)
+    text=markdown(report)
+    name=f"sentra-report-{decision.org_id or 'team'}-{now:%Y-%m-%d}-{days}d{'-demo' if demo else ''}.md"
+    private_download(text.encode('utf-8'),name,'text/markdown')
+    st.caption('Downloads cannot be recalled. Share only with authorized colleagues; recipients delete copies '
+               'within 30 days.')
+    with st.container(border=True):
+        st.markdown(text)
+
+
 def main():
     st.set_page_config(page_title='Sentra · Wearable explorer',page_icon='🔎',layout='wide')
     # A sharing change, withdrawal or removed role must apply on the next render.
@@ -771,7 +825,7 @@ def main():
                 st.session_state['audit_access']=decision
             st.session_state['audit_owner']=identity
         page=st.sidebar.radio('Explore',('Daily activity','Sleep','Workouts','Data availability','Wellness board',
-            'Organization overview','Profiles','Trends','Follow-ups'),key='explore',label_visibility='collapsed',width='stretch')
+            'Organization overview','Profiles','Trends','Follow-ups','Reports'),key='explore',label_visibility='collapsed',width='stretch')
         st.sidebar.divider()
         if page=='Wellness board':
             wellness_board()
@@ -787,6 +841,9 @@ def main():
             return
         if page=='Follow-ups':
             follow_ups_page()
+            return
+        if page=='Reports':
+            reports_page()
             return
         decision=current_access()
         # Refetch when the permitted set changes; filtering a cached copy cannot add newly shared people.
