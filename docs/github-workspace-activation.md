@@ -39,8 +39,8 @@ start at Not started. Automatic issue closure, PR-merge completion and sub-issue
 addition are disabled. Keep Done under human acceptance control.
 
 Rollout issue #16 is attached, assigned to `han33-dotcom`, In progress and High
-priority. The four original university report/meeting records remain in Notion;
-no private records were published to the Wiki.
+priority. The original university reports and meeting records predate the GitHub
+workflow. Keep private records out of the Wiki.
 
 The owner approved and applied Write access for `MohamadNasrallah` and
 `mhmdaboulhoda` on October 15; Manage access shows both with Role: Write.
