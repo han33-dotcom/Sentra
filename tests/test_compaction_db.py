@@ -9,6 +9,7 @@ import unittest
 from uuid import uuid4
 
 from sentra import compaction
+from sentra.tiers import tier_query
 from sentra.errors import SentraError
 
 URL = os.environ.get('SENTRA_TEST_DATABASE_URL')
@@ -73,6 +74,28 @@ class CompactionDatabaseTests(unittest.TestCase):
         self.assertEqual(self.db.execute('select count(*) from audit.measurements').fetchone()[0], 5)  # nothing deleted
         result = compaction.compact(self.db, self.guard, 'p01', 'google_health', 'minute_steps')
         self.assertEqual((result['compacted_responses'], result['pending_responses']), (1, 0))
+
+    def tier_rows(self):
+        query, values = tier_query('measurements', series=True)
+        return sorted(self.db.execute(query, values).fetchall(), key=repr)
+
+    def test_tiers_publish_the_same_rows_after_per_field_rows_are_removed(self):
+        self.rows(RESPONSE, ['12', None, '7.50', '0'], resolution='60.0')
+        compaction.compact(self.db, self.guard, 'p01', 'google_health', 'minute_steps')
+        before = self.tier_rows()
+        self.assertEqual(len(before), 4)  # per-field rows present: compact copies are not read twice
+        measurements_only, values = tier_query('measurements', series=False)
+        self.assertEqual(before, sorted(self.db.execute(measurements_only, values).fetchall(), key=repr))
+        # Simulates the gated phase-3 deletion on this throwaway database only.
+        self.db.execute('delete from audit.measurements where source_response_id=%s', (RESPONSE,))
+        self.assertEqual(self.tier_rows(), before)
+
+    def test_a_per_field_correction_wins_over_a_stale_compact_copy(self):
+        self.rows(RESPONSE, ['12', '13'])
+        compaction.compact(self.db, self.guard, 'p01', 'google_health', 'minute_steps')
+        self.db.execute("update audit.measurements set value=14 where record_key=%s", (f'{RESPONSE[:4]}-0001',))
+        values = sorted(r[5] for r in self.tier_rows())
+        self.assertEqual([str(v) for v in values], ['12', '14'])
 
     def test_a_later_correction_shows_as_a_mismatch_until_rebuilt(self):
         self.rows(RESPONSE, ['12', '13'])

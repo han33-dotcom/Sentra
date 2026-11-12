@@ -36,19 +36,37 @@ DEFAULT_MAX_READ_BYTES = 500_000_000
 MAX_OBJECT_BYTES = 52_428_800  # bucket file_size_limit in sql/006_parquet_tiers.sql
 SLOTS = ('slot-a/', 'slot-b/')  # two complete tier sets; size_report.json points at one
 
-QUERIES = {
-    'hr_raw': ('''select participant_id,provider,measured_at,value from audit.measurements
-        where dataset=%s and metric=%s and measured_at is not null and value is not null''', HR_RAW),
-    'hr_minute': ('''select participant_id,provider,interval_start,metric,value from audit.measurements
-        where dataset=%s and metric=any(%s) and interval_start is not null and value is not null''',
+# Measurement tiers: (columns, filter, values). Each reads audit.measurements and, where the
+# compact series migration exists, the compact copy of rows no longer kept per field (#46).
+MEASUREMENT_TIERS = {
+    'hr_raw': ('participant_id,provider,measured_at,value',
+        'dataset=%s and metric=%s and measured_at is not null and value is not null', HR_RAW),
+    'hr_minute': ('participant_id,provider,interval_start,metric,value',
+        'dataset=%s and metric=any(%s) and interval_start is not null and value is not null',
         (HR_MINUTE_DATASET, list(HR_MINUTE_METRICS))),
-    'measurements': ('''select participant_id,provider,dataset,record_key,metric,value,unit,value_kind,availability,
-        measured_at,interval_start,interval_end,civil_date,vendor_value from audit.measurements
-        where dataset<>%s and not (dataset=%s and metric=any(%s))''',
+    'measurements': ('participant_id,provider,dataset,record_key,metric,value,unit,value_kind,availability,'
+        'measured_at,interval_start,interval_end,civil_date,vendor_value',
+        'dataset<>%s and not (dataset=%s and metric=any(%s))',
         (HR_RAW[0], HR_MINUTE_DATASET, list(HR_MINUTE_METRICS))),
-    'sessions': ('''select participant_id,provider,dataset,record_key,session_type,started_at,ended_at,
-        score_state,provisional from audit.sessions''', ()),
 }
+SESSIONS_QUERY = '''select participant_id,provider,dataset,record_key,session_type,started_at,ended_at,
+    score_state,provisional from audit.sessions'''
+# A compact row is used only when its per-field row is gone, so nothing is read twice and a
+# per-field row (including a later correction) always wins over a possibly stale compact copy.
+COMPACT_ONLY = '''not exists (select 1 from audit.measurements m where (m.participant_id,m.provider,m.dataset,
+    m.record_key,m.metric)=(c.participant_id,c.provider,c.dataset,c.record_key,c.metric))'''
+
+
+def tier_query(name, *, series):
+    """SQL and values for one tier. With `series`, compact rows fill in removed per-field rows."""
+    if name == 'sessions':
+        return SESSIONS_QUERY, ()
+    columns, where, values = MEASUREMENT_TIERS[name]
+    query = f'select {columns} from audit.measurements where {where}'
+    if not series:
+        return query, values
+    return (f'{query} union all select {columns} from audit.series_rows c where {where} and {COMPACT_ONLY}',
+            (*values, *values))
 
 
 def _pa():
@@ -64,6 +82,7 @@ class AuditReader:
 
     def __init__(self, db, limits, *, budget_db=None, max_read_bytes=DEFAULT_MAX_READ_BYTES):
         self.db, self.limits, self.max_read_bytes, self.read_bytes = db, limits, max_read_bytes, 0
+        self.series = None
         self.budget_db = budget_db if budget_db is not None else db
         try:
             role = db.execute('select session_user').fetchone()[0]
@@ -89,13 +108,19 @@ class AuditReader:
             raise CapacityStop('Storage usage unavailable; verify project usage before building tiers.')
         return usage
 
+    def _has_series(self):
+        """True once sql/009 is installed; before that, every reading is still kept per field."""
+        if self.series is None:
+            self.series = self.db.execute("select to_regclass('audit.series_rows') is not null").fetchone()[0] is True
+        return self.series
+
     def read(self, name):
-        query, values = QUERIES[name]
         self.reserve(65_536)
         try:
             # One read-only snapshot: the size estimate and the rows cover the same data.
             with self.db.transaction():
                 self.db.execute('set transaction isolation level repeatable read, read only')
+                query, values = tier_query(name, series=self._has_series())
                 count, size = self.db.execute(f'select count(*),coalesce(sum(octet_length(t::text)),0) from ({query}) t', values).fetchone()
                 size = int(size) + int(count) * 64
                 if self.read_bytes + size > self.max_read_bytes:
