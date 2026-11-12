@@ -650,6 +650,7 @@ def save_follow_up(action,message):
         return
     st.session_state.pop('audit_follow_ups',None)
     st.session_state.pop('audit_follow_ups_scope',None)
+    st.session_state.pop('audit_report_follow_ups_scope',None)  # report counts include the change too
     st.session_state['audit_follow_up_saved']=message
     st.rerun()
 

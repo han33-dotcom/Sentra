@@ -103,6 +103,18 @@ class ReportPageTests(unittest.TestCase):
         self.assertIn('No group statistic can be shown', text)  # fewer than 5 agreed
         self.assertRegex(filename(app), r'-7d-demo\.md$')
 
+    def test_saving_a_follow_up_refreshes_the_report_counts(self):
+        from sentra import viewer_app
+        @contextmanager
+        def writer(): yield Mock()
+        state = {'audit_follow_ups': 1, 'audit_follow_ups_scope': 1, 'audit_report_follow_ups': 1,
+                 'audit_report_follow_ups_scope': 1}
+        with patch.object(viewer_app, 'open_follow_up_writer', writer), \
+                patch.object(viewer_app, 'st', Mock(session_state=state)):
+            viewer_app.save_follow_up(lambda w: None, 'Follow-up recorded.')
+        self.assertNotIn('audit_report_follow_ups_scope', state)  # the next report render reads again
+        self.assertNotIn('audit_follow_ups_scope', state)
+
     def test_team_operator_report_covers_all_organizations(self):
         app = self.open('team@example.test')
         self.assertEqual(app.multiselect(key='audit_report_people').options, [p['id'] for p in BOARD['people']])

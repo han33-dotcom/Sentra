@@ -1,0 +1,69 @@
+# Reports
+
+Task: [#42](https://github.com/han33-dotcom/Sentra/issues/42). The **Reports** page in the
+private viewer produces a selected-period report for authorized colleagues. It is previewed on
+the page and downloaded as a Markdown (`.md`) file. Everything in it is wellness information
+compared with each person's own pattern, not a medical assessment.
+
+## What a report contains
+
+A report reuses the calculators behind the other pages, so it follows the same rules:
+
+| Section | Source | Who appears |
+| --- | --- | --- |
+| Header | Organization, the role of the person who prepared it, period, generation time, board build time | — |
+| Participation | [Organization overview](organization-overview.md) counts: enrolled, connected, recently contributing, assessable | Counts only; organization users see small activity counts as `<5` |
+| Group summary | The overview's per-device group medians for the period | Group contributors; each statistic needs at least 5 of its own |
+| Group trends | [Trends](trends.md) group view, summarized per measure and device: days shown, lowest and highest daily median, most contributors on a day | Organization users: only devices that reach 5 on some day, no hidden-day counts |
+| Individuals | Trends one-person summary per measure, plus the [observations](observations.md) for the latest published day | Only people the user may see individually **and** selected on the page |
+| Follow-ups | [Follow-ups](follow-ups.md) counted by status (open, ongoing, resolved) | Counts only. Note text never enters a report |
+| Limitations | Fixed list: wellness wording, provisional rules, gaps, the 5-person rule, recall and sharing | — |
+
+Periods are the Trends periods: the last 7, 14 or 28 published days. For organization users the
+group period ends on the latest day with a statistic that can be shown, so a suppressed reading
+never moves it. Each individual section ends on that person's own latest published day.
+
+## Access
+
+- The report is rebuilt from the signed-in user's current access decision on every page load. A
+  withdrawal or a change to group-only sharing removes that person from the preview and from the
+  download link on the next load.
+- The builder (`sentra.reports.build`) re-checks every input against the access decision, so a
+  caller passing too much cannot widen a report. The [privacy matrix](privacy-checks.md) renders
+  Reports with a reader that returns everyone, selects every offered person and decodes the
+  downloaded file as well as the page.
+- Organization users never see the board's own "data through" date, because it covers every
+  organization. They see only the dates within their scope.
+- Team operators get the same report across all organizations, with exact counts and hidden-day
+  counts.
+
+## Demonstration copy
+
+The join page records whether a participant allows their pseudonymous data in internal project
+demonstrations (`org.consents.demonstration`). A **demonstration copy** uses only participants
+whose consent in force says so, in group figures as well as individual sections. Group figures
+still need 5 such participants each. The file is marked as a demonstration copy and is not for
+public material ([participation permissions](participation-permissions.md)).
+
+The demonstration copy uses only people who agreed, for group figures too. This is the cautious
+reading of the consent and is open to the team's review.
+
+## Sharing and retention
+
+- Downloads go through the viewer's in-session download; there is no server link.
+- A report reflects the permissions in force when it was generated. Later changes apply to new
+  reports only, and a copy already shared cannot be recalled.
+- Recipients delete downloaded copies within 30 days ([retention policy](retention-policy.md)).
+- The viewer's database access is read-only, so no record is kept of who prepared or downloaded a
+  report.
+
+## Limitations
+
+- Markdown only. No PDF, which would need a new library; the browser's print to PDF works on the
+  preview.
+- Follow-up counts cover the latest 50 follow-ups the user may read, open and ongoing first.
+- No department comparisons (no departments in the schema), and no reports through the read
+  API, whose key has no organization scope.
+- Pilot participants without a consent record are never in a demonstration copy.
+  With today's participants every real group figure is hidden.
+- Data is only as current as the daily board refresh.
