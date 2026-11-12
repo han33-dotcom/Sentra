@@ -202,6 +202,43 @@ class FollowUpDatabaseTests(unittest.TestCase):
         self.assertEqual((current['status'], current['event_count']), (trail[-1]['status'], len(trail)))
         self.assertEqual(current['assignee'], trail[-1]['assignee'])
 
+    def test_organization_read_excludes_notes_withdrawn_before_its_snapshot(self):
+        self.db.execute("insert into audit.participants values ('p904')")
+        membership = self.db.execute(
+            "insert into org.memberships(participant_id,org_id,joined_on) values ('p904','org-a','2026-11-01') "
+            "returning membership_id").fetchone()[0]
+        consent = ("insert into org.consents(membership_id,participant_id,org_id,consent_version,sharing,withdrawn) "
+                   "values (%s,'p904','org-a','1.0','individual',%s)")
+        self.db.execute(consent, (membership, False))
+        withdrawn = self.open(pid='p904', note='Synthetic individual note.')
+        group = self.open(pid=None, note='Synthetic group note.')
+        self.update(group, 'resolved')
+
+        reader, budget = self.reader()
+        calls = 0
+
+        def reserve(*args):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                self.db.execute(consent, (membership, True))
+
+        budget.execute.side_effect = reserve
+        # The access decision still includes p904, but consent has changed before the data read.
+        for statuses in (('resolved',), None):
+            with self.subTest(statuses=statuses):
+                rows, events = reader.follow_up_rows('org-a', ['p904'], statuses=statuses)
+                row_ids = {row['follow_up_id'] for row in rows}
+                event_ids = {event['follow_up_id'] for event in events}
+                self.assertIn(group, row_ids)
+                self.assertIn(group, event_ids)
+                self.assertNotIn(withdrawn, row_ids)
+                self.assertNotIn(withdrawn, event_ids)
+
+        rows, events = reader.follow_up_rows(statuses=('resolved',))
+        self.assertTrue(any(row['follow_up_id'] == withdrawn and row['sharing_ended'] for row in rows))
+        self.assertIn(withdrawn, {event['follow_up_id'] for event in events})
+
     def test_history_is_append_only_and_roles_stay_narrow(self):
         fid = self.open()
         for sql in ('update org.follow_up_events set note=%s where follow_up_id=%s',

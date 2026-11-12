@@ -144,6 +144,8 @@ class ViewerReader:
         ended='''(f.participant_id is not null and not exists (select 1 from org.current_consent s
               where s.participant_id=f.participant_id and s.org_id=f.org_id and s.sharing='individual'
               and not s.withdrawn and s.membership_open))'''
+        if org_id is not None:
+            where.append(f'not {ended}')
         shown=f"case when {ended} then 'resolved' else l.status end"
         if statuses is not None:
             where.append(f'{shown}=any(%s)'); values.append(list(statuses))
