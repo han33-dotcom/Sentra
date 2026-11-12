@@ -126,6 +126,14 @@ for single-use Fitbit links. Each link carries a hashed invitation, its target
 participant and organization, a keyed digest of the expected Gmail address and
 an expiry. Only the enrollment role can use it. Separating it from signup
 invitations also makes a link invalid on a deployment predating migration 011.
+A `fitbit-link:` tag on the keyed identity digest distinguishes a hosted login
+for a legacy Fitbit from a credential managed by hosted enrollment. The enrollment
+role cannot insert or replace the legacy credential's encrypted bundle, including
+on a service rollback. It can still record withdrawal. Tagged accounts need the
+updated service to sign in. Apply 011 to a recovery
+target before restoring an archive that includes tagged identities. Older identity
+archives have the same columns and can still be restored.
+Pending Fitbit link invitations are short-lived and can be reissued after recovery.
 Redemption removes the link in the transaction that adds hosted membership and
 consent to the existing participant. Issue new links after recovery as needed.
 

@@ -13,6 +13,7 @@ from .cloud_tokens import TokenRepository
 from .enrollment import EnrollmentError, digest
 
 FITBIT_LINK_CREDENTIAL_STATES = ('active', 'refresh_pending')
+FITBIT_LINK_IDENTITY_PREFIX = 'fitbit-link:'
 
 
 @contextmanager
@@ -71,7 +72,7 @@ class EnrollmentStore:
     def _require_legacy_fitbit(self, pid):
         eligible = self.db.execute('''select exists (
             select 1 from collector_private.provider_credentials
-            where participant_id=%s and provider='google_health' and refresh_status=any(%s)
+            where participant_id=%s and provider='google_health' and refresh_status=any(%s) for share
         ) and not exists (
             select 1 from org.memberships where participant_id=%s
         ) and not exists (
@@ -79,6 +80,11 @@ class EnrollmentStore:
         )''', (pid, list(FITBIT_LINK_CREDENTIAL_STATES), pid, pid)).fetchone()[0]
         if not eligible:
             raise EnrollmentError('This participant is no longer eligible for a Fitbit link.', 409)
+
+    def operator_managed_fitbit(self, pid):
+        return self.db.execute('''select exists (select 1 from enrollment_private.identities
+            where participant_id=%s and provider='google_health' and starts_with(identity_hash,%s))''',
+            (pid, FITBIT_LINK_IDENTITY_PREFIX)).fetchone()[0]
 
     def invite_fitbit_link(self, hashed, org_id, pid, email_hash, days):
         if not 1 <= days <= 30:
@@ -169,15 +175,18 @@ class EnrollmentStore:
             # Serializes duplicate callbacks in different browsers before identity creation.
             key = int.from_bytes(bytes.fromhex(digest(provider + identity_hash))[:8], 'big', signed=True)
             self.db.execute('select pg_advisory_xact_lock(%s)', (key,))
-            row = self.db.execute('''select participant_id from enrollment_private.identities
-                where provider=%s and identity_hash=%s''', (provider, identity_hash)).fetchone()
+            identity_keys = [identity_hash]
+            if provider == 'google_health':
+                identity_keys.append(FITBIT_LINK_IDENTITY_PREFIX + identity_hash)
+            row = self.db.execute('''select participant_id,identity_hash from enrollment_private.identities
+                where provider=%s and identity_hash=any(%s)''', (provider, identity_keys)).fetchone()
             expected = pending.get('expected_pid')
             if expected and row and row[0] != expected:
                 raise EnrollmentError('That wearable belongs to a different participation. Sign out and try again.', 409)
             pid = row[0] if row else expected
             if not pid and not value.get('invite_hash'):
                 raise EnrollmentError('No participation found. Please use your invitation link.', 403)
-            invite = None
+            invite_org = seats = None
             fitbit_link = value.get('fitbit_email_hash') is not None
             if fitbit_link:
                 # Deletion is rolled back if any later check or enrollment write fails.
@@ -190,13 +199,13 @@ class EnrollmentStore:
                 if (provider != 'google_health' or row or expected
                         or not hmac.compare_digest(pending.get('fitbit_email_hash', ''), link[2])):
                     raise EnrollmentError('This Fitbit account cannot use the link.', 403)
-                pid = link[1]
-                invite = (link[0], 1)
+                invite_org, pid, _ = link
             elif value.get('invite_hash'):
                 invite = self.db.execute('''select org_id,remaining from enrollment_private.invites
                     where invite_hash=%s and expires_at>now() for update''', (value['invite_hash'],)).fetchone()
                 if not invite:
                     raise EnrollmentError('Your invitation expired. Ask for a new link.', 410)
+                invite_org, seats = invite
             if not pid:
                 for _ in range(100):
                     pid = 'p' + str(self.db.execute("select nextval('enrollment_private.participant_number')").fetchone()[0])
@@ -209,35 +218,38 @@ class EnrollmentStore:
             if fitbit_link:
                 self._require_legacy_fitbit(pid)
             consent = self._consent(pid)
-            if invite and consent and consent['withdrawn'] and consent['recorded_epoch'] > pending['started']:
+            if invite_org is not None and consent and consent['withdrawn'] and consent['recorded_epoch'] > pending['started']:
                 raise EnrollmentError('Participation changed during connection. Please open a new invitation.', 409)
-            if invite and consent and consent['open'] and consent['org_id'] != invite[0]:
+            if invite_org is not None and consent and consent['open'] and consent['org_id'] != invite_org:
                 raise EnrollmentError('You already belong to another organization. Withdraw there before joining.', 409)
-            if invite:
+            if invite_org is not None:
                 if not pending['choices'].get('accepted'):
                     raise EnrollmentError('Please confirm your participation choices.')
                 if not consent or not consent['open']:
-                    if invite[1] <= 0:
-                        raise EnrollmentError('This invitation is full. Ask for a new link.', 410)
-                    if not fitbit_link:
+                    if seats is not None:
+                        if seats <= 0:
+                            raise EnrollmentError('This invitation is full. Ask for a new link.', 410)
                         self.db.execute('update enrollment_private.invites set remaining=remaining-1 where invite_hash=%s',
                                         (value['invite_hash'],))
                     membership = self.db.execute('''insert into org.memberships(participant_id,org_id,joined_on)
-                        values(%s,%s,(now() at time zone 'Asia/Beirut')::date) returning membership_id''', (pid, invite[0])).fetchone()[0]
-                    consent = {'membership_id': membership, 'org_id': invite[0]}
+                        values(%s,%s,(now() at time zone 'Asia/Beirut')::date) returning membership_id''',
+                        (pid, invite_org)).fetchone()[0]
+                    consent = {'membership_id': membership, 'org_id': invite_org}
                 self._append(pid, consent, pending['choices'])
                 consent = self._consent(pid)
             if not consent:
                 raise EnrollmentError('Participation is unavailable. Contact the Sentra team.', 403)
             if not row:
-                self.db.execute('insert into enrollment_private.identities values(%s,%s,%s)', (provider, identity_hash, pid))
+                stored_identity = FITBIT_LINK_IDENTITY_PREFIX + identity_hash if fitbit_link else identity_hash
+                self.db.execute('''insert into enrollment_private.identities
+                    (provider,identity_hash,participant_id) values(%s,%s,%s)''', (provider, stored_identity, pid))
+            # Linking and later sign-ins prove the hosted identity, not the source of the legacy token.
+            operator_managed = fitbit_link or (row is not None and row[1].startswith(FITBIT_LINK_IDENTITY_PREFIX))
             # A login to a withdrawn account can view that state, but cannot restart it.
-            if consent['open'] and not consent['withdrawn']:
+            if not operator_managed and consent['open'] and not consent['withdrawn']:
                 repo = TokenRepository(self.db)
                 with repo.lock(pid, provider):
                     previous = repo.read(pid, provider, required=False)
-                    if fitbit_link and (not previous or previous['refresh_status'] not in FITBIT_LINK_CREDENTIAL_STATES):
-                        raise EnrollmentError('This participant is no longer eligible for a Fitbit link.', 409)
                     body = login.envelope(provider, pid, token)
                     if previous:
                         # CAS without touching unrelated collection-state tables.
@@ -276,6 +288,8 @@ class EnrollmentStore:
         if not c or c['org_id'] != value['account']['org_id']:
             raise EnrollmentError('Your participation changed. Please sign in again.', 401)
         public.update(self._participation(pid, c))
+        if self.operator_managed_fitbit(pid):
+            public['fitbit_operator_managed'] = True
         return public
 
     def _participation(self, pid, c):

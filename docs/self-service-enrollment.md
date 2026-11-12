@@ -179,12 +179,19 @@ python -m sentra.enrollment --organization YOUR_ORG_ID --link-fitbit EXISTING_PA
 Enter the verified Gmail address at the private prompt and share the resulting
 single-use link only with the participant. The participant opens it, reviews and
 accepts the hosted sharing choices, and signs in with the original Fitbit Google
-account. This flow requests a verified Gmail address from Google and checks it
-against the operator's keyed digest. Returning sign-in uses the Google subject
-link and the normal scopes. See [Google's account ownership guidance](https://developers.google.com/identity/sign-in/web/backend-auth).
+account. This flow requests only Google identity and email scopes, checks the
+verified Gmail address against the operator's keyed digest, and discards the
+OAuth token. Gmail and Googlemail variants with or without dots match the same
+mailbox. Use the operator workflow for an account with a non-Gmail address.
+See [Google's account ownership guidance](https://developers.google.com/identity/sign-in/web/backend-auth)
+and [Gmail's address guidance](https://support.google.com/mail/answer/10313).
 
-The callback records one membership and consent on the original participant ID,
-preserves existing history, and updates the existing encrypted Fitbit credential.
+The callback records one membership and consent on the original participant ID.
+Linking and subsequent hosted sign-ins leave the encrypted Fitbit credential
+and history intact. Returning sign-in recognizes the stored Google subject.
+If a legacy Fitbit needs a new collection credential, the Sentra operator
+verifies the original account and uses the [private reconnect workflow](operating-guide.md#manual-runs-and-reconnect).
+Participants can still manage sharing and withdraw on the hosted page.
 An incorrect account, expired or used link, or a participant whose eligibility
 changed fails without committing enrollment changes. A successful link consumes
 the invitation. The participant can then sign in again from the ordinary account

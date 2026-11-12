@@ -57,7 +57,11 @@ def create_app(settings=None, store_factory=None, provider_login=None):
     def participant_status(repository, session_id):
         result = repository.status(session_id)
         config = configuration()
-        providers = [p for p in config.clients if p == 'google_health' or not result.get('linking_fitbit')]
+        providers = list(config.clients)
+        if result.get('linking_fitbit'):
+            providers = [p for p in providers if p == 'google_health']
+        elif result.get('fitbit_operator_managed'):
+            providers = [p for p in providers if p != 'google_health']
         result.update(providers_available=providers, consent_version=config.consent_version)
         return result
 
@@ -144,6 +148,9 @@ def create_app(settings=None, store_factory=None, provider_login=None):
         with store() as repository:
             value = repository.session(sid(request))
             repository.check_csrf(value, request.headers.get('x-csrf-token', ''))
+            account = value.get('account')
+            if account and data.provider == 'google_health' and repository.operator_managed_fitbit(account['participant_id']):
+                raise EnrollmentError('Contact the Sentra team to reconnect this Fitbit.', 409)
             fitbit_email_hash = value.get('fitbit_email_hash')
             if fitbit_email_hash and data.provider != 'google_health':
                 raise EnrollmentError('Use the original Fitbit account for this link.', 403)

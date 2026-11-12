@@ -97,14 +97,15 @@ class EnrollmentProtocolTests(unittest.TestCase):
         login = ProviderLogin(config)
         email = 'synthetic.user@gmail.com'
         url, pending = login.begin('google_health', fitbit_email_hash=config.fitbit_email_hash(email))
-        self.assertIn(GOOGLE_EMAIL_SCOPE, parse_qs(urlsplit(url).query)['scope'][0].split())
+        query = parse_qs(urlsplit(url).query)
+        self.assertEqual(set(query['scope'][0].split()), {'openid', GOOGLE_EMAIL_SCOPE})
+        self.assertNotIn('access_type', query)
         self.assertNotIn(email, url)
         self.assertNotIn(pending['fitbit_email_hash'], url)
         response = MagicMock()
         response.__enter__.return_value = response
         response.status_code = 200
-        granted = {'access_token': 'fake-access', 'refresh_token': 'fake-refresh',
-                   'token_type': 'Bearer', 'expires_in': 3600,
+        granted = {'access_token': 'fake-access', 'token_type': 'Bearer',
                    'scope': scopes('google_health', fitbit_link=True)}
         with patch('sentra.enrollment.PrivateOAuthSession') as session, \
                 patch('sentra.enrollment.requests.get', return_value=response):
@@ -116,13 +117,22 @@ class EnrollmentProtocolTests(unittest.TestCase):
                 with self.subTest(address=address, verified=verified), self.assertRaises(EnrollmentError):
                     login.finish(pending, 'synthetic-code')
             response.iter_content.return_value = [json.dumps(
-                {'sub': 'synthetic-sub', 'email': email, 'email_verified': True}).encode()]
+                {'sub': 'synthetic-sub', 'email': 'SyntheticUser@googlemail.com', 'email_verified': True}).encode()]
             identity, token = login.finish(pending, 'synthetic-code')
             self.assertEqual(identity, config.identity('google_health', 'synthetic-sub'))
-            self.assertNotIn(email, json.dumps(token))
+            self.assertIsNone(token)
             session.return_value.fetch_token.return_value = {**granted, 'scope': scopes('google_health')}
             with self.assertRaises(EnrollmentError):
                 login.finish(pending, 'synthetic-code')
+
+    def test_link_cli_explains_invalid_gmail_and_never_echoes_the_address(self):
+        from sentra.enrollment import main
+        address = 'synthetic.user@example.invalid'
+        with patch.object(EnrollmentSettings, 'from_env', return_value=settings()), \
+                patch('getpass.getpass', return_value=address), redirect_stdout(StringIO()) as output:
+            self.assertEqual(main(['--organization', 'synthetic-pilot', '--link-fitbit', 'p9990']), 1)
+        self.assertIn('Enter the verified Gmail address', output.getvalue())
+        self.assertNotIn(address, output.getvalue())
 
     def test_identity_is_stable_provider_separated_and_not_plaintext(self):
         config = settings()

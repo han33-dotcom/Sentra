@@ -76,12 +76,11 @@ class EnrollmentSettings:
         return hmac.new(self.identity_key.encode(), f'{provider}/{subject}'.encode(), hashlib.sha256).hexdigest()
 
     def fitbit_email_hash(self, email):
-        if not isinstance(email, str):
-            raise ValueError('Enter the verified Gmail address for the existing Fitbit connection.')
-        address = email.strip().lower()
-        if not re.fullmatch(r'[a-z0-9.]{1,64}@gmail\.com', address):
-            raise ValueError('Enter the verified Gmail address for the existing Fitbit connection.')
-        return self.identity('fitbit-link-email', address)
+        local, _, domain = email.strip().lower().partition('@') if isinstance(email, str) else ('', '', '')
+        if (domain not in ('gmail.com', 'googlemail.com') or len(local) > 64
+                or not re.fullmatch(r'[a-z0-9]+(?:\.[a-z0-9]+)*', local)):
+            raise EnrollmentError('Enter the verified Gmail address for the existing Fitbit connection.')
+        return self.identity('fitbit-link-email', local.replace('.', '') + '@gmail.com')
 
     def callback(self, provider):
         return f'{self.origin}/oauth/{provider}/callback'
@@ -96,10 +95,11 @@ class EnrollmentSettings:
 
 def scopes(provider, *, fitbit_link=False):
     # Identity is required to prevent duplicate signup and account substitution on reconnect.
-    if fitbit_link and provider != 'google_health':
-        raise EnrollmentError('Use the original Fitbit account for this link.', 403)
-    required = [*PROVIDERS[provider].scopes, 'openid' if provider == 'google_health' else 'read:profile']
-    return [*required, GOOGLE_EMAIL_SCOPE] if fitbit_link else required
+    if fitbit_link:
+        if provider != 'google_health':
+            raise EnrollmentError('Use the original Fitbit account for this link.', 403)
+        return ['openid', GOOGLE_EMAIL_SCOPE]
+    return [*PROVIDERS[provider].scopes, 'openid' if provider == 'google_health' else 'read:profile']
 
 
 class ProviderLogin:
@@ -111,8 +111,12 @@ class ProviderLogin:
         state, verifier = secrets.token_urlsafe(32), secrets.token_urlsafe(64)
         session = PrivateOAuthSession(c['client_id'], scope=scopes(provider, fitbit_link=fitbit_email_hash is not None),
             redirect_uri=self.settings.callback(provider), state=state)
-        params = {'access_type': 'offline', 'prompt': 'consent'} if provider == 'google_health' else {}
+        params = {}
         if provider == 'google_health':
+            if fitbit_email_hash is not None:
+                params['prompt'] = 'select_account'
+            else:
+                params.update(access_type='offline', prompt='consent')
             params.update(code_challenge=base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b'=').decode(),
                           code_challenge_method='S256')
         url, _ = session.authorization_url(PROVIDERS[provider].authorization_url, **params)
@@ -138,13 +142,18 @@ class ProviderLogin:
                 granted = granted.split()
             if not set(required) <= set(granted) or token.get('token_type', '').lower() != 'bearer':
                 raise ValueError
-            saved = token_state(token)
-            if provider == 'google_health' and c['publishing_status'] == 'testing':
-                saved['refresh_expires_at'] = time.time() + 7 * 86400
+            access_token = token.get('access_token')
+            if not isinstance(access_token, str) or not access_token:
+                raise ValueError
+            saved = None
+            if expected_email is None:
+                saved = token_state(token)
+                if provider == 'google_health' and c['publishing_status'] == 'testing':
+                    saved['refresh_expires_at'] = time.time() + 7 * 86400
             endpoint = ('https://openidconnect.googleapis.com/v1/userinfo' if provider == 'google_health'
                 else 'https://api.prod.whoop.com/developer/v2/user/profile/basic')
             # No response bodies, callback URLs, passwords, names or email in logs/errors.
-            with requests.get(endpoint, headers={'Authorization': 'Bearer ' + saved['access_token']},
+            with requests.get(endpoint, headers={'Authorization': 'Bearer ' + access_token},
                     timeout=(10, 30), allow_redirects=False, stream=True) as response:
                 if response.status_code != 200:
                     raise ValueError
@@ -203,7 +212,7 @@ def main(argv=None):
         invite = secrets.token_urlsafe(32)
         if args.link_fitbit:
             if 'google_health' not in settings.clients:
-                raise ValueError('Fitbit enrollment is unavailable.')
+                raise EnrollmentError('Fitbit enrollment is unavailable.')
             with warnings.catch_warnings():
                 warnings.simplefilter('error', GetPassWarning)
                 address = getpass('Verified Gmail address for the existing Fitbit connection: ')
@@ -215,9 +224,13 @@ def main(argv=None):
                 store.invite(digest(invite), args.organization, args.seats or 5, args.days)
         print(f'{settings.origin}/join#invite={invite}')
         return 0
+    except GetPassWarning:
+        print('Run this command from a private interactive terminal to enter the Gmail address.')
+    except EnrollmentError as error:
+        print(error)
     except Exception:
         print('Enrollment operation unavailable. Check private configuration and organization.')
-        return 1
+    return 1
 
 
 if __name__ == '__main__':

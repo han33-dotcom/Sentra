@@ -192,6 +192,7 @@ class EnrollmentPostgresTests(unittest.TestCase):
             sequence_before = db.execute('select last_value from enrollment_private.participant_number').fetchone()[0]
             self.assertIsNone(db.execute('select 1 from enrollment_private.invites where invite_hash=%s',
                                          (digest(link),)).fetchone())
+            credential_before = TokenRepository(db).read(pid, 'google_health')
         state = self.start(self.client, link)
         self.assertEqual(state['providers_available'], ['google_health'])
         self.assertTrue(state['linking_fitbit'])
@@ -209,6 +210,15 @@ class EnrollmentPostgresTests(unittest.TestCase):
         status = self.client.get('/api/status').json()
         self.assertEqual(status['participant_id'], pid)
         self.assertTrue(status['collection_paused'])
+        self.assertTrue(status['fitbit_operator_managed'])
+        self.assertNotIn('google_health', status['providers_available'])
+        self.assertIn('whoop', status['providers_available'])
+        with self.admin_db() as db:
+            self.assertEqual(TokenRepository(db).read(pid, 'google_health'), credential_before)
+        reconnect = self.client.post('/api/connect', json={'provider': 'google_health'},
+                                     headers={**self.headers, 'X-CSRF-Token': status['csrf']})
+        self.assertEqual(reconnect.status_code, 409)
+        self.assertIn('Contact the Sentra team', reconnect.json()['message'])
         replay = stale_browser.get('/oauth/google_health/callback',
                                    params={'state': stale_pending, 'code': 'different-subject'})
         self.assertEqual(replay.headers['location'], '/join?connection=failed')
@@ -217,6 +227,7 @@ class EnrollmentPostgresTests(unittest.TestCase):
         returning = self.complete(self.browser(), provider='google_health')
         self.assertEqual(returning['participant_id'], pid)
         with self.admin_db() as db:
+            self.assertEqual(TokenRepository(db).read(pid, 'google_health'), credential_before)
             self.assertEqual(db.execute('select last_value from enrollment_private.participant_number').fetchone()[0],
                              sequence_before)
             self.assertEqual(db.execute('select count(*) from org.memberships where participant_id=%s',
@@ -225,6 +236,36 @@ class EnrollmentPostgresTests(unittest.TestCase):
                                         (pid,)).fetchone()[0], 1)
             self.assertEqual(db.execute('select remaining from enrollment_private.invites where invite_hash=%s',
                                         (digest(self.invite),)).fetchone()[0], 5)
+
+    def test_legacy_credential_guard_allows_collector_refresh_and_hosted_withdrawal(self):
+        pid = self.legacy_fitbit()
+        status = self.complete(invite=self.fitbit_link(pid), provider='google_health')
+        with self.admin_db() as db:
+            before = TokenRepository(db).read(pid, 'google_health')
+            renewed = self.login.envelope('google_health', pid, token_state(
+                {'access_token': 'renewed-access', 'refresh_token': 'renewed-refresh', 'expires_in': 3600}))
+            update = ('update collector_private.provider_credentials set encrypted_token_bundle=%s, version=version+1 '
+                      'where participant_id=%s and provider=%s')
+            db.execute('set role sentra_enrollment')
+            with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+                db.execute(update, (renewed, pid, 'google_health'))
+            self.assertEqual(TokenRepository(db).read(pid, 'google_health'), before)
+            # A rolled-back service cannot bind the same subject as a new ordinary enrollment.
+            ordinary_subject = self.config.identity('google_health', self.code)
+            other_pid = 'p' + str(db.execute("select nextval('enrollment_private.participant_number')").fetchone()[0])
+            db.execute('insert into audit.participants(participant_id) values (%s)', (other_pid,))
+            with self.assertRaises(psycopg.errors.UniqueViolation):
+                db.execute('insert into enrollment_private.identities values (%s,%s,%s)',
+                           ('google_health', ordinary_subject, other_pid))
+            db.execute('set role sentra_collector')
+            self.assertEqual(db.execute(update, (renewed, pid, 'google_health')).rowcount, 1)
+        withdrawn = self.client.post('/api/withdraw', json={},
+                                     headers={**self.headers, 'X-CSRF-Token': status['csrf']})
+        self.assertEqual(withdrawn.status_code, 200)
+        with self.admin_db() as db:
+            after = TokenRepository(db).read(pid, 'google_health')
+            self.assertEqual(after['encrypted_token_bundle'], renewed)
+            self.assertEqual(after['refresh_status'], 'withdrawn')
 
     def test_fitbit_link_rejects_an_already_linked_google_identity_without_consuming(self):
         original = self.complete(invite=self.invite, provider='google_health')
