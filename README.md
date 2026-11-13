@@ -24,14 +24,18 @@ approved team accounts.
 
 ```
 Google Health v4 / WHOOP v2
-  -> GitHub Actions collector (collect.yml, paused)    extract, follow all pages, resume
-  -> Supabase Storage  sentra-originals                unchanged responses, gzip, hash-keyed, immutable
-  -> Supabase Postgres audit.*                         records, measurements, sessions, coverage, runs
-       |-> Streamlit viewer (sentra_viewer role)       inspect, audit, export
-       '-> sentra tiers-build (sentra_viewer role)     -> Storage sentra-tiers: zstd parquet tiers
-             '-> processing job                        -> v0 daily wellness features + k-anonymous cohort
-                   '-> read-only FastAPI (X-API-Key)   pseudonymous participant IDs only
+  -> GitHub Actions collector (collect.yml, paused)  -> Supabase Storage sentra-originals (unchanged responses)
+                                                     -> Supabase Postgres audit.* (records, measurements, runs)
+Participant phone -> enrollment service (Render)     -> Supabase Postgres org.* (memberships, consent history)
+GitHub Actions wellness refresh (read-only)          -> sentra-tiers: parquet tiers, processing, board.json
+Streamlit private viewer (read-only role)            -> team pages; organization overview, profiles,
+                                                        trends and follow-ups within each user's permissions
+Read-only FastAPI (operator, X-API-Key)              -> pseudonymous processed outputs
 ```
+
+Components, hosting, database roles, migrations and privacy boundaries:
+[architecture](docs/architecture.md). Operating procedures by situation:
+[operator handover](docs/handover.md).
 
 ## What the pipeline does
 
@@ -249,10 +253,10 @@ pre-commit hook) and gitleaks block health data, exports and secrets. See
 
 ## Verification, privacy and remaining work
 
-**Tests.** The Python suite has **159 tests**. The most recent complete run had
-**154 passed and five opt-in live integration tests skipped**. Three JavaScript regressions
-exercise the board's baseline comparisons. CI runs both suites on Ubuntu and
-Windows with Python 3.11 for every PR, and the live tests stay skipped there.
+**Tests.** CI runs the Python suite and the JavaScript regressions on Ubuntu and
+Windows with Python 3.11 for every PR; opt-in live and PostgreSQL tests stay skipped
+there. Each PR records its own results, and the [evaluation table](docs/evaluation.md)
+records the sprint evidence.
 
 **Live checks.** Selected live checks were run separately during the stages,
 including permission denials, source integrity, token renewal, a private restore
