@@ -85,7 +85,7 @@ def health():
 @app.get('/api/v1/metadata', dependencies=[Depends(require_key)])
 def metadata():
     meta = _metadata()
-    return {'notice': meta.get('notice'), 'thresholds_status': (meta.get('thresholds') or {}).get('_status'),
+    return {'notice': meta.get('notice'), 'assessment_version': meta.get('assessment_version'), 'thresholds_status': (meta.get('thresholds') or {}).get('_status'),
             'thresholds': meta.get('thresholds'), 'days': meta.get('days'), 'subjects': meta.get('subjects')}
 
 
@@ -107,5 +107,9 @@ def daily(subject: str | None = None, since: str | None = Query(None, descriptio
 
 @app.get('/api/v1/cohort', dependencies=[Depends(require_key)])
 def cohort(since: str | None = Query(None, description='YYYY-MM-DD')):
-    c = _since(_table('cohort_daily'), since)
+    c = _table('cohort_daily')
+    if 'device' not in c.columns:
+        # Written before per-device group statistics; its pooled rows must not be served.
+        raise HTTPException(503, 'cohort_daily predates per-device group statistics; rerun the processing job to rebuild it')
+    c = _since(c, since)
     return {'notice': _metadata().get('notice'), 'rows': _records(c)}

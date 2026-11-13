@@ -214,6 +214,8 @@ LEVELS = ('green', 'amber', 'red', 'insufficient')
 # Bump when assessment rules or their meaning change: a board built under another version is
 # rebuilt from existing data on the next refresh, even when no new collection has arrived.
 ASSESSMENT_VERSION = 'assessment-v1'
+# Provider -> device label shared by every consumer. Readings from different devices are never pooled.
+DEVICES = {'google_health': 'Fitbit', 'whoop': 'WHOOP'}
 
 
 def rule_states(df: pd.DataFrame) -> pd.DataFrame:
@@ -255,15 +257,23 @@ def flags(df: pd.DataFrame) -> pd.DataFrame:
 
 
 # ----------------------------------------------------------------- 6. cohort -
-def cohort(df: pd.DataFrame) -> pd.DataFrame:
+def cohort(df: pd.DataFrame, devices: dict | None = None) -> pd.DataFrame:
+    """Group statistics per date and device. `devices` maps pseudonym -> provider (as for the board).
+
+    Fitbit and WHOOP measure sleep, resting heart rate and HRV differently, so their readings are
+    never pooled. A participant contributes only with exactly one known device (see
+    observations.devices), matching the organization overview (sentra.organization)."""
     k = TH['cohort_k_anonymity']
+    devices = devices or {}
     d = df[df.usable_day].copy()
+    d['device'] = d.subject_id.map(lambda pid: DEVICES.get(devices.get(pid)))
+    d = d[d.device.notna()]
     # Only assessed days count toward the wellness share; an "insufficient" day is not a calm day.
     assessed = d.wellness_level.isin(['green', 'amber', 'red']) if 'wellness_level' in d else pd.Series(False, index=d.index)
     d['flag_short_sleep'] = d.flag_short_sleep.where(d.sleep_min.notna())
     d['flag_sustained_high_hr'] = d.flag_sustained_high_hr.where(d.hr_mean.notna())
     d['wellness_signals'] = d.wellness_signals.where(assessed)
-    c = d.groupby('date').agg(
+    c = d.groupby(['date', 'device']).agg(
         workers=('subject_id', 'nunique'),
         pct_short_sleep=('flag_short_sleep', 'mean'),
         pct_wellness_amber_or_red=('wellness_signals', lambda x: (x >= 1).where(x.notna()).mean()),
@@ -272,21 +282,23 @@ def cohort(df: pd.DataFrame) -> pd.DataFrame:
         median_steps=('steps', 'median'),
     ).reset_index()
     hidden = c.workers < k  # never show a group smaller than k people
-    c[c.columns[2:]] = c[c.columns[2:]].astype('float64')
-    c.loc[hidden, c.columns[2:]] = np.nan
+    stats = c.columns[3:]
+    c[stats] = c[stats].astype('float64')
+    c.loc[hidden, stats] = np.nan
     # Each published statistic needs k contributors who actually supplied its inputs; the
     # eligible count is published next to it so consumers never re-derive it.
     for output, source in {'pct_short_sleep': 'flag_short_sleep',
             'pct_wellness_amber_or_red': 'wellness_signals', 'pct_sustained_high_hr': 'flag_sustained_high_hr',
             'median_sleep_h': 'sleep_min', 'median_steps': 'steps'}.items():
-        contributors = c.date.map(d[d[source].notna()].groupby('date').subject_id.nunique()).fillna(0).astype(int)
+        eligible = d[d[source].notna()].groupby(['date', 'device']).subject_id.nunique()
+        contributors = pd.Series(pd.MultiIndex.from_frame(c[['date', 'device']]).map(eligible), index=c.index).fillna(0).astype(int)
         c.loc[contributors < k, output] = np.nan
         c[f'n_{output}'] = contributors
     c['suppressed'] = hidden
     return c
 
 
-def run(obs: pd.DataFrame, out_dir: Path, ages=None, log=print):
+def run(obs: pd.DataFrame, out_dir: Path, ages=None, log=print, devices=None):
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     obs, rep = clean(obs)
@@ -299,11 +311,11 @@ def run(obs: pd.DataFrame, out_dir: Path, ages=None, log=print):
     log(f'4 baselines  rhr baseline available on {int(d.rhr_base.notna().sum()) if "rhr_base" in d else 0:,} days')
     d = flags(d)
     log(f'5 flags      wellness levels on usable days: {d[d.usable_day].wellness_level.value_counts().to_dict()}')
-    c = cohort(d)
-    log(f'6 cohort     {len(c)} days, {int(c.suppressed.sum())} suppressed (<{TH["cohort_k_anonymity"]} people)')
+    c = cohort(d, devices)
+    log(f'6 cohort     {len(c)} date-device rows, {int(c.suppressed.sum())} suppressed (<{TH["cohort_k_anonymity"]} people)')
     for df, name in ((g, 'minute'), (d, 'daily_features'), (c, 'cohort_daily')):
         _write_atomic(df, out_dir / f'{name}.parquet')
-    meta = {'notice': NOTICE, 'thresholds': TH, 'clean': rep, 'subjects': int(d.subject_id.nunique()),
+    meta = {'notice': NOTICE, 'assessment_version': ASSESSMENT_VERSION, 'thresholds': TH, 'clean': rep, 'subjects': int(d.subject_id.nunique()),
             'days': [str(d.date.min().date()), str(d.date.max().date())] if len(d) else None}
     tmp = out_dir / 'metadata.json.tmp'
     tmp.write_text(json.dumps(meta, indent=2, default=str), encoding='utf-8')

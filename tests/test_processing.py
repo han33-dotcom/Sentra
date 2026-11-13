@@ -10,10 +10,16 @@ import pandas as pd
 
 from sentra.processing import metric_map, pipeline
 from sentra.processing.canonical import METRICS
-from sentra.processing.observations import load
+from sentra.processing.board import payload
+from sentra.processing.observations import devices, load
+from sentra import organization
 from sentra.tiers import hr_tables, measurements_table, parquet_bytes, sessions_table
 
 UTC = timezone.utc
+
+
+def FITBIT(d):
+    return {pid: 'google_health' for pid in d.subject_id}
 NOW = datetime(2026, 10, 11, 12, tzinfo=UTC)
 
 
@@ -116,7 +122,7 @@ class PipelineTests(unittest.TestCase):
             'usable_day': True, 'sleep_min': 420.0, 'steps': 100.0, 'hr_mean': 70.0,
             'wellness_signals': [1, 0, 0, 0, 0, 0], 'wellness_level': ['amber', 'green', 'green', 'green', 'green', 'insufficient'],
             'flag_short_sleep': False, 'flag_sustained_high_hr': False})
-        c = pipeline.cohort(d)
+        c = pipeline.cohort(d, FITBIT(d))
         self.assertAlmostEqual(c.pct_wellness_amber_or_red.iloc[0], 0.2)  # 1 of 5 assessed, not 1 of 6
         self.assertEqual(c.n_pct_wellness_amber_or_red.iloc[0], 5)
         self.assertEqual(c.n_median_sleep_h.iloc[0], 6)
@@ -129,14 +135,14 @@ class PipelineTests(unittest.TestCase):
             'wellness_level': ['amber', 'insufficient', 'insufficient', 'insufficient', 'insufficient'],
             'flag_short_sleep': [True, False, False, False, False],
             'flag_sustained_high_hr': [True, False, False, False, False]})
-        c = pipeline.cohort(d)
+        c = pipeline.cohort(d, FITBIT(d))
         metrics = ['pct_short_sleep', 'pct_wellness_amber_or_red', 'pct_sustained_high_hr',
                    'median_sleep_h', 'median_steps']
         self.assertTrue(c[metrics].isna().all().all())
         self.assertEqual(c.workers.iloc[0], 5)
         d['sleep_min'] = 300.0; d['steps'] = 100.0; d['hr_mean'] = 160.0
         d['wellness_level'] = ['amber', 'green', 'green', 'green', 'green']
-        c = pipeline.cohort(d)
+        c = pipeline.cohort(d, FITBIT(d))
         self.assertEqual(c.median_sleep_h.iloc[0], 5.0)
         self.assertEqual(c.median_steps.iloc[0], 100.0)
         self.assertAlmostEqual(c.pct_short_sleep.iloc[0], 0.2)
@@ -155,10 +161,11 @@ class PipelineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             write_tiers(folder, rows=rows)
             out = Path(folder) / 'processed'
-            _, d, c, _ = pipeline.run(load(folder), out, log=lambda *_: None)
+            _, d, c, _ = pipeline.run(load(folder), out, log=lambda *_: None, devices=devices(folder))
             self.assertTrue((out / 'daily_features.parquet').is_file())
             meta = json.loads((out / 'metadata.json').read_text(encoding='utf-8'))
             self.assertIn('pending medical expert sign-off', meta['notice'])
+            self.assertEqual(meta['assessment_version'], pipeline.ASSESSMENT_VERSION)
         p01 = d[d.subject_id == 'p01'].reset_index(drop=True)
         self.assertTrue(p01.rhr_z.iloc[:7].isna().all())  # fewer than 7 previous days: no baseline, no flag
         self.assertFalse(p01.flag_rhr_above_baseline.iloc[:35].any())
@@ -166,8 +173,95 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(p01.wellness_level.iloc[35], 'amber')
         self.assertFalse(p01.flag_short_sleep.any())  # sleep never returned -> never flagged
         self.assertTrue(d.usable_day.all())
-        self.assertTrue(c.suppressed.all())  # two people < k=5
+        self.assertEqual(set(c.device), {'Fitbit', 'WHOOP'})  # one row per date and device, never pooled
+        self.assertTrue(c.suppressed.all())  # one person per device < k=5
         self.assertTrue(c.pct_short_sleep.isna().all())
+
+
+
+def day_rows(day, people):
+    """Synthetic usable day rows: (pid, sleep_min, steps, level, state) per person."""
+    return pd.DataFrame([{'subject_id': pid, 'date': pd.Timestamp(day), 'usable_day': True, 'sleep_min': sleep,
+        'steps': steps, 'hr_mean': 70.0, 'wellness_signals': 0 if level == 'green' else (1 if level == 'amber' else 0),
+        'wellness_level': level, 'assessment_state': state,
+        'assessment_reasons': None if state == 'complete' else 'rhr:baseline_building',
+        'flag_short_sleep': False, 'flag_sustained_high_hr': False}
+        for pid, sleep, steps, level, state in people])
+
+
+class GroupStatisticConsistencyTests(unittest.TestCase):
+    """#45: processing, the read API's cohort and the organization overview count the same people."""
+
+    def setUp(self):
+        fitbit = [(f'p0{i}', 420.0 + i, 5000.0 + i, 'green', 'complete') for i in range(1, 6)]
+        whoop = [('p11', 400.0, 4000.0, 'amber', 'complete'), ('p12', 410.0, None, 'insufficient', 'insufficient')]
+        unknown = [('p21', 300.0, 100.0, 'green', 'complete')]
+        self.daily = day_rows('2026-10-03', fitbit + whoop + unknown)
+        self.devices = {**{p[0]: 'google_health' for p in fitbit}, **{p[0]: 'whoop' for p in whoop}}
+
+    def test_devices_are_never_pooled_and_unknown_devices_never_contribute(self):
+        c = pipeline.cohort(self.daily, self.devices).set_index('device')
+        self.assertEqual(sorted(c.index), ['Fitbit', 'WHOOP'])  # no pooled row, no row for p21
+        self.assertFalse(c.loc['Fitbit', 'suppressed'])
+        self.assertEqual(c.loc['Fitbit', 'n_median_sleep_h'], 5)
+        self.assertAlmostEqual(c.loc['Fitbit', 'median_sleep_h'], 423 / 60)
+        self.assertTrue(c.loc['WHOOP', 'suppressed'])  # 2 WHOOP people: not 7 pooled with Fitbit
+        self.assertTrue(pd.isna(c.loc['WHOOP', 'median_sleep_h']))
+        self.assertEqual(c.loc['WHOOP', 'n_median_steps'], 1)  # p12 supplied no steps
+        self.assertEqual(c.loc['WHOOP', 'n_pct_wellness_amber_or_red'], 1)  # p12 is insufficient, not calm
+
+    def test_without_known_devices_no_group_statistic_is_published(self):
+        c = pipeline.cohort(self.daily)
+        self.assertEqual(len(c), 0)
+        self.assertIn('n_median_sleep_h', c.columns)
+
+    def test_cohort_counts_match_the_organization_overview_built_from_the_board(self):
+        board = payload(self.daily, self.devices, built_at='2026-10-04T00:00:00+00:00')
+        people = board['people']
+        everyone = {p['id'] for p in people}
+        summary = organization.group_summary(people, everyone, end=date(2026, 10, 3))
+        c = pipeline.cohort(self.daily, self.devices).set_index('device')
+        for key, column in (('sleep', 'median_sleep_h'), ('steps', 'median_steps')):
+            for row in (r for r in summary if r['key'] == key):
+                self.assertEqual(row['contributors'], c.loc[row['device'], f'n_{column}'], (key, row['device']))
+                self.assertEqual(row['status'] == 'available', pd.notna(c.loc[row['device'], column]), (key, row['device']))
+        self.assertEqual({r['device'] for r in summary if r['key'] == 'sleep'}, {'Fitbit', 'WHOOP'})
+
+    def test_a_participant_with_two_providers_never_enters_a_device_statistic(self):
+        start, end = datetime(2026, 10, 9, 20, tzinfo=UTC), datetime(2026, 10, 10, 3, tzinfo=UTC)
+        rows = [m(f'p0{i}', 'google_health', 'sleep', f'p0{i}-s', '/sleep/summary/minutesAsleep', minutes, ts=start, end=end)
+                for i, minutes in enumerate([360, 370, 380, 390, 400, 410], 1)]
+        # p01 also has WHOOP sleep; processing merges a person's day without keeping its provider.
+        rows += [m('p01', 'whoop', 'sleep', 'p01-w', metric, 160 * 60000, ts=start, end=end)
+                 for metric in ('/score/stage_summary/total_light_sleep_time_milli',
+                                '/score/stage_summary/total_slow_wave_sleep_time_milli',
+                                '/score/stage_summary/total_rem_sleep_time_milli')]
+        with tempfile.TemporaryDirectory() as folder:
+            write_tiers(folder, rows=rows)
+            mapping = devices(folder)
+            _, d, c, _ = pipeline.run(load(folder), Path(folder) / 'out', log=lambda *_: None, devices=mapping)
+        self.assertNotIn('p01', mapping)
+        self.assertEqual(c.device.tolist(), ['Fitbit'])  # no WHOOP row from p01's WHOOP sleep either
+        self.assertEqual((c.workers.iloc[0], c.n_median_sleep_h.iloc[0]), (5, 5))
+        self.assertAlmostEqual(c.median_sleep_h.iloc[0], 390 / 60)  # p02-p06 Fitbit sleep only
+        board = payload(d, mapping, built_at='2026-10-11T00:00:00+00:00')
+        self.assertEqual(next(p['device'] for p in board['people'] if p['id'] == 'p01'), 'Unknown')
+
+    def test_heart_rate_tiers_also_identify_a_participants_provider(self):
+        raw = [('p07', 'whoop', datetime(2026, 10, 10, 8, tzinfo=UTC), Decimal('61'))]
+        with tempfile.TemporaryDirectory() as folder:
+            write_tiers(folder, raw=raw)
+            self.assertEqual(devices(folder), {'p07': 'whoop'})
+
+    def test_only_complete_assessments_count_as_assessable_everywhere(self):
+        board = payload(self.daily, self.devices, built_at='2026-10-04T00:00:00+00:00')
+        counts = organization.participation(set(self.devices) | {'p21'}, [], board['people'], today=date(2026, 10, 3),
+                                            assessment_version=board['assessment_version'])
+        complete = int((self.daily.assessment_state == 'complete').sum())
+        self.assertEqual(counts['assessable'], complete)
+        insufficient = next(d for p in board['people'] if p['id'] == 'p12' for d in p['days'])
+        self.assertIsNone(insufficient['lvl'])
+        self.assertEqual(insufficient['a'], 'insufficient')
 
 
 if __name__ == '__main__':

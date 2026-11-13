@@ -29,7 +29,7 @@ tiers -> observations.py (metric_map.py) -> clean -> minute grid -> daily -> 28-
 ```
 
 Outputs, written atomically: `minute.parquet`, `daily_features.parquet`,
-`cohort_daily.parquet` and `metadata.json` (notice, thresholds, cleaning report). Inputs
+`cohort_daily.parquet` and `metadata.json` (notice, `assessment_version`, thresholds, cleaning report). Inputs
 and outputs must stay beneath `.private`.
 
 ## Behaviour on this schema
@@ -56,8 +56,10 @@ and outputs must stay beneath `.private`.
     the nightly totals.
   - Resting minutes now exclude stage-asleep minutes.
 - **No MET values:** `active_min` and `sedentary_min` stay empty.
-- **Cohort:** a day is shown only when at least `cohort_k_anonymity` (5) people have
-  usable data. With the current two participants, every cohort day is suppressed.
+- **Cohort:** one row per date and device; Fitbit and WHOOP are never pooled. A row is
+  shown only when at least `cohort_k_anonymity` (5) people of that device have usable data,
+  and each statistic needs 5 contributors of its own. With the current participants, every
+  cohort row is suppressed.
 
 ## Metric-name mapping (`src/sentra/processing/metric_map.py`)
 

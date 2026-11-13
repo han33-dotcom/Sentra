@@ -23,9 +23,9 @@ class ApiTests(unittest.TestCase):
         pd.DataFrame({'subject_id': ['p01', 'p01', 'p02', 'alice'], 'date': pd.to_datetime(['2026-10-01', '2026-10-02', '2026-10-02', '2026-10-02']),
                       'rhr': [60.0, 61.0, 55.0, 50.0], 'wellness_level': ['green', 'amber', 'green', 'green']}
                      ).to_parquet(folder / 'daily_features.parquet')
-        pd.DataFrame({'date': pd.to_datetime(['2026-10-02']), 'workers': [2], 'pct_short_sleep': [None], 'suppressed': [True]}
+        pd.DataFrame({'date': pd.to_datetime(['2026-10-02']), 'device': ['Fitbit'], 'workers': [2], 'pct_short_sleep': [None], 'suppressed': [True]}
                      ).to_parquet(folder / 'cohort_daily.parquet')
-        (folder / 'metadata.json').write_text(json.dumps({'notice': 'Wellness indicators; not a medical assessment.',
+        (folder / 'metadata.json').write_text(json.dumps({'notice': 'Wellness indicators; not a medical assessment.', 'assessment_version': 'assessment-v1',
             'thresholds': {'_status': 'v0 — pending medical expert sign-off'}, 'days': ['2026-10-01', '2026-10-02']}), encoding='utf-8')
         self.env = mock.patch.dict(os.environ, {'SENTRA_PROCESSED_DIR': str(folder), 'SENTRA_API_KEY': KEY})
         self.env.start()
@@ -57,7 +57,21 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(self.client.get('/api/v1/subjects', headers=h).json(), ['p01', 'p02'])
         meta = self.client.get('/api/v1/metadata', headers=h).json()
         self.assertEqual(meta['thresholds_status'], 'v0 — pending medical expert sign-off')
-        self.assertTrue(self.client.get('/api/v1/cohort', headers=h).json()['rows'][0]['suppressed'])
+        self.assertEqual(meta['assessment_version'], 'assessment-v1')
+        cohort = self.client.get('/api/v1/cohort', headers=h).json()['rows'][0]
+        self.assertTrue(cohort['suppressed'])
+        self.assertEqual(cohort['device'], 'Fitbit')
+
+    def test_a_pooled_cohort_from_before_device_separation_is_not_served(self):
+        from sentra import api
+        folder = Path(os.environ['SENTRA_PROCESSED_DIR'])
+        pd.DataFrame({'date': pd.to_datetime(['2026-10-02']), 'workers': [7], 'median_sleep_h': [6.5],
+                      'n_median_sleep_h': [7], 'suppressed': [False]}).to_parquet(folder / 'cohort_daily.parquet')
+        api._cache.clear()
+        response = self.client.get('/api/v1/cohort', headers={'X-API-Key': KEY})
+        self.assertEqual(response.status_code, 503)
+        self.assertIn('rerun the processing job', response.json()['detail'])
+        self.assertNotIn('6.5', response.text)
 
     def test_no_write_routes_exist(self):
         from sentra import api
