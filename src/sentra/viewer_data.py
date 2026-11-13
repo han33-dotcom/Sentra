@@ -92,7 +92,7 @@ def inline_download(payload, filename, mime):
     """No server URL: bytes travel only in the already-authorized session iframe."""
     if (not isinstance(payload,bytes) or len(payload)>MAX_BYTES
             or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]{0,180}',filename)
-            or mime not in ('text/csv','application/gzip')):
+            or mime not in ('text/csv','application/gzip','text/markdown','application/pdf')):
         raise SentraError('Invalid or oversized private download.')
     encoded = base64.b64encode(payload).decode('ascii')
     return ('<style>body{font:14px system-ui}a{display:inline-block;background:#12634d;color:white;'

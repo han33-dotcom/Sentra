@@ -70,7 +70,7 @@ py -3.11 -m venv .venv
 .venv/Scripts/python.exe -m pip install -r requirements-windows.txt
 .venv/Scripts/python.exe -m pip install -r requirements-api.txt
 .venv/Scripts/python.exe -m pip install --no-deps -e ".[dev,viewer]"
-.venv/Scripts/python.exe -m pip install "streamlit[auth]==1.65.0" "Authlib==1.8.0" pytest pre-commit httpx
+.venv/Scripts/python.exe -m pip install "streamlit[auth]==1.65.0" "Authlib==1.8.0" "reportlab==5.0.1" pytest pre-commit httpx
 .venv/Scripts/python.exe -m pip check
 .venv/Scripts/pre-commit.exe install
 ```

@@ -30,6 +30,7 @@ Tasks belong in [GitHub Issues](https://github.com/han33-dotcom/Sentra/issues); 
 - [participation permissions](participation-permissions.md)
 - [pr policy activation](pr-policy-activation.md)
 - [privacy checks](privacy-checks.md)
+- [reports](reports.md)
 - [processing](processing.md)
 - [read api](read-api.md)
 - [schema](schema.md)

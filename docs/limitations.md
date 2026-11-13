@@ -81,5 +81,8 @@ Last updated: November 12, 2026, from `develop` at `464222e`.
 - **Only the latest published day is explained** on Profiles; trends and reports are separate
   tasks. (#65)
 - **Data is only as current as the daily board refresh.**
+- **Reports (Markdown and PDF) keep no record of who prepared or downloaded one.** Follow-up
+  counts cover the latest 50. The demonstration copy uses only people who agreed, also in group
+  figures, pending the team's review. ([reports](reports.md))
 - **Follow-ups need hosted setup and acceptance.** Apply migration 010, configure the private
   follow-up write role and run the hosted privacy checks with synthetic accounts. (#72)
