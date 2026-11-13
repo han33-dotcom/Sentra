@@ -50,8 +50,9 @@ therefore still target the live project.
      credential. Without it the restore stops on that constraint and rolls back. The
      `fitbit_link_invites` table itself is not backed up; issue new links after recovery.
 
-   The restore checks this before writing anything and stops if a table in the backup has no
-   counterpart on the target. It also resets the participant-number and identity sequences, which
+   The restore checks that backed-up private tables exist on the target before inserting rows.
+   Migration 011 changes the identity constraint without changing the backup table list, so check
+   its installation separately. The restore also resets the participant-number and identity sequences, which
    needs the admin role used by `shared-restore` to own them; otherwise it stops with a
    permission error and rolls back.
 
@@ -86,8 +87,8 @@ differs. The original responses are uploaded into the rehearsal project's own
 | Item | Expected | Actual |
 | --- | --- | --- |
 | Backup created at / selection | full, after collection paused | |
-| `shared-backup-verify` | `verified`, N originals, `not_covered` empty. `tables`: the 7 audit tables plus each installed organization, enrollment and follow-up table (15 with Follow-ups installed, 13 without) | |
-| Inventory reconciled with the source | every table installed in the live project is under `tables`; `not_installed` lists only tables it lacks (both follow-up tables before `sql/010`). Check against the migrations applied to the live project | |
+| `shared-backup-verify` | `verified`, N originals, `not_covered` empty. `tables`: the seven supported audit tables plus the installed private tables in the backup allowlist (15 with Follow-ups installed, 13 without) | |
+| Inventory reconciled with the source | Compare the migrations applied to the source against `TABLES` and `PRIVATE_TABLES` in [the backup code](../src/sentra/shared_backup.py). Every installed table in that inventory appears under `tables`. Only absent tables from the private allowlist appear under `not_installed` (for example, both follow-up tables before `sql/010`). Record intentional exclusions separately, even when `not_covered` is empty | |
 | Restore result | `restored_and_verified` | |
 | Row counts per table | equal to the manifest | |
 | Table fingerprints | equal to the manifest | |
@@ -107,6 +108,12 @@ enrollment service is deployed against the target.
 ## Not covered (record as unverified)
 
 - Enrollment browser sessions and rate limits, which are short-lived and excluded on purpose.
+- Pending Fitbit sign-in links (`enrollment_private.fitbit_link_invites`). Issue new links
+  after recovery if needed.
+- Compact readings (`audit.series`, added by `sql/009`). If 009 is installed on the source,
+  record compact-series recovery as unverified in this rehearsal. In particular, verification
+  of the backed-up tables does not establish recovery of readings stored only in the compact
+  table. See the [storage plan](storage-plan.md) before any deletion of per-field rows.
 - Provider credentials, storage accounts and keys. They are excluded on purpose, so after
   a real loss participants must reconnect and keys come from secure recovery.
 - Parquet tiers and the board. They are derived and rebuilt from the restored audit data.
