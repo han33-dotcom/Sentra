@@ -776,7 +776,8 @@ def reports_page():
     demonstration=None
     if demo:
         demonstration=demonstration_ids(team_consents()) if decision.is_team else decision.demonstrators
-    choices=sorted(p['id'] for p in board['people'] if decision.can_view_individual(p.get('id'))
+    choices=sorted(p['id'] for p in board['people'] if p.get('id') in scope
+                   and decision.can_view_individual(p['id'])
                    and (demonstration is None or p.get('id') in demonstration))
     include=st.multiselect('Individual sections',choices,key='audit_report_people',
                            help='Only people who share individual details with you are listed'

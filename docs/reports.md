@@ -22,7 +22,7 @@ A report reuses the calculators behind the other pages, so it follows the same r
 | --- | --- | --- |
 | Header | Organization, the role of the person who prepared it, period, generation time, board build time | — |
 | Participation | [Organization overview](organization-overview.md) counts: enrolled, connected, recently contributing, assessable | Counts only; organization users see small activity counts as `<5` |
-| Group summary | The overview's per-device group medians for the period | Group contributors; each statistic needs at least 5 of its own |
+| Group summary | The overview's per-device group medians for the period | Each statistic needs at least 5 eligible contributors. Organization users see device labels only for publishable statistics |
 | Group trends | [Trends](trends.md) group view, summarized per measure and device: days shown, lowest and highest daily median, most contributors on a day | Organization users: only devices that reach 5 on some day, no hidden-day counts |
 | Individuals | Trends one-person summary per measure, plus the [observations](observations.md) for the latest published day | Only people the user may see individually **and** selected on the page |
 | Follow-ups | [Follow-ups](follow-ups.md) counted by status (open, ongoing, resolved) | Counts only. Note text never enters a report |
@@ -34,23 +34,24 @@ never moves it. Each individual section ends on that person's own latest publish
 
 ## Access
 
-- The report is rebuilt from the signed-in user's current access decision on every page load. A
-  withdrawal or a change to group-only sharing removes that person from the preview and from the
-  download link on the next load.
+- The report is rebuilt from current access and consent on every page load. Withdrawal or a
+  closed membership removes that person from new organization and team reports, including both
+  downloads, even if the published board still contains their rows. A change to group-only sharing
+  also removes the individual section and participant follow-ups from new organization reports.
 - The builder (`sentra.reports.build`) re-checks every input against the access decision, so a
   caller passing too much cannot widen a report. The [privacy matrix](privacy-checks.md) renders
   Reports with a reader that returns everyone, selects every offered person, and checks the page,
   the Markdown file and the PDF's drawn text each on its own.
 - Organization users never see the board's own "data through" date, because it covers every
   organization. They see only the dates within their scope.
-- Team operators get the same report across all organizations, with exact counts and hidden-day
-  counts.
+- Team operators get a report across all organizations, with exact participation and hidden-day
+  counts. The report's data-through date comes from the eligible participants in that copy.
 
 ## Demonstration copy
 
 The join page records whether a participant allows their pseudonymous data in internal project
 demonstrations (`org.consents.demonstration`). A **demonstration copy** uses only participants
-whose consent in force says so, in group figures as well as individual sections. Group figures
+whose consent in force says so, including for the team report's data-through date. Group figures
 still need 5 such participants each. The file is marked as a demonstration copy and is not for
 public material ([participation permissions](participation-permissions.md)).
 

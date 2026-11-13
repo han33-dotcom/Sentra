@@ -138,6 +138,20 @@ class ReportPageTests(unittest.TestCase):
         self.assertEqual(app.multiselect(key='audit_report_people').options, [p['id'] for p in BOARD['people']])
         self.assertIn('Organization: All organizations (team operator)', downloads(app)[0])
 
+    def test_team_report_rechecks_withdrawal_against_cached_board(self):
+        app = self.open('team@example.test')
+        app.multiselect(key='audit_report_people').set_value(['p91']).run()
+        self.assertIn('### p91', downloads(app)[0])
+        self.state['consents'] = [
+            dict(c, withdrawn=True) if c['participant_id'] == 'p91' else c for c in CONSENTS
+        ]
+        app.run()
+        self.check(app)
+        self.assertNotIn('p91', app.multiselect(key='audit_report_people').options)
+        self.assertNotIn('p91', self.preview(app))
+        self.assertNotIn('p91', downloads(app)[0])
+        self.assertNotIn('p91', pdf_text(pdf_download(app)))
+
 
 if __name__ == '__main__':
     unittest.main()

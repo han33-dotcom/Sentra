@@ -4,7 +4,7 @@ A report only reuses the calculators behind the viewer pages, so it follows the 
 - participation counts as on the overview (#39); organization users see small activity counts as '<k';
 - group summary and group trends per device, each statistic needing at least `cohort_k_anonymity`
   contributors of its own (#39, #40); for organization users the period ends on the latest publishable
-  day, so a suppressed reading never moves it, and devices that never reach k are left out;
+  day, and summaries and trends omit device labels for suppressed statistics;
 - individual sections only for people this user may see individually and chose to include: their trend
   against their own baseline (#40) and the explained observations for their latest day (#41);
 - follow-ups as counts by status only (#31). Note text never enters a report.
@@ -35,6 +35,23 @@ TEAM_LABEL = 'All organizations (team operator)'
 
 def _available(series):
     return [r['value'] for r in series if r['status'] == 'available']
+
+
+def _group_summary(people, scope, *, end, days, team):
+    rows = group_summary(people, scope, end=end, days=days)
+    if team:
+        return rows
+    by_measure = {}
+    for row in rows:
+        by_measure.setdefault(row['key'], []).append(row)
+    result = []
+    for measure_rows in by_measure.values():
+        available = [row for row in measure_rows if row['status'] == 'available']
+        result.extend(available or [dict(
+            measure_rows[0], device=None, contributors=None, value=None, status='unavailable',
+            reason=f'No device has a publishable statistic (minimum {K_ANONYMITY} eligible contributors).',
+        )])
+    return result
 
 
 def _group_trends(people, scope, *, end, days, team):
@@ -71,6 +88,8 @@ def build(decision, *, board, group_people, scope, enrolled, catalog, include, d
     """The report for `decision` over the last `days` published days.
 
     `group_people`, `scope`, `enrolled` and `catalog` are the overview's group inputs (`organization_data`);
+    for the team, `scope` excludes withdrawn participants and closed memberships, including when a
+    cached board still contains their rows.
     `board` is the individually scoped board; `include` the participant IDs the user chose for individual
     sections; `follow_ups` the items the user may read (`follow_ups.visible`).
 
@@ -83,32 +102,31 @@ def build(decision, *, board, group_people, scope, enrolled, catalog, include, d
     if demonstration is not None and not team:
         demonstration = set(demonstration) & decision.demonstrators  # never wider than the user's own decision
 
-    def keep(pid):
-        return demonstration is None or pid in demonstration
-
-    group_people = [p for p in group_people if isinstance(p, dict) and decision.group_contributors([p.get('id')])
-                    and keep(p.get('id'))]
-    scope = {pid for pid in decision.group_contributors(scope) if keep(pid)}
-    enrolled = {pid for pid in enrolled if keep(pid)}
+    scope = decision.group_contributors(scope)
+    if demonstration is not None:
+        scope &= demonstration
+    group_people = [p for p in group_people if isinstance(p, dict) and p.get('id') in scope]
     version = board.get('assessment_version')
     counts = participation(scope, catalog, group_people, today=today, assessment_version=version)
-    counts['enrolled'] = len(enrolled & scope) if not team else len(enrolled)
+    counts['enrolled'] = len(scope.intersection(enrolled))
     shown = {k: (str(v) if team or k == 'enrolled' else shown_count(v))
              for k, v in counts.items() if k != 'recent_days'}
     end = latest_group_day(group_people) if team else publishable_end(group_people, scope)
-    people = [p for p in board.get('people', ()) if isinstance(p, dict) and p.get('id') in include
-              and decision.can_view_individual(p.get('id')) and keep(p.get('id'))]
+    selected = scope.intersection(include)
+    people = [p for p in board.get('people', ()) if isinstance(p, dict) and p.get('id') in selected
+              and decision.can_view_individual(p.get('id'))]
     items = [i for i in follow_ups if (team or (i.get('org_id') == decision.org_id and (
         i.get('participant_id') is None or decision.can_view_individual(i['participant_id']))))
-        and (i.get('participant_id') is None or keep(i['participant_id']))]
+        and (i.get('participant_id') is None or i['participant_id'] in scope)]
     return {
         'organization': TEAM_LABEL if team else decision.org_id, 'role': decision.role,
         'demonstration': demonstration is not None,
         'generated_at': generated_at, 'days': days, 'today': today,
-        # The board's own date covers every organization; organization users get only their scoped dates.
-        'data_through': board.get('data_through') if team else None, 'board_built_at': board.get('built_at'),
+        # The source board can include dates from withdrawn participants and people who declined demonstrations.
+        'data_through': end.isoformat() if team and end else None, 'board_built_at': board.get('built_at'),
         'participation': shown, 'recent_days': counts['recent_days'],
-        'group_end': end, 'group_summary': group_summary(group_people, scope, end=end, days=days) if end else [],
+        'group_end': end, 'group_summary': _group_summary(group_people, scope, end=end, days=days, team=team)
+        if end else [],
         'group_trends': _group_trends(group_people, scope, end=end, days=days, team=team),
         'individuals': [_individual(p, days=days, today=today, assessment_version=version)
                         for p in sorted(people, key=lambda p: p['id'])],
@@ -160,7 +178,8 @@ def blocks(report):
         out += [('p', f"Median of each person's period median, days through {report['group_end'].isoformat()}.", None),
                 ('table', ('Measure', 'Device', 'Group median', 'Contributors', 'Note'),
                  [(r['label'], r['device'] or '', _value(r['value'], r['unit']) if r['status'] == 'available'
-                   else 'Not shown', shown_count(r['contributors']), r['reason'] or '')
+                   else 'Not shown', '—' if r['contributors'] is None else shown_count(r['contributors']),
+                   r['reason'] or '')
                   for r in report['group_summary']])]
     out.append(('h2', 'Group trends'))
     if report['group_trends']:

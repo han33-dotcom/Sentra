@@ -7,6 +7,7 @@ from datetime import date, datetime, timedelta, timezone
 import unittest
 
 from sentra.access import resolve
+from sentra.organization import team_scope
 from sentra.processing.pipeline import ASSESSMENT_VERSION
 from sentra import reports
 from test_privacy_matrix import pdf_text
@@ -70,8 +71,11 @@ def decide(email, consents=CONSENTS):
 
 def build(email, consents=CONSENTS, *, board=BOARD, days=7, include=EVERYONE, demonstration=None):
     decision = decide(email, consents)
-    scope = EVERYONE if decision.is_team else set(decision.contributors)
-    report = reports.build(decision, board=board, group_people=board['people'], scope=scope, enrolled=set(scope),
+    if decision.is_team:
+        enrolled, scope = team_scope(EVERYONE, consents)
+    else:
+        enrolled = scope = set(decision.contributors)
+    report = reports.build(decision, board=board, group_people=board['people'], scope=scope, enrolled=enrolled,
                            catalog=CATALOG, include=include, days=days, today=TODAY,
                            generated_at=datetime(2026, 11, 11, 9, tzinfo=timezone.utc).isoformat(),
                            follow_ups=FOLLOW_UPS, demonstration=demonstration)
@@ -120,8 +124,10 @@ class ReportBoundaryTests(unittest.TestCase):
         summary = {(r['key'], r['device']): r for r in report['group_summary']}
         self.assertEqual(summary[('sleep', 'Fitbit')]['status'], 'available')
         self.assertEqual(summary[('sleep', 'Fitbit')]['contributors'], 6)
-        self.assertEqual(summary[('rhr', 'Fitbit')]['status'], 'suppressed')
-        self.assertIn('| Resting heart rate | Fitbit | Not shown | <5 |', text)  # four contributors, never '4'
+        self.assertNotIn(('rhr', 'Fitbit'), summary)
+        self.assertEqual(summary[('rhr', None)]['status'], 'unavailable')
+        self.assertIsNone(summary[('rhr', None)]['contributors'])
+        self.assertIn('| Resting heart rate |  | Not shown | — |', text)
         self.assertEqual(report['participation'], {'enrolled': '6', 'connected': '5', 'recently_contributing': '6',
                                                    'assessable': '6'})
 
@@ -134,6 +140,17 @@ class ReportBoundaryTests(unittest.TestCase):
             self.assertGreaterEqual(row['days_shown'], 1)
             self.assertGreaterEqual(row['most_contributors'], 5)
 
+    def test_suppressed_device_does_not_change_organization_summary_or_downloads(self):
+        others = [p for p in PEOPLE if p['id'] != 'p92']
+        without_readings = dict(BOARD, people=others)
+        suppressed = {'id': 'p92', 'device': 'WHOOP', 'days': [{'d': END.isoformat(), 'sleep': 450}]}
+        with_readings = dict(BOARD, people=others + [suppressed])
+        before, markdown_before = build('officer@a.test', board=without_readings)
+        after, markdown_after = build('officer@a.test', board=with_readings)
+        self.assertEqual(before['group_summary'], after['group_summary'])
+        self.assertEqual(markdown_before, markdown_after)
+        self.assertEqual(reports.pdf(before), reports.pdf(after))
+
     def test_team_report_shows_exact_counts_and_hidden_days(self):
         report, text = build('team@example.test')
         self.assertEqual(report['organization'], reports.TEAM_LABEL)
@@ -141,6 +158,16 @@ class ReportBoundaryTests(unittest.TestCase):
         self.assertTrue(all('days_hidden' in r for r in report['group_trends']))
         self.assertIn('Days hidden', text)
         self.assertEqual(sorted(p['id'] for p in report['individuals']), sorted(EVERYONE))
+
+    def test_team_report_filters_withdrawn_and_closed_even_with_full_board_and_follow_ups(self):
+        rows = [dict(c, withdrawn=True) if c['participant_id'] == 'p91' else
+                dict(c, membership_open=False) if c['participant_id'] == 'p97' else c for c in CONSENTS]
+        report, text = build('team@example.test', rows)
+        self.assertEqual({p['id'] for p in report['individuals']}, EVERYONE - {'p91', 'p97'})
+        self.assertEqual(report['follow_ups'], {'open': 0, 'ongoing': 1, 'resolved': 1})
+        for pid in ('p91', 'p97'):
+            self.assertNotIn(pid, text)
+            self.assertNotIn(pid, pdf_text(reports.pdf(report)))
 
     def test_group_window_ends_on_the_latest_publishable_day_for_organizations(self):
         newer = dict(person('p92'), days=days('p92') + [{'d': (END + timedelta(days=1)).isoformat(), 'sleep': 300}])
@@ -200,6 +227,19 @@ class DemonstrationCopyTests(unittest.TestCase):
         for pid in EVERYONE - {'p91', 'p97'}:
             self.assertNotIn(pid, text)
 
+    def test_team_demonstration_date_uses_only_eligible_readings(self):
+        from sentra.access import demonstration_ids
+        later = (END + timedelta(days=2)).isoformat()
+        board = dict(BOARD, data_through=later, people=[
+            dict(p, days=p['days'] + [{'d': later, 'sleep': 300}]) if p['id'] == 'p97' else p
+            for p in PEOPLE
+        ])
+        rows = agreed('p91')
+        report, text = build('team@example.test', rows, board=board, demonstration=demonstration_ids(rows))
+        self.assertEqual(report['data_through'], END.isoformat())
+        self.assertNotIn(later, text)
+        self.assertNotIn(later, pdf_text(reports.pdf(report)))
+
     def test_normal_reports_are_not_marked(self):
         report, text = build('officer@a.test')
         self.assertFalse(report['demonstration'])
@@ -222,8 +262,9 @@ class PdfTests(unittest.TestCase):
         self.assertEqual(data, reports.pdf(report))  # no timestamps or random IDs
         self.assertNotIn(b'/FlateDecode', data)  # uncompressed, so the privacy matrix can read it
         text = pdf_text(data)
-        self.assertIn('| Fewer than 5'[2:], text)
-        self.assertIn('<5', text)  # escaped for layout, shown as written
+        self.assertIn('No device has a publishable statistic', ' '.join(text.split()))
+        small, _ = build('officer@b.test')
+        self.assertIn('<5', pdf_text(reports.pdf(small)))  # escaped for layout, shown as written
         self.assertIn('—', text)
         for line in reports.LIMITATIONS[:3]:
             self.assertIn(line.split(';')[0], text)
