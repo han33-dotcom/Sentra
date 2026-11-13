@@ -48,7 +48,7 @@ Processed files -> read API (operator, 127.0.0.1) -> team tools
 | Role | May | May not |
 | --- | --- | --- |
 | `sentra_collector` | Write audit tables and original objects; use the collection controls; list enrolled connections through one function | Read organization or enrollment tables directly |
-| `sentra_viewer` | Read audit and organization tables in read-only transactions, reserving egress first | Write anything |
+| `sentra_viewer` | Read audit and organization tables. Reserve egress through `public.sentra_reserve_viewer_egress`, which updates the private budget through a restricted function | Modify health or organization rows or directly write to the egress budget |
 | `sentra_enrollment` | Write enrollment and consent rows and encrypted provider credentials | Read health rows |
 | `sentra_followups` | Execute the two follow-up functions | Anything else |
 
@@ -76,15 +76,19 @@ configuration, not in this repository.
 
 ## Privacy boundaries
 
-- **Pseudonyms only** (`p01` …) in every published output, page and download. Names, contact
-  details and provider account IDs never reach the board, the viewer or the API.
+- **Pseudonyms** (`p01` …) identify participants in normalized data, published wellness
+  outputs, organization views and downloads, and the read API. Team operators can also
+  download unchanged provider responses from **Audit details** in the private viewer. Those
+  originals can contain identifying fields and stay operator-only
+  ([participation permissions](participation-permissions.md#data-categories)).
 - **One access module** (`sentra.access`) decides what each signed-in viewer user sees: team
   operators see everyone; organization users see their own organization only, individuals only
   with `individual` sharing, and group statistics only with at least 5 contributors each. The
   decision is rechecked on every page load, so withdrawals and sharing changes apply on the next
   load ([organization overview](organization-overview.md)).
-- **Read-only by default.** The viewer, the refresh's reads and processing use `sentra_viewer`.
-  The only viewer write path is the follow-up role.
+- **Read-only health and organization access.** The viewer, the refresh's reads and processing
+  use `sentra_viewer`. The guarded egress function records reservations on a separate connection
+  so they persist even if the read fails. Follow-up changes use the separate `sentra_followups` role.
 - **Bounded and guarded.** Every read reserves egress before rows leave the database, and storage
   and database ceilings are checked before collection ([operating guide](operating-guide.md)).
 - **Wellness, not medical.** Rules are provisional until the medical expert signs them off
