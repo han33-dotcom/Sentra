@@ -345,16 +345,18 @@ class Worker:
             self.client.status(pr["head"]["sha"], "pending", "Metadata changed; acceptance must rerun")
             return
         # GitHub also enforces required checks and strict target freshness at merge time.
-        method = "merge" if release or pr["head"]["ref"] == "codex/release-sync" else "squash"
+        synchronization = pr["head"]["ref"] in {"codex/release-sync", "codex/sync-main-into-develop"}
+        method = "merge" if release or synchronization else "squash"
         result = self.client.write(f"/pulls/{pr['number']}/merge", {"sha": pr["head"]["sha"],
                                    "merge_method": method}, method="PUT")
         if not result.get("merged"):
             raise RuntimeError("GitHub did not merge the PR; retry after rereading current state.")
 
     def process_issue(self, issue, pulls):
+        """Return True only after publishing evidence for a current task snapshot."""
         merged = {str(p["number"]): p["merge_commit_sha"] for p in pulls if p.get("merged_at")}
         if any(p["state"] == "open" for p in pulls) or not merged:
-            return
+            return False
         comments = self.client.comments(issue["number"])
         expected = criteria(issue.get("body"))
         self.prepare("origin/develop")
@@ -370,7 +372,7 @@ class Worker:
         complete = validate_report(report, expected)
         current = self.client.issue(issue["number"])
         if body_digest(current.get("body")) != body_digest(issue.get("body")):
-            return
+            return False
         if self.git("status", "--porcelain", "--untracked-files=no"):
             raise RuntimeError("Task acceptance edited tracked files; cannot publish evidence.")
         latest = self.client._rest("/git/ref/heads/develop")["object"]["sha"]
@@ -379,7 +381,7 @@ class Worker:
                   and issue["number"] in declared_tasks(p.get("body") or "", REPO)]
         current_merged = {str(p["number"]): p["merge_commit_sha"] for p in linked if p.get("merged_at")}
         if latest != commit or current_merged != merged or any(p["state"] == "open" for p in linked):
-            return
+            return False
         report.update(mode="task", issue=issue["number"], issue_digest=body_digest(issue.get("body")),
                       commit=commit, merged_pulls=merged)
         self.publish(issue["number"], report)
@@ -387,6 +389,7 @@ class Worker:
             self.client.write(f"/issues/{issue['number']}", {"state": "closed", "state_reason": "completed"}, "PATCH")
         elif any(row["status"] == "failed" for row in report["criteria"]):
             self.create_fix_pr(issue, report)
+        return True
 
     def create_fix_pr(self, issue, report):
         prefix = f"codex/acceptance-{issue['number']}-"
@@ -467,15 +470,16 @@ class Worker:
                     criteria(issue.get("body"))
                 except ValueError:
                     continue  # Legacy tasks require an observable acceptance checklist.
-                # Avoid rerunning inaccessible observations on every poll. Issue comments wake it.
+                # Cache published evidence only; discarded snapshots must retry next cycle.
                 stamp = body_digest(json.dumps([issue.get("updated_at"), linked], sort_keys=True))
                 cache = self.state_dir / f"task-{number}.json"
-                if cache.exists() and json.loads(cache.read_text()).get("stamp") == stamp:
+                prior = json.loads(cache.read_text()) if cache.exists() else {}
+                if prior.get("evidence_published") is True and prior.get("stamp") == stamp:
                     continue
-                self.process_issue(issue, linked)
-                fresh = self.client.issue(number)
-                stamp = body_digest(json.dumps([fresh.get("updated_at"), linked], sort_keys=True))
-                cache.write_text(json.dumps({"stamp": stamp}))
+                if self.process_issue(issue, linked):
+                    fresh = self.client.issue(number)
+                    stamp = body_digest(json.dumps([fresh.get("updated_at"), linked], sort_keys=True))
+                    cache.write_text(json.dumps({"stamp": stamp, "evidence_published": True}))
                 return
         if allow_release:
             self.release(pulls)

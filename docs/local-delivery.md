@@ -28,6 +28,8 @@ Authentication and allowance failures pause work for retry.
 7. The worker opens `develop` to `main` releases when code differs, verifies
    the integrated release, and uses a merge commit after CI. A
    `codex/release-sync` PR brings release ancestry back with a merge commit.
+   The documented `codex/sync-main-into-develop` repair branch also uses a merge
+   commit to preserve ancestry; ordinary work PRs continue to squash-merge.
    Outstanding human-only observations stay on their tasks across releases.
    Failed release checks or acceptance create a repair PR into `develop`; the
    worker never repairs an integration branch by pushing directly to it.
@@ -85,6 +87,12 @@ acceptance. Interrupted edits are preserved in Git stashes, and
 `codex/local-worker-recovery` retains detached commits for recovery. Jobs stay
 pending until current checks pass. Failed PRs back off for 15 minutes so other
 PRs can progress. Human-only task evidence reruns when the issue changes.
+Task attempts are cached only after current evidence is published. If `develop`,
+the issue criteria or linked implementation PRs change during verification, the
+worker discards the stale evidence and retries on the next eligible cycle without
+requiring an issue edit or comment. Linked-PR changes also wake cached tasks.
+Old attempt-only cache entries are ignored, so previously stalled tasks retry
+after the trusted coordinator runtime is updated through reinstallation.
 Uncertain remote writes are reconciled from GitHub on the next cycle.
 
 Pause a PR with draft or `automation:hold` before taking back branch ownership.

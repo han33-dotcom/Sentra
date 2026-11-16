@@ -160,6 +160,74 @@ class WorkerTests(unittest.TestCase):
             {"sha": "head", "merge_method": "squash"}, method="PUT")
         self.assertEqual(worker.client.status.call_args.args[1], "success")
 
+    def test_documented_synchronization_branches_preserve_ancestry(self):
+        for branch in ("codex/release-sync", "codex/sync-main-into-develop"):
+            with self.subTest(branch=branch):
+                worker = self.delivery_worker()
+                pr = pull(); pr["head"]["ref"] = branch
+                worker.client.pull.return_value = pr
+                with patch("scripts.team_workflow.local_worker.ci_state", return_value="passed"):
+                    worker.process_pr(pr)
+                worker.client.write.assert_called_once_with("/pulls/1/merge",
+                    {"sha": "head", "merge_method": "merge"}, method="PUT")
+
+    def task_worker(self, directory):
+        worker = self.delivery_worker()
+        worker.state_dir = Path(directory)
+        issue = dict(worker.client.issue.return_value, state="open", updated_at="unchanged")
+        worker.client.issue.return_value = issue
+        pr = pull(); pr.update(state="closed", merged_at="synthetic-time", merge_commit_sha="merge")
+        worker.client.list_pulls.return_value = [pr]
+        worker.client.comments.return_value = []
+        worker.client._rest.return_value = {"object": {"sha": "head"}}
+        worker.agent.return_value = {"summary": "Synthetic task evidence", "criteria": [outcome()]}
+        return worker, issue, pr
+
+    def test_cycle_retries_discarded_task_evidence_without_metadata_changes(self):
+        for invalidation in ("develop", "issue", "linked_pr"):
+            with self.subTest(invalidation=invalidation), tempfile.TemporaryDirectory() as directory:
+                worker, issue, pr = self.task_worker(directory)
+                if invalidation == "develop":
+                    worker.client._rest.side_effect = [
+                        {"object": {"sha": "advanced"}}, {"object": {"sha": "head"}}]
+                elif invalidation == "issue":
+                    changed = dict(issue, body=issue["body"] + "\n- [ ] Changed criterion")
+                    worker.client.issue.side_effect = [issue, changed, issue, issue, issue, issue]
+                else:
+                    changed = dict(pr, merge_commit_sha="changed")
+                    worker.client.list_pulls.side_effect = [[pr], [changed], [pr], [pr]]
+                worker.cycle(allow_release=False)
+                worker.publish.assert_not_called()
+                worker.client.write.assert_not_called()
+                self.assertFalse((Path(directory) / "task-86.json").exists())
+                worker.cycle(allow_release=False)
+                self.assertEqual(worker.agent.call_count, 2)
+                worker.publish.assert_called_once()
+                worker.client.write.assert_called_once_with("/issues/86",
+                    {"state": "closed", "state_reason": "completed"}, "PATCH")
+
+    def test_task_cache_skips_published_human_evidence_until_issue_changes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            worker, issue, pr = self.task_worker(directory)
+            worker.agent.return_value["criteria"] = [dict(outcome(status="human_required"),
+                reason="Separate phone unavailable", human_steps="Open the filter on the phone",
+                expected_result="Date selector is usable", record_evidence="Record device and result")]
+            worker.cycle(allow_release=False)
+            worker.cycle(allow_release=False)
+            self.assertEqual(worker.agent.call_count, 1)
+            worker.client.write.assert_not_called()
+            issue["updated_at"] = "human-evidence-added"
+            worker.cycle(allow_release=False)
+            self.assertEqual(worker.agent.call_count, 2)
+
+    def test_legacy_attempt_cache_does_not_suppress_task_verification(self):
+        with tempfile.TemporaryDirectory() as directory:
+            worker, issue, pr = self.task_worker(directory)
+            stamp = body_digest(json.dumps([issue["updated_at"], [pr]], sort_keys=True))
+            (Path(directory) / "task-86.json").write_text(json.dumps({"stamp": stamp}))
+            worker.cycle(allow_release=False)
+            worker.publish.assert_called_once()
+
     def test_pending_ci_failed_acceptance_and_concurrent_head_never_merge(self):
         worker = self.delivery_worker()
         with patch("scripts.team_workflow.local_worker.ci_state", return_value="pending"):
