@@ -1,9 +1,9 @@
 # Task-first Slack notifications
 
 Task: [SEN-66](https://github.com/han33-dotcom/Sentra/issues/66). Owner:
-`han33-dotcom`; another configured teammate reviews the implementation and verifies
-acceptance. This replaces the native Sentra PR/review messages only after the
-reviewed implementation is released to `main` and the cutover below is verified.
+`han33-dotcom`. Acceptance follows [local delivery](local-delivery.md); code review
+is optional. This replaces the native Sentra PR/review messages only after the
+verified implementation is released to `main` and the cutover below is verified.
 Until then, native notifications stay on and custom delivery stays off.
 
 ## Message and delivery contract
@@ -27,7 +27,7 @@ There is one custom card per PR. Draft, review-requested, current-head approval,
 changes-requested, merged and closed-unmerged states update that card. Title,
 reviewer-request and head changes also update it. Updates edit the existing card;
 they do not create a new channel post or promise a fresh push alert. Detailed
-reviews stay on GitHub. A merged PR does not imply human task acceptance.
+reviews stay on GitHub. A merged PR does not imply complete task acceptance.
 
 The default-branch `Team project sync` workflow owns the sole delivery writer,
 under its existing repository-wide concurrency group. It never checks out or
@@ -117,9 +117,10 @@ Do all preparation while `TEAM_SLACK_MODE` is absent or `native`:
 6. Exercise one agreed synthetic PR event. Inspect its single task-first card and
    its bot-authored delivery ledger. Verify no parallel native event. Repeat the
    reconciliation: no new message, no ledger write. Exercise review/merge updates
-   against the same Slack timestamp and confirm task acceptance remains human-owned.
+   against the same Slack timestamp and confirm task acceptance still requires criterion-level evidence.
 7. Record actual subscription evidence, cutoff, workflow run, Slack permalink and
-   replay results on SEN-66. A teammate verifies acceptance before Done/closure.
+   replay results on SEN-66. Agents verify accessible criteria before Done/closure; inaccessible observations
+   retain explicit human verification instructions.
 
 Native subscriptions are managed by GitHub's Slack app; the worker cannot query
 their configuration through Slack Web API. `TEAM_SLACK_MODE` and the verified

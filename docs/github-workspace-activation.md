@@ -200,7 +200,10 @@ notification does not automatically launch a teammate's personal AI assistant.
 - `workflow-maintenance` and `release` labels now exist. The owner confirmed
   `mhmdaboulhoda` may grant independent exemptions; CODEOWNERS remain unchanged.
 
-## Pilot
+## Historical policy-version-2 pilot (superseded)
+
+The following describes the earlier rollout. Current acceptance and merge rules
+are in [local delivery](local-delivery.md); these historical review gates no longer apply.
 
 Use dedicated pilot issue [#21](https://github.com/han33-dotcom/Sentra/issues/21)
 and PR [#23](https://github.com/han33-dotcom/Sentra/pull/23), with the

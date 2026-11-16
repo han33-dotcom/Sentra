@@ -121,7 +121,8 @@ Complete current acceptance evidence permits automatic Done and issue closure.
 The metadata reconciler preserves manual Done/Blocked states.
 Closed-unmerged PRs are treated as abandoned attempts when open or merged PRs
 remain for the same task. Only abandoned PRs still require triage and preserve the
-current status. Humans must reconcile any removed scope before accepting the task.
+current status. Agents reconcile removed scope against the task before recording acceptance;
+requirements decisions that cannot be inferred remain with the task owner.
 A release PR does not mark every associated feature accepted.
 
 ## Activation and collaborator refresh
