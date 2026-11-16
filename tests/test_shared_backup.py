@@ -138,6 +138,30 @@ class BackupTests(unittest.TestCase):
                 shared_cli.run_command(args(**partial))
                 self.assertIsNone(backup.call_args.kwargs['admin_db'])
 
+    def test_compact_series_coverage_is_reported_and_its_inventory_checked(self):
+        m = self.module()
+        base = {'tables': {t: 0 for t in m.TABLES}, 'table_fingerprints': {t: m.row_fingerprint([]) for t in m.TABLES},
+                'private_tables': {}, 'private_fingerprints': {}, 'private_absent': list(m.PRIVATE_TABLES)}
+        older = m.inventory(base)  # made before the series was included: inventory still valid
+        self.assertNotIn('series', [t for t, _, _ in older])
+        with_series = {**base, 'optional_tables': {'series': 0}, 'optional_fingerprints': {'series': m.row_fingerprint([])}}
+        names = [t for t, _, _ in m.inventory(with_series)]
+        self.assertLess(names.index('raw_response_manifest'), names.index('series'))  # restored after its foreign key
+        self.assertLess(names.index('series'), len(m.TABLES) + 1)
+        for broken in ({**base, 'optional_tables': {'series': 0}, 'optional_fingerprints': {}},
+                       {**base, 'optional_tables': {'notes': 0}, 'optional_fingerprints': {'notes': 'x'}}):
+            with self.subTest(broken=broken), self.assertRaises(m.SentraError):
+                m.inventory(broken)
+        cipher = Fernet(Fernet.generate_key())
+        with tempfile.TemporaryDirectory() as directory:
+            for info, covered, installed in ((base, ['audit.series'], list(m.PRIVATE_TABLES)),
+                                             ({**base, 'optional_tables': {}, 'optional_fingerprints': {},
+                                               'optional_absent': ['audit.series']}, [], list(m.PRIVATE_TABLES) + ['audit.series']),
+                                             (with_series, [], list(m.PRIVATE_TABLES))):
+                writer = m.BackupWriter(Path(directory), cipher)
+                result = m.verify_backup(m.BackupReader(writer.finish({**info, 'objects': {}}), cipher))
+                self.assertEqual((result['not_covered'], result['not_installed']), (covered, installed))
+
     def test_incomplete_inventory_refused_before_cloud_changes(self):
         m=self.module(); cipher=Fernet(Fernet.generate_key())
         with tempfile.TemporaryDirectory() as directory:

@@ -110,7 +110,8 @@ class BackupRestoreDatabaseTests(unittest.TestCase):
             self.assertEqual((result['tables']['org.consents'], result['tables']['org.memberships'],
                               result['tables']['enrollment_private.identities'], result['not_covered']), (3, 2, 1, []))
             self.assertEqual((result['tables']['org.follow_ups'], result['tables']['org.follow_up_events'],
-                              result['not_installed']), (1, 2, []))
+                              result['not_installed']), (1, 2, ['audit.series']))  # this fixture has no sql/009
+            self.assertNotIn('series', result['tables'])
             self.assertEqual(result['restore_estimate_bytes'],
                              int(sum(reader.info['table_bytes'].values()) * m.RESTORE_FACTOR) + 16_000_000)
             backend = self.Backend(self.source)
@@ -155,6 +156,69 @@ class BackupRestoreDatabaseTests(unittest.TestCase):
             self.assertEqual(limited.execute('select count(*) from org.consents').fetchone()[0], 0)  # silently filtered
             with tempfile.TemporaryDirectory() as folder, self.assertRaisesRegex(m.SentraError, 'row-level security'):
                 self.backup(folder, limited)
+
+    def test_compact_series_is_backed_up_and_restored_when_installed(self):
+        import gzip, hashlib
+        source, source_info = self.database()
+        target, _ = self.database()
+        bare, _ = self.database()  # a target that never applied sql/009
+        series_sql = Path('sql/009_compact_series.sql').read_text(encoding='utf-8')
+        for db in (source, target):
+            db.execute(series_sql)
+        raw = b'{"synthetic":1}'
+        packed, digest = gzip.compress(raw, mtime=0), hashlib.sha256(raw).hexdigest()
+        location = 'sentra-originals/p01/' + 'r' * 8 + '.json.gz'
+        source.execute("insert into audit.participants values ('p01')")
+        source.execute("""insert into audit.raw_response_manifest values (%s,'p01','google_health','minute_steps','e','{}',
+            'minute',now(),%s,%s,%s,'{}')""", ('a' * 64, location, digest, len(packed)))
+        for _ in range(2):  # two compact rows; ids restored as recorded and continued afterwards
+            source.execute("""insert into audit.series (participant_id,provider,dataset,metric,source_response_id,unit,
+                vendor_unit,value_kind,availability,timestamp_basis,resolution_seconds,resolution_description,
+                record_keys,vals,vendor_values,measured_at,interval_start,interval_end,civil_dates,vendor_times,
+                collected_at,source_pointers)
+                values ('p01','google_health','minute_steps','/steps/countSum',%s,'count',null,'vendor_summary',
+                'available','start',60.0,'minute rollup',array['k1','k2'],array[12,7.50]::numeric[],
+                array['{"v":1}'::jsonb,null],array[null,null]::timestamptz[],
+                array['2026-10-01T08:00Z','2026-10-01T08:01Z']::timestamptz[],
+                array['2026-10-01T08:01Z','2026-10-01T08:02Z']::timestamptz[],
+                array[null,null]::jsonb[],array['{"t":1}'::jsonb,'{"t":2}'::jsonb],
+                array[now(),now()],array['/m/0','/m/1'])""", ('a' * 64,))
+        admin = self.psycopg.connect(source_info, autocommit=True)
+
+        class Storage:
+            def get(self, key, expected, maximum):
+                return packed
+            def put(self, key, data, expected):
+                pass
+        backend = self.Backend(source)
+        backend.storage = Storage()
+        try:
+            with tempfile.TemporaryDirectory() as folder:
+                cipher = Fernet(Fernet.generate_key())
+                root = Path(folder) / 'backups'
+                root.mkdir()
+                reader = m.BackupReader(m.make_backup(backend, root, cipher, admin_db=admin), cipher)
+                result = m.verify_backup(reader)
+                self.assertEqual((result['tables']['series'], result['not_covered'], result['not_installed']), (2, [], []))
+                with self.assertRaisesRegex(m.SentraError, 'sql/009'):
+                    m.restore_backup(reader, backend, bare, empty_audit=True)
+                self.assertEqual(bare.execute('select count(*) from audit.participants').fetchone()[0], 0)  # rolled back
+                self.assertEqual(m.restore_backup(reader, backend, target, empty_audit=True)['status'], 'restored_and_verified')
+                same = target.execute("""select count(*) from audit.series_rows""").fetchone()[0]
+                self.assertEqual(same, 4)
+                following = target.execute("""insert into audit.series (participant_id,provider,dataset,metric,
+                    source_response_id,value_kind,availability,timestamp_basis,resolution_description,record_keys,vals,
+                    vendor_values,measured_at,interval_start,interval_end,civil_dates,vendor_times,collected_at,source_pointers)
+                    select participant_id,provider,dataset,metric,source_response_id,value_kind,availability,timestamp_basis,
+                    resolution_description,record_keys,vals,vendor_values,measured_at,interval_start,interval_end,civil_dates,
+                    vendor_times,collected_at,source_pointers from audit.series limit 1 returning series_id""").fetchone()[0]
+                self.assertGreater(following, 2)
+                isolated = m.restore_backup(reader, backend, admin)['schema']
+                self.assertEqual(admin.execute(f'select count(*) from {isolated}.series').fetchone()[0], 2)
+                admin.execute(f'drop schema {isolated} cascade')
+        finally:
+            for db in (admin, source, target, bare):
+                db.close()
 
     def test_audit_only_backup_says_what_it_does_not_cover(self):
         with tempfile.TemporaryDirectory() as folder:
