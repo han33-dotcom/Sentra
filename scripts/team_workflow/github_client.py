@@ -16,7 +16,8 @@ class GitHubClient:
             headers={"Authorization": "Bearer " + token, "Accept": "application/vnd.github+json",
                      "Content-Type": "application/json", "X-GitHub-Api-Version": "2022-11-28"})
         with build_opener(NoRedirect()).open(request, timeout=30) as response:
-            return json.load(response)
+            body = response.read()
+            return json.loads(body) if body else None
 
     def _call(self, url, token, payload=None, method=None):
         for attempt in range(3):

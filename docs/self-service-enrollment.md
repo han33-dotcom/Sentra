@@ -256,8 +256,9 @@ viewer-only secrets, existing URLs and Google callbacks when deploying.
 Real Google signup and returning-account sharing updates were reported on a phone
 and verified privately. HTTPS, cookies, origin/body-size enforcement, hosted
 database sessions and anonymous mobile OAuth cancellation passed. No participant
-phone timing has been supplied. Reconnect/withdrawal with a real person and final
-human acceptance remain separate from the synthetic checks.
+phone timing has been supplied. Reconnect/withdrawal with a real person remains separate from synthetic checks.
+Task acceptance follows [local delivery](local-delivery.md); only observations
+unavailable to the agent require human verification instructions.
 
 Acceptance corrections in the current work branch:
 

@@ -107,8 +107,8 @@ as a shortcut to changing the configured branch.
    download frames disappear. Use synthetic tests for expired/unapproved identity
    scenarios; do not claim a real hosted scenario from synthetic evidence.
 6. Verify the private host denies an unauthenticated browser. Record remaining
-   failures with the responsible operator action. Human acceptance remains
-   separate from code merge and release.
+   failures with the responsible operator action. Task acceptance follows [local delivery](local-delivery.md). Only observations
+   unavailable to the agent require a human, with exact steps and expected evidence.
 
 ## Verification evidence
 

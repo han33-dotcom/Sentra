@@ -136,12 +136,13 @@ Do not edit files, run operational jobs or send messages.
 Read AGENTS.md, CONTRIBUTING.md and docs/team-workflow.md for this checkout.
 Report the repository, current branch or provided-context limitations, policy commit
 if accessible, instruction sources, implementation PR target, exact validation
-commands, and two project-specific constraints. Explain who approves a PR and what
+commands, and two project-specific constraints. Explain what gates automatic merging and what
 distinguishes Implemented from Done. Flag missing access rather than guessing.
 ```
 
-Expected: PR target `develop`; checks match `AGENTS.md`; humans decide approval
-and verify task acceptance. Collection stays paused and tests use synthetic data; the assistant must not request participant credentials for this check.
+Expected: PR target `develop`; checks match `AGENTS.md`; reviews are optional,
+passing machine checks permit automatic merge, and agents verify all accessible
+acceptance criteria. Human-only observations need explicit verification steps. Collection stays paused and tests use synthetic data; the assistant must not request participant credentials for this check.
 Self-reported compliance alone does not prove all future behavior; verify actual
 file access/source display where the tool supports it. A tool with no file access
 passes only the manual-context route, not an automatic-loading check.

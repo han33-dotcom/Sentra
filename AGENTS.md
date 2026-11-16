@@ -1,6 +1,6 @@
 # Sentra agent instructions
 
-Policy version: 2. This is the canonical policy for coding and review agents.
+Policy version: 3. This is the canonical policy for coding and acceptance agents.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) and the linked documents relevant to your task.
 Follow applicable nested instructions if they are added later.
 
@@ -20,7 +20,7 @@ when a task depends on them; summarize code-affecting decisions in reviewed docs
 
 ## Starting work
 
-1. Read the current task and its acceptance criteria; identify the human owner/reviewer.
+1. Read the current task and its acceptance criteria; identify the task owner.
 2. Check the repository, branch, working-tree changes and current instructions.
 3. Work on a focused branch based on `develop`; implementation PRs target `develop`.
    Releases go from `develop` to `main`. Do not push directly to either integration branch.
@@ -68,21 +68,33 @@ actual PR results; a local success is not a claim that CI passed.
   `[SEN-28, SEN-27] fix: retry joins`. Dependencies stay in prose, not these fields.
   Explain what changed, why, validation and material limitations. For workflow
   maintenance or releases with no implementation task, explain the scope explicitly.
-- Use Related to #NUMBER, not automatic issue-closing keywords. Keep issues open
-  until a teammate records acceptance; Project Status and issue closure are distinct.
+- Use Related to #NUMBER instead of automatic issue-closing keywords. The local
+  worker closes tasks only after complete acceptance evidence is recorded.
 - Record lasting decisions in repository documentation or the linked task; private
   chat memory is not shared project context.
 - Put actionable code-review findings on the PR, tied to files/lines and the reviewed
   commit. Read accepted PR findings directly when fixing them; verify the current head.
-- A human teammate reviews and decides whether to approve. Agents do not approve
-  on someone's behalf, merge automatically or dismiss unresolved findings.
-- Implementation is complete only when accepted changes are merged into `develop`.
-  A task is Done only when its acceptance criteria have been verified by a human;
-  release/deployment requirements remain separate when applicable.
+- Code reviews and human approvals are optional for every change. Do not create
+  a mandatory agent review, code-owner approval, or special review gate.
+- Local Codex workers use existing ChatGPT subscriptions. Required CI and current
+  PR acceptance evidence authorize automatic merging. Work PRs squash-merge into
+  `develop`; release and ancestry synchronization PRs use merge commits.
+- Implementation is complete when required implementation PRs merge into `develop`.
+  Agents verify every observable acceptance criterion with recorded evidence.
+  All criteria verified means Done and permits automatic issue closure.
+- Only criteria the agent genuinely cannot execute or observe remain for a human.
+  Record the reason, exact verification steps, expected result and evidence to record.
+  Missing dependencies, failing tests and unfinished implementation require agent
+  work. They must not be relabeled as human-only checks or passing outcomes.
+- Keep tasks with human-only criteria open with those specific instructions.
+  Their code may merge and release once machine checks and scoped PR acceptance pass.
+- Follow [local delivery](docs/local-delivery.md) for worker ownership, retries,
+  acceptance evidence, automatic releases and pausing. Ready team PRs transfer
+  branch ownership to the worker. Use draft or `automation:hold` while editing.
 - Do not claim Slack notifications, shared AI review or Project status sync occurred
   unless their actual results are available. See the rollout status in the team guide.
 
-## Code Review Rules
+## Optional Code Review Rules
 
 - Flag exposure of participant data/credentials, unintended collection activation,
   removal of bounded-operation guards, and missing authorization checks.

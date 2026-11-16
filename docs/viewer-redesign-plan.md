@@ -2,7 +2,8 @@
 
 **Goal:** Implement the approved private viewer design and an explicit ongoing daily collection control.
 
-**Architecture:** Compute curated daily/session tables from existing audit records without another stored copy. Keep the existing reader, identity checks, original exports, quota guards and collector locks. Explicit ongoing mode supplements the legacy bounded window; publication remains subject to human review.
+**Architecture:** Compute curated daily/session tables from existing audit records without another stored copy. Keep the existing reader, identity checks, original exports, quota guards and collector locks. Explicit ongoing mode supplements the legacy bounded window; publication follows [local delivery](local-delivery.md), with optional code review.
+Collection activation still requires explicit operator authorization.
 
 **Stack:** Existing Python, PostgreSQL/Supabase Free, Streamlit and GitHub Actions.
 

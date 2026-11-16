@@ -1,5 +1,5 @@
 name: Team task
-description: Scoped work with acceptance criteria and a human reviewer
+description: Scoped work with observable acceptance criteria and automated delivery
 title: "[Task] "
 body:
   - type: textarea
@@ -23,11 +23,6 @@ body:
       options: [High, Medium, Low]
       default: 1
   - type: input
-    id: reviewer
-    attributes:
-      label: Human reviewer
-      description: A teammate other than the implementer; use their GitHub handle.
-  - type: input
     id: due
     attributes:
       label: Due date
@@ -41,4 +36,4 @@ body:
     id: evidence
     attributes:
       label: Completion evidence
-      description: Record tests, review and acceptance evidence. Merge means Implemented; a teammate records Done and then closes the issue.
+      description: Agents record evidence for every criterion. All criteria verified means Done and permits closure. Human-only items need a reason, exact steps, expected result and evidence to record.
