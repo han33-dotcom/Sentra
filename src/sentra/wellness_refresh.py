@@ -15,12 +15,11 @@ from pathlib import Path
 import tempfile
 from urllib.parse import urlsplit
 
-import pandas as pd
 
 from .errors import SentraError
-from .processing.board import payload
+from .processing.board import BOARD_VERSION, payload
 from .processing.job import runtime_config as viewer_config
-from .processing.observations import load
+from .processing.observations import devices as participant_devices, load
 from .processing.pipeline import ASSESSMENT_VERSION, run
 from .shared_backend import PrivateStorage, connect_db
 from .tiers import TIER_BUCKET, AuditReader, build, publish
@@ -70,8 +69,10 @@ def refresh(reader, limits, storage, *, force=False, now=None, log=print):
     if not force:
         before = previous_board(storage) if source is not None else {}
         previous = before.get('source_run')
-        # A board built under older assessment rules is rebuilt even without new collection data.
-        current_rules = before.get('assessment_version') == ASSESSMENT_VERSION
+        # A board built under older assessment rules or an older board format (for example device
+        # labels before #45) is rebuilt from existing data even without new collection data.
+        current_rules = (before.get('assessment_version') == ASSESSMENT_VERSION
+                         and before.get('board_version') == BOARD_VERSION)
         if source is None or (current_rules and previous and datetime.fromisoformat(source) <= datetime.fromisoformat(previous)):
             log('No changed collection data or rules since the last board; tiers not read or published.')
             return {'status': 'skipped', 'source_run': source}
@@ -82,9 +83,8 @@ def refresh(reader, limits, storage, *, force=False, now=None, log=print):
             path = Path(folder) / key
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
-        measurements = pd.read_parquet(Path(folder) / 'measurements.parquet', columns=['participant', 'provider'])
-        devices = {str(p): str(v) for p, v in measurements.drop_duplicates('participant').itertuples(index=False)}
-        _, daily, _, _ = run(load(folder), Path(folder) / 'processed', log=lambda *_: None)
+        devices = participant_devices(folder)
+        _, daily, _, _ = run(load(folder), Path(folder) / 'processed', log=lambda *_: None, devices=devices)
     board = payload(daily, devices, built_at=now.isoformat(), source_run=source)
     body = json.dumps(board, separators=(',', ':')).encode()
     if len(body) > MAX_BOARD_BYTES:

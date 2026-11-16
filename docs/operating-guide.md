@@ -141,6 +141,9 @@ include gaps/index overhead. They do not promise ongoing capacity.
 
 ## Backup and recovery
 
+See the [service account handoff](service-account-handoff.md) for service
+administration, contacts and access recovery.
+
 ```powershell
 # Complete health workspace; selected rehearsal can add participant/provider/dataset:
 .venv/Scripts/sentra.exe shared-backup
@@ -183,7 +186,8 @@ is automatic. To stop, set `SENTRA_COLLECTION_ENABLED=false` in GitHub and run
 authorization stops remain mandatory. Record actual enabling time and the first
 successful approved run before calling it operational.
 
-Link the viewer and [data dictionary](data-dictionary.md) from private Notion.
+Keep the viewer link with restricted team operating materials. Use the
+[data dictionary](data-dictionary.md) for metric definitions.
 Document definitions, vendor classification, units, sampling, source IDs and
 observed gaps/delays. Keep findings preliminary; two different devices cannot
 validate general accuracy or health predictions. [Stage 6 evidence](stage-6-validation.md)

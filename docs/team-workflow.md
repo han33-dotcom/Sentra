@@ -2,18 +2,15 @@
 
 ## Rollout status
 
-The reviewed workflow is on `main`; metadata-only Project synchronization is enabled
-and live writes were verified on October 21, 2026. The private board, Wiki, approved
-access and native Slack subscriptions are configured. The owner confirmed the
-listed teammates' own-account board access. The human pilot (issue #21),
-acceptance reconciliation and local agent onboarding remain unverified; rollout
-issue #16 stays open. Merging all of a task's remaining linked implementation PRs
-gives Implemented; only a human sets Done.
-Release #18 and reviewed merge-commit back-merge #22 are merged.
-Collection remains paused. Shared cloud AI review is optional and deferred.
+Policy version 3 is authorized in [SEN-86](https://github.com/han33-dotcom/Sentra/issues/86).
+Local subscription-authenticated Codex workers perform fixes, acceptance and
+merging. Code reviews and human approvals are optional for every change.
+See [local delivery](local-delivery.md) for installation, ownership, recovery and
+activation evidence. Each machine's actual activation must be recorded separately.
 
-Workspace: `nsquared` (`T0C8YHJMXAN`). Channel: `#fyp-sentra`.
-Implementation PRs target `develop`. Sentra releases go `develop` → `main`.
+Project synchronization and native Slack subscriptions remain configured.
+Collection remains paused. Workspace is `nsquared` and channel is `#fyp-sentra`.
+Implementation PRs target `develop`; releases go `develop` → `main`.
 
 ## Where work lives
 
@@ -29,39 +26,30 @@ Start with the [documentation index](README.md). Keep one authoritative copy of 
 document. If Wiki decisions affect code, summarize the technical consequences in
 the relevant repository document through a PR. Agents consult Wiki context when
 needed; ordinary code clones do not include the separate Wiki repository.
-Existing Notion reports and original tasks remain available as historical records;
-new software tasks belong in GitHub. Private attachments and participant material
-must not be published in public Issues, Wiki pages or repository documentation.
+Notion was retired from the project. Software tasks belong in GitHub.
+Keep private attachments and participant material out of public Issues, Wiki pages
+and repository documentation.
 
 ## Everyday handoff
 
-1. Create an issue using **Team task**; set its native Assignees field, **Human reviewer** (a teammate's GitHub handle),
-   acceptance checklist, Priority and Due date. Add it to this project's board.
-2. Pull current `develop`, refresh the assistant's instructions and create a focused
-   work branch. One writer works on the branch at a time.
-3. Implement the issue scope and run the checks in AGENTS.md.
-4. Open a PR into `develop` with `Project: Sentra` and one full primary `Task URL:`
-   pointing to this repository's issue. For each other task this PR implements,
-   add an `Additional Task URL:` line (maximum 10 total tasks). Title the PR
-   `[SEN-28, SEN-27] description`, listing every declared issue in order. A single
-   task uses `[SEN-28] description`. Optional `Task ID:` matches the primary issue.
-   Include what/why, test evidence and risks. Dependencies remain prose references.
-5. Use **Related to #NUMBER**, not Closes/Fixes/Resolves. Automatic closing keywords
-   would bypass the separate human acceptance step.
-6. The teammate opens the PR from GitHub or Slack and asks their own assistant to
-   review its current head and issue criteria. Findings stay on the PR.
-7. The author's assistant reads the findings directly, fixes accepted issues and
-   reruns checks. The human reviewer decides approval; agents do not approve or merge
-   on someone's behalf.
-8. Keep the branch up to date with `develop` and rerun required checks after
-   integration changes. Merge through the existing review rules. All required
-   implementation PRs merged means **Implemented**. A teammate records acceptance
-   evidence, sets **Done** and then closes the issue. Status synchronization is
-   active; humans still own acceptance.
-
-The tracking issue for this rollout is [#16](https://github.com/han33-dotcom/Sentra/issues/16).
-Task ownership does not require buying a cloud AI reviewer. Personal assistants run
-when their human starts them; a Slack notification does not start a teammate's chat.
+1. Create a Team task with assignee, observable Acceptance criteria checkboxes,
+   priority and due date. Add it to the Project.
+2. Start a focused branch from current `develop` and load AGENTS.md. Keep one writer.
+3. Implement scope and run the project checks. Open a PR into `develop` using
+   `Project: Sentra`, one `Task URL:` and any `Additional Task URL:` declarations.
+   Titles list every SEN ID in declaration order. Include what/why, tests and limits.
+4. Use Related to references. The acceptance worker owns issue closure.
+5. Keep a PR draft or apply `automation:hold` while editing. Making it ready hands
+   the branch to the local worker, which fixes failures and verifies scoped acceptance.
+6. Passing required CI and current acceptance evidence allow automatic squash merge.
+   Reviews and review requests are optional and never gate the merge.
+7. All implementation PRs merged means Implemented. The worker then verifies every
+   task criterion. Complete evidence means Done and permits automatic closure.
+8. Only inaccessible observations remain for humans. Record reason, exact steps,
+   expected result and required evidence. The issue stays open for these items.
+   Code can merge/release while those observations remain tracked.
+9. Automatic release and ancestry synchronization PRs use merge commits. See
+   [local delivery](local-delivery.md) for release timing and pause controls.
 
 ## Consistent task identity and multi-task PRs
 
@@ -99,8 +87,8 @@ its status.
 The trusted default-branch job repairs generated issue prefixes and open team PR
 title prefixes on issue/PR events and daily reconciliation. It preserves the human
 description, reads current metadata before edits, and writes only changed titles
-and Project Status. Done, Blocked, closed-issue status, acceptance and closure
-remain human-owned. An API edit can still race after the final read; the next
+and Project Status. Manual Done and Blocked states are preserved. The local acceptance worker owns
+evidence-based completion and closure. An API edit can still race after the final read; the next
 reconciliation repairs prefixes, while humans restore any overwritten description.
 Title edits made by the job's `GITHUB_TOKEN` do not trigger another Actions run.
 Title reconciliation records sanitized errors per issue or PR and continues with
@@ -113,14 +101,9 @@ If `pr-policy` already failed before an automatic title repair, rerun that check
 against the current head/base (or have the author save the corrected title) before
 merging. A repaired title is not itself a claim that checks passed.
 
-Rollout for [SEN-66](https://github.com/han33-dotcom/Sentra/issues/66): the title
-check becomes active after independent review and merge into develop. Automatic
-title repair and multi-task Project reconciliation become active only after the
-normal reviewed release carries these changes to main. Preview the updated job
-with `dry_run=true`, inspect task mappings, then verify a write run and a second
-no-change run. Do not claim the permanent automation is live before that release.
-Task-first Slack delivery additionally requires the separate credential and
-cutover in the linked guide; title prefixes alone do not change native formatting.
+SEN-66 introduced task identity and multi-task reconciliation. Task-first Slack
+still requires the separate credential and subscription cutover in its guide.
+Local delivery does not change that notification setup.
 
 ## Status meanings
 
@@ -128,16 +111,18 @@ cutover in the linked guide; title prefixes alone do not change native formattin
 |---|---|
 | Not started | Scoped task, implementation not begun |
 | In progress | Work underway or only draft PRs open |
-| In review | At least one implementation PR ready for review |
-| Changes requested | Outstanding change request from an independent configured human reviewer |
+| In review | At least one implementation PR ready for automated checks and acceptance |
+| Changes requested | Legacy status; optional review requests do not block delivery |
 | Implemented | All remaining implementation PRs merged into `develop` |
-| Done | Teammate verifies acceptance and records evidence |
+| Done | Every acceptance criterion has recorded verified evidence |
 | Blocked | Human-recorded dependency or decision; include reason |
 
-Automation never sets Done, closes issues or overwrites manual Done/Blocked.
+Complete current acceptance evidence permits automatic Done and issue closure.
+The metadata reconciler preserves manual Done/Blocked states.
 Closed-unmerged PRs are treated as abandoned attempts when open or merged PRs
 remain for the same task. Only abandoned PRs still require triage and preserve the
-current status. Humans must reconcile any removed scope before accepting the task.
+current status. Agents reconcile removed scope against the task before recording acceptance;
+requirements decisions that cannot be inferred remain with the task owner.
 A release PR does not mark every associated feature accepted.
 
 ## Activation and collaborator refresh

@@ -4,22 +4,39 @@ Start with [Team workflow](team-workflow.md), [Collaborator setup](collaborator-
 
 Tasks belong in [GitHub Issues](https://github.com/han33-dotcom/Sentra/issues); general reference and meeting notes belong in the [Wiki](https://github.com/han33-dotcom/Sentra/wiki) after publication.
 
+## Sprint evidence and handover (SEN-32)
+
+- [Evaluation table](evaluation.md): expected vs actual for every sprint acceptance item, with evidence.
+- [Known limitations](limitations.md): one list collected from every merged PR.
+- [Privacy checks](privacy-checks.md): the hosted access and withdrawal procedure and its results.
+- Runbooks: [operating guide](operating-guide.md), [self-service enrollment](self-service-enrollment.md),
+  [recovery rehearsal](recovery-rehearsal.md), [retention and backup policy](retention-policy.md).
+- Definitions: [schema](schema.md), [data dictionary](data-dictionary.md),
+  [indicator contract](indicator-contract.md), [participation permissions](participation-permissions.md).
+
 ## Documents
+
+- [Local automated delivery](local-delivery.md)
 
 - [collaborator setup](collaborator-setup.md)
 - [collection restart readiness](collection-restart-readiness.md)
 - [data dictionary](data-dictionary.md)
 - [dashboard restoration](dashboard-restoration.md)
+- [evaluation](evaluation.md)
+- [follow-ups](follow-ups.md)
+- [limitations](limitations.md)
 - [observations](observations.md)
 - [operating guide](operating-guide.md)
 - [organization overview](organization-overview.md)
 - [parquet tiers](parquet-tiers.md)
 - [participation permissions](participation-permissions.md)
 - [pr policy activation](pr-policy-activation.md)
+- [privacy checks](privacy-checks.md)
 - [processing](processing.md)
 - [read api](read-api.md)
 - [schema](schema.md)
 - [self-service enrollment](self-service-enrollment.md)
+- [service account handoff](service-account-handoff.md)
 - [stage 0 feasibility](stage-0-feasibility.md)
 - [stage 1 setup](stage-1-setup.md)
 - [stage 2 collection](stage-2-collection.md)
@@ -40,6 +57,7 @@ Tasks belong in [GitHub Issues](https://github.com/han33-dotcom/Sentra/issues); 
 - [storage plan](storage-plan.md)
 - [team workflow](team-workflow.md)
 - [task-first Slack notifications and cutover](task-first-slack.md)
+- [trends](trends.md)
 - [synthetic workflow pilot](workflow-pilot.md)
 - [viewer redesign plan](viewer-redesign-plan.md)
 - [viewer redesign validation](viewer-redesign-validation.md)

@@ -46,6 +46,17 @@ class ViewerReaderTests(unittest.TestCase):
             m.ViewerReader({},Limits(),denied,db=db).organization_rows()
         db.cursor.assert_not_called()
 
+    def test_follow_up_rows_fall_back_to_none_without_migration_010(self):
+        import psycopg
+        m=self.module()
+        from unittest.mock import MagicMock
+        db=MagicMock()
+        db.cursor.return_value.__enter__=Mock(return_value=Mock(execute=Mock(side_effect=psycopg.errors.UndefinedTable('absent'))))
+        db.cursor.return_value.__exit__=Mock(return_value=False)
+        reader=m.ViewerReader({},Limits(),lambda:'officer@a.test',db=db,budget_db=Mock())
+        self.assertEqual(reader.follow_up_rows(),([],[]))
+        db.rollback.assert_called_once()
+
     def test_board_and_group_board_keep_individual_and_group_scopes_apart(self):
         from unittest import mock
         m=self.module()

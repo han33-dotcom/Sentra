@@ -167,9 +167,11 @@ details, and choose `read:cycles`, `read:recovery`, `read:sleep`, `read:workout`
 No profile, body-measurement or write scope is requested. OAuth additionally
 requests `offline` for background refresh. No new subscription or paid approval.
 
-Use the published [Sentra Privacy Policy](https://scented-sailfish-eda.notion.site/Sentra-Privacy-Policy-3f37b9b98086819c925be83723a18bb9)
-for the Privacy Policy URL and a monitored app-owner/team email for contacts.
-The policy is a separate public page containing no health records or credentials.
+The app owner needs a verified public Sentra privacy policy URL and a monitored
+app-owner/team email for contacts. The replacement policy URL is pending.
+Follow the [service account handoff](service-account-handoff.md#privacy-policy-and-public-contact)
+before supplying a URL. The public policy page must contain no health records or
+credentials.
 
 Register `http://localhost:8765/callback` as the exact redirect for local testing.
 WHOOP's public OAuth guide illustrates HTTPS/custom-scheme redirects without

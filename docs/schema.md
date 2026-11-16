@@ -121,5 +121,29 @@ excludes withdrawn or closed episodes. Withdrawal marks credentials `withdrawn`
 transactionally, preventing subsequent provider requests without deleting history.
 Collection discovery is opt-in and does not change existing activation controls.
 
+Migration [011](../sql/011_fitbit_link_invites.sql) adds a separate private table
+for single-use Fitbit links. Each link carries a hashed invitation, its target
+participant and organization, a keyed digest of the expected Gmail address and
+an expiry. Only the enrollment role can use it. Separating it from signup
+invitations also makes a link invalid on a deployment predating migration 011.
+A `fitbit-link:` tag on the keyed identity digest distinguishes a hosted login
+for a legacy Fitbit from a credential managed by hosted enrollment. The enrollment
+role cannot insert or replace the legacy credential's encrypted bundle, including
+on a service rollback. It can still record withdrawal. Tagged accounts need the
+updated service to sign in. Apply 011 to a recovery
+target before restoring an archive that includes tagged identities. Older identity
+archives have the same columns and can still be restored.
+Pending Fitbit link invitations are short-lived and can be reissued after recovery.
+Redemption removes the link in the transaction that adds hosted membership and
+consent to the existing participant. Issue new links after recovery as needed.
+
 See [self-service enrollment](self-service-enrollment.md) for configuration,
 deployment, participant behavior and the isolated PostgreSQL verification fixture.
+
+## Follow-ups (`sql/010_follow_ups.sql`, not yet applied)
+
+After 007, `org.follow_ups` and `org.follow_up_events` hold brief follow-up notes, an assignee
+and open/ongoing/resolved history. Both are append-only with forced RLS; `sentra_viewer` can
+only read them. Writes go through two security-definer functions, executable only by a separate
+`sentra_followups` role with no table privileges, which re-check the officer, assignee and
+`individual` consent rules. See [follow-ups](follow-ups.md).

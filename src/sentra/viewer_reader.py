@@ -122,6 +122,66 @@ class ViewerReader:
         except psycopg.Error:
             raise SentraError('Viewer database request unavailable. Check project pause and viewer configuration; sensitive details omitted.') from None
 
+    # Follow-up pages (#31): open and ongoing first, then most recently updated; each row's egress is
+    # reserved at its maximum (500-character note, up to 4 bytes per character, plus metadata).
+    FOLLOW_UP_PAGE = 50
+    FOLLOW_UP_HISTORY = 10
+    FOLLOW_UP_ROW_BYTES = 3_000
+
+    def follow_up_rows(self, org_id=None, participants=None, statuses=None):
+        """Follow-ups in scope with their authoritative latest state, and each one's latest history events.
+
+        org_id/participants come from the access decision (None for the team) and `statuses` from the page's
+        filter (None for all). All three apply before the page limit, so other organizations' records or
+        another status never push the requested ones out. A follow-up about someone who no longer shares
+        individual details (`sharing_ended`) counts as resolved. Both reads use one snapshot, so a change
+        committed meanwhile cannot mix an older state with newer history. Empty until 010 exists."""
+        where,values=[],[]
+        if org_id is not None:
+            where.append('f.org_id=%s'); values.append(org_id)
+        if participants is not None:
+            where.append('(f.participant_id is null or f.participant_id=any(%s))'); values.append(list(participants))
+        ended='''(f.participant_id is not null and not exists (select 1 from org.current_consent s
+              where s.participant_id=f.participant_id and s.org_id=f.org_id and s.sharing='individual'
+              and not s.withdrawn and s.membership_open))'''
+        if org_id is not None:
+            where.append(f'not {ended}')
+        shown=f"case when {ended} then 'resolved' else l.status end"
+        if statuses is not None:
+            where.append(f'{shown}=any(%s)'); values.append(list(statuses))
+        page_bytes=self.FOLLOW_UP_PAGE*self.FOLLOW_UP_ROW_BYTES+65_536
+        history_bytes=self.FOLLOW_UP_PAGE*self.FOLLOW_UP_HISTORY*self.FOLLOW_UP_ROW_BYTES+65_536
+        self.principal()
+        # Reserve both reads at their maximum first, outside the read transaction, so reservations stay
+        # independent of the snapshot (as in `_rows`).
+        self.reserve(page_bytes)
+        self.reserve(history_bytes)
+        try:
+            with self.db.transaction(), self.db.cursor(row_factory=dict_row) as cursor:
+                cursor.execute('set transaction isolation level repeatable read, read only')
+                cursor.execute(f'''select f.follow_up_id,f.org_id,f.participant_id,f.opened_by,f.opened_at,
+                  l.status,l.assignee,l.note,l.recorded_at updated_at,l.event_id latest_event_id,
+                  (select count(*) from org.follow_up_events c where c.follow_up_id=f.follow_up_id) event_count,
+                  {ended} sharing_ended
+                  from org.follow_ups f cross join lateral (select e.event_id,e.status,e.assignee,e.note,e.recorded_at
+                    from org.follow_up_events e where e.follow_up_id=f.follow_up_id
+                    order by e.event_id desc limit 1) l
+                  {'where '+' and '.join(where) if where else ''}
+                  order by {shown}='resolved',l.event_id desc limit %s''',(*values,self.FOLLOW_UP_PAGE))
+                rows=cursor.fetchall()
+                cursor.execute('''select event_id,follow_up_id,recorded_at,actor,status,assignee,note from (
+                  select e.*,row_number() over (partition by e.follow_up_id order by e.event_id desc) n
+                  from org.follow_up_events e where e.follow_up_id=any(%s)) x
+                  where n<=%s order by follow_up_id,event_id''',
+                  ([r['follow_up_id'] for r in rows],self.FOLLOW_UP_HISTORY))
+                events=cursor.fetchall()
+            return rows,events
+        except (psycopg.errors.UndefinedTable,psycopg.errors.InvalidSchemaName):
+            self.db.rollback()
+            return [],[]
+        except psycopg.Error:
+            raise SentraError('Viewer database request unavailable. Check project pause and viewer configuration; sensitive details omitted.') from None
+
     @safe_database
     def catalog(self):
         return [r for r in self._catalog_rows() if self.can_view(r['participant_id'])]

@@ -16,6 +16,7 @@ from datetime import date, timedelta
 from statistics import median
 
 from .access import K_ANONYMITY, SHARING, publishable
+from .processing.board import DEVICES
 from .processing.pipeline import ASSESSMENT_VERSION
 from .viewer_data import latest_available_day
 
@@ -28,6 +29,7 @@ METRICS = (
     ('rec', 'WHOOP recovery', '%', 0),
 )
 BASELINES = {'sleep': 'sleep_b', 'rhr': 'rhr_b', 'hrv': 'hrv_b', 'steps': 'steps_b'}
+KNOWN_DEVICES = frozenset(DEVICES.values())  # board device labels with a known measurement meaning
 RECENT_DAYS = 3  # proposed "recently contributing" window; latest measurement day within 3 days
 
 
@@ -81,8 +83,9 @@ def group_summary(people, contributors, *, end, days=1, k=K_ANONYMITY):
         for person in scoped:
             values = [d[key] for d in valid_days(person) if d['d'] in window and is_number(d.get(key))]
             if values:
-                device = person.get('device') if isinstance(person.get('device'), str) else 'Not supplied'
-                by_device.setdefault(device, []).append(median(values))
+                device = person.get('device')
+                if device in KNOWN_DEVICES:  # unknown devices may differ from each other; never pooled
+                    by_device.setdefault(device, []).append(median(values))
         for device in sorted(by_device) or [None]:
             per_person = by_device.get(device, [])
             count = len(per_person)

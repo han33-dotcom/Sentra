@@ -1,5 +1,9 @@
 # Synthetic workflow acceptance fixture
 
+This records the historical policy version 2 pilot. Policy version 3 makes reviews
+optional and automates accessible acceptance. See [local delivery](local-delivery.md).
+
+
 This documentation-only fixture exercises the Sentra team workflow in issue #21.
 It changes no application behavior, collection controls or participant data.
 

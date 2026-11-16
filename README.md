@@ -241,7 +241,7 @@ docker compose up -d --build   # API on http://127.0.0.1:8000
 
 Work happens on `feat/*`, `fix/*`, `chore/*`, `ci/*` or `docs/*` branches. Open a PR
 into `develop`; releases go by PR from `develop` to `main`. Both protected branches
-need a PR, a green `guard` and `test` CI and one code-owner approval. Feature
+follow the PR flow with green CI, PR policy and local acceptance checks. Reviews are optional. Feature
 branches are squash-merged. Commits use conventional messages (`feat:`, `fix:`,
 `ci:`, `chore:`, `docs:`). The data guard (`scripts/check_no_data.py`, also a
 pre-commit hook) and gitleaks block health data, exports and secrets. See
@@ -302,4 +302,4 @@ Use the [documentation index](docs/README.md) and [team workflow](docs/team-work
 Software tasks live in GitHub Issues and the project board; technical documents stay
 in this repository. Meeting notes and general references belong in the Wiki after
 publication. See [workspace activation](docs/github-workspace-activation.md) for the
-current rollout status. Shared cloud AI review is optional and deferred.
+current rollout status. [Local delivery](docs/local-delivery.md) automates acceptance, fixes and merges using existing Codex subscriptions.

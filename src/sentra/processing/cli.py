@@ -22,12 +22,13 @@ def private_path(path, private):
 
 
 def run_command(args):
-    from .observations import load
+    from .observations import devices, load
     from .pipeline import run
     private = load_connection(args.config, 'google_health', require_client=False).private_dir
     out = private_path(args.out, private)
     if args.tiers is not None:
-        run(load(private_path(args.tiers, private)), out)
+        tiers = private_path(args.tiers, private)
+        run(load(tiers), out, devices=devices(tiers))
         return 0
     from ..shared_backend import PrivateStorage, connect_db
     from ..shared_config import read_shared
@@ -39,7 +40,7 @@ def run_command(args):
         storage = PrivateStorage(viewer, AuditReader(db, limits).reserve, bucket=TIER_BUCKET)
         with tempfile.TemporaryDirectory(dir=private) as folder:
             fetch(storage, folder)
-            run(load(folder), out)
+            run(load(folder), out, devices=devices(folder))
         return 0
     finally:
         db.close()

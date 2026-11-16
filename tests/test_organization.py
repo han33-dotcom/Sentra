@@ -50,7 +50,7 @@ class GroupSummaryTests(unittest.TestCase):
         people = []
         for i in range(5):
             days = [{'d': '2026-11-01', 'sleep': 300}, {'d': '2026-11-02'}, {'d': END.isoformat(), 'sleep': 500}]
-            people.append({'id': f'p9{i}', 'days': days})
+            people.append({'id': f'p9{i}', 'device': 'WHOOP', 'days': days})
         people.append({'id': 'p99', 'days': [{'d': '2026-10-20', 'sleep': 900}]})  # outside the period
         rows = by_key(group_summary(people, {p['id'] for p in people}, end=END, days=3))
         self.assertEqual(rows['sleep']['contributors'], 5)
@@ -60,6 +60,11 @@ class GroupSummaryTests(unittest.TestCase):
         people = [person(f'p9{i}', sleep=v) for i, v in enumerate([True, None, 'x', float('nan'), 420])]
         rows = by_key(group_summary(people, {p['id'] for p in people}, end=END))
         self.assertEqual(rows['sleep']['contributors'], 1)
+
+
+    def test_unknown_devices_are_left_out_of_group_statistics(self):
+        people = [{**person(f'p9{i}', sleep=400), 'device': device} for i, device in enumerate(['Unknown'] * 5 + [None] * 5)]
+        self.assertEqual(by_key(group_summary(people, {p['id'] for p in people}, end=END))['sleep']['status'], 'no_data')
 
 
 class ParticipationTests(unittest.TestCase):
@@ -120,7 +125,7 @@ class ProfileTests(unittest.TestCase):
         p = profile({'id': 'p90', 'days': days}, today=END)
         self.assertEqual((p['data_through'], p['days_with_data_last_7']), (date(2026, 11, 1), 1))
         self.assertEqual(by_key(p['metrics'])['sleep']['value'], 400)
-        people = [{'id': f'p9{i}', 'days': [{'d': END.isoformat(), 'sleep': 400}, {'d': 'x', 'sleep': 1}]}
+        people = [{'id': f'p9{i}', 'device': 'Fitbit', 'days': [{'d': END.isoformat(), 'sleep': 400}, {'d': 'x', 'sleep': 1}]}
                   for i in range(5)]
         self.assertEqual(by_key(group_summary(people, {p['id'] for p in people}, end=END))['sleep']['value'], 400)
 

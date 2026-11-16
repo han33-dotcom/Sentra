@@ -1,0 +1,28 @@
+name: Local delivery status
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened, ready_for_review, converted_to_draft]
+  issues:
+    types: [edited, reopened]
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+concurrency:
+  group: local-delivery-status-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
+jobs:
+  invalidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      # Only trusted default-branch metadata code runs with the status-write token.
+      # No PR checkout, dependency installation, task execution or Codex credential.
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+      - name: Require fresh local acceptance after metadata changes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -m scripts.team_workflow.invalidate_acceptance

@@ -74,5 +74,5 @@ personal baseline yet" are explicit.
   daily refresh. Collection remains paused.
 - Organization users need, privately: migration 007 applied, an `org.org_users` row and
   access to the Streamlit app's private sharing list.
-- Trends over longer periods (#40), explanations (#41) and reports (#42) build on these
+- [Trends](trends.md) (#40), explanations (#41) and reports (#42) build on these
   pages.

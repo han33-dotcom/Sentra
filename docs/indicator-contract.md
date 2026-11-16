@@ -75,13 +75,36 @@ produce green.** Missing values are never filled or treated as zero.
 
 ## Group statistics (`cohort_daily`)
 
-- Only usable days count. A group day is shown only when at least 5 people have usable data
-  (`suppressed`), and **each statistic** additionally needs 5 people who supplied its input.
+- One row per date and `device` (`Fitbit` or `WHOOP`). Readings from different devices are
+  **never pooled**, matching the organization overview: the same name is not the same
+  measurement across devices (see below). A participant contributes only with exactly one
+  known device. Processing combines a person's readings per day without keeping their
+  provider, so someone with readings from both devices, or from no known device, contributes
+  to no group statistic. The board shows them as `Unknown`.
+- Only usable days count. A group row is shown only when at least 5 people of that device have
+  usable data (`suppressed`), and **each statistic** additionally needs 5 of them who supplied
+  its input.
 - `pct_wellness_amber_or_red` counts only assessed days (`green`, `amber`, `red`); an
   `insufficient` day is not a calm day.
 - Each statistic publishes its eligible contributor count as `n_<statistic>` (for example
   `n_pct_wellness_amber_or_red`), so dashboards and reports show "not available — 3 of 5
   needed" without recomputing it.
+- `metadata.json` and `GET /api/v1/metadata` carry `assessment_version`, as the board does, so
+  every consumer can tell which rules produced the outputs.
+
+### Consistency checks
+
+`tests/test_processing.py::GroupStatisticConsistencyTests` runs one synthetic day through
+processing, the board payload and the organization overview. The tests check that:
+
+- per-device contributor counts and suppression agree between `cohort_daily` (read API) and
+  the overview;
+- the overview's assessable count equals the number of `complete` assessments;
+- an `insufficient` day has no level in the board and never counts as calm;
+- devices are never pooled, and unknown devices never contribute;
+- a participant with both Fitbit and WHOOP readings (tiers to cohort) changes no device's
+  statistic;
+- the read API refuses a `cohort_daily` written before device separation.
 
 ## Board payload
 
@@ -96,6 +119,14 @@ Bump it whenever these rules or their meaning change. The daily refresh rebuilds
 published under another version from the existing data, even when no new collection has
 arrived. Boards from before this contract carry no version, so the first refresh after
 deployment replaces their misleading greens.
+
+`board_version` (`BOARD_VERSION` in `processing/board.py`) works the same way for changes in
+meaning outside the assessment rules. `board-2` labels a participant with a device only when all
+their readings come from one provider. A board from before it, which may label a mixed-device
+participant as Fitbit, is rebuilt on the next refresh even at an unchanged watermark.
+Until that refresh runs, the published board keeps its old labels. While the daily wellness
+schedule is off, run the wellness workflow once after deploying this change, before relying on
+the overview and the read API counts together.
 
 ## Provider differences (preserved, not merged)
 

@@ -54,6 +54,17 @@ def create_app(settings=None, store_factory=None, provider_login=None):
         response.set_cookie(c.cookie, value, max_age=1800, secure=c.secure, httponly=True, samesite='lax', path='/')
         return response
 
+    def participant_status(repository, session_id):
+        result = repository.status(session_id)
+        config = configuration()
+        providers = list(config.clients)
+        if result.get('linking_fitbit'):
+            providers = [p for p in providers if p == 'google_health']
+        elif result.get('fitbit_operator_managed'):
+            providers = [p for p in providers if p != 'google_health']
+        result.update(providers_available=providers, consent_version=config.consent_version)
+        return result
+
     @app.exception_handler(EnrollmentError)
     async def expected_error(request, error):
         return JSONResponse({'message': str(error)}, status_code=error.status)
@@ -122,16 +133,13 @@ def create_app(settings=None, store_factory=None, provider_login=None):
     def start(request: Request, data: Start):
         with store() as repository:
             new_sid, _ = repository.start(data.invite, request.client.host if request.client else 'unknown')
-            result = repository.status(new_sid)
-        result.update(providers_available=list(configuration().clients), consent_version=configuration().consent_version)
+            result = participant_status(repository, new_sid)
         return cookie(JSONResponse(result), new_sid)
 
     @app.get('/api/status')
     def status(request: Request):
         with store() as repository:
-            result = repository.status(sid(request))
-        result.update(providers_available=list(configuration().clients), consent_version=configuration().consent_version)
-        return result
+            return participant_status(repository, sid(request))
 
     @app.post('/api/connect')
     def connect(request: Request, data: Connect):
@@ -140,7 +148,13 @@ def create_app(settings=None, store_factory=None, provider_login=None):
         with store() as repository:
             value = repository.session(sid(request))
             repository.check_csrf(value, request.headers.get('x-csrf-token', ''))
-            url, pending = login().begin(data.provider)
+            account = value.get('account')
+            if account and data.provider == 'google_health' and repository.operator_managed_fitbit(account['participant_id']):
+                raise EnrollmentError('Contact the Sentra team to reconnect this Fitbit.', 409)
+            fitbit_email_hash = value.get('fitbit_email_hash')
+            if fitbit_email_hash and data.provider != 'google_health':
+                raise EnrollmentError('Use the original Fitbit account for this link.', 403)
+            url, pending = login().begin(data.provider, fitbit_email_hash=fitbit_email_hash)
             repository.pending(sid(request), request.headers.get('x-csrf-token', ''), data.provider, data.model_dump(exclude={'provider'}), pending)
         return {'url': url}
 

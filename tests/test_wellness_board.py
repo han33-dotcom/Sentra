@@ -164,7 +164,8 @@ class RefreshTests(unittest.TestCase):
 
     def test_older_watermark_does_not_rebuild_an_already_newer_board(self):
         from sentra import wellness_refresh as w
-        storage = self.Storage({'source_run': '2026-10-11T00:00:00+00:00', 'assessment_version': ASSESSMENT_VERSION})
+        storage = self.Storage({'source_run': '2026-10-11T00:00:00+00:00', 'assessment_version': ASSESSMENT_VERSION,
+                                 'board_version': board_mod.BOARD_VERSION})
         with mock.patch.object(w, 'build', side_effect=AssertionError('Older data must not rebuild tiers')):
             result = w.refresh(self.Reader(datetime(2026, 10, 10, tzinfo=UTC)), Limits(), storage, log=lambda *_: None)
         self.assertEqual(result['status'], 'skipped')
@@ -199,7 +200,8 @@ class RefreshTests(unittest.TestCase):
     def test_skips_without_new_collection_run_and_reads_nothing(self):
         from sentra import wellness_refresh as w
         finished = datetime(2026, 10, 11, 0, 5, tzinfo=UTC)
-        storage = self.Storage({'source_run': finished.isoformat(), 'assessment_version': ASSESSMENT_VERSION})
+        storage = self.Storage({'source_run': finished.isoformat(), 'assessment_version': ASSESSMENT_VERSION,
+                                 'board_version': board_mod.BOARD_VERSION})
         with mock.patch.object(w, 'build') as build:
             result = w.refresh(self.Reader(finished), Limits(), storage, log=lambda *_: None)
         self.assertEqual(result['status'], 'skipped')
@@ -221,6 +223,31 @@ class RefreshTests(unittest.TestCase):
         board = json.loads(storage.posts['board/board.json'][0])
         self.assertEqual((board['assessment_version'], board['source_run']), (ASSESSMENT_VERSION, finished.isoformat()))
         storage.previous = board  # the rebuilt board is current: the next run skips again
+        with mock.patch.object(w, 'build', side_effect=AssertionError('current board must not rebuild')):
+            self.assertEqual(w.refresh(self.Reader(finished), Limits(), storage, log=lambda *_: None)['status'], 'skipped')
+
+    def test_a_board_with_older_device_labels_is_rebuilt_at_an_unchanged_watermark(self):
+        from sentra import wellness_refresh as w
+        finished = datetime(2026, 10, 11, 0, 5, tzinfo=UTC)
+        whoop = [row('p01', 'whoop', 'sleep', 'w1', metric, value=160 * 60000)
+                 for metric in ('/score/stage_summary/total_light_sleep_time_milli',
+                                '/score/stage_summary/total_slow_wave_sleep_time_milli',
+                                '/score/stage_summary/total_rem_sleep_time_milli')]
+        with tempfile.TemporaryDirectory() as folder:
+            write(folder, sleep_rows() + whoop)  # p01 has Fitbit and WHOOP readings
+            objects = {p.relative_to(folder).as_posix(): p.read_bytes() for p in Path(folder).rglob('*.parquet')}
+        # Published before #45 at the latest watermark: current assessment rules, p01 labelled Fitbit.
+        legacy = {'source_run': finished.isoformat(), 'assessment_version': ASSESSMENT_VERSION,
+                  'people': [{'id': 'p01', 'device': 'Fitbit', 'days': [{'d': '2026-10-10', 'sleep': 480}]}]}
+        storage = self.Storage(legacy)
+        with mock.patch.object(w, 'build', return_value=(objects, {})) as build, mock.patch.object(w, 'publish'):
+            result = w.refresh(self.Reader(finished), Limits(), storage, now=NOW, log=lambda *_: None)
+        build.assert_called_once()
+        self.assertEqual(result['status'], 'published')
+        board = json.loads(storage.posts['board/board.json'][0])
+        self.assertEqual(board['board_version'], board_mod.BOARD_VERSION)
+        self.assertEqual({p['id']: p['device'] for p in board['people']}, {'p01': 'Unknown'})
+        storage.previous = board  # current format and rules at the same watermark: skipped again
         with mock.patch.object(w, 'build', side_effect=AssertionError('current board must not rebuild')):
             self.assertEqual(w.refresh(self.Reader(finished), Limits(), storage, log=lambda *_: None)['status'], 'skipped')
 
@@ -273,6 +300,90 @@ class RefreshTests(unittest.TestCase):
         for env in ({}, {'SENTRA_COLLECTOR_CONFIG': json.dumps({'credentials': {'url': 'https://x.supabase.co'}})}):
             with mock.patch.dict(os.environ, env, clear=True), self.assertRaises(SentraError):
                 w.collector_storage()
+
+
+
+class Bucket:
+    """In-memory private tier bucket: GET/POST by key, optional failure on one upload."""
+
+    def __init__(self):
+        self.objects, self.fail = {}, None
+
+    def request(self, method, key, data=None, maximum=None, upsert=None, content_type=None):
+        if method == 'GET':
+            return (200, self.objects[key]) if key in self.objects else (404, b'')
+        if key == self.fail:
+            return 500, b''
+        self.objects[key] = data
+        return 200, b''
+
+
+class PublicationConsistencyTests(unittest.TestCase):
+    """#48: repeated, corrected and interrupted refreshes against the real slot publisher and reader."""
+
+    def tiers(self, asleep):
+        rows = sleep_rows()
+        rows[-1] = row('p01', 'google_health', 'sleep', 's1', '/sleep/summary/minutesAsleep', value=asleep)
+        with tempfile.TemporaryDirectory() as folder:
+            write(folder, rows)
+            return {p.relative_to(folder).as_posix(): p.read_bytes() for p in Path(folder).rglob('*.parquet')}
+
+    def refresh(self, bucket, finished, asleep):
+        from sentra import wellness_refresh as w
+        reader = RefreshTests.Reader(finished)
+        objects = self.tiers(asleep)
+        report = {'built_at': finished.isoformat(), 'objects': {k: len(v) for k, v in objects.items()}}
+        with mock.patch.object(w, 'build', return_value=(objects, report)):
+            return w.refresh(reader, Limits(), bucket, now=NOW, log=lambda *_: None)
+
+    @staticmethod
+    def board(bucket):
+        board = json.loads(bucket.objects['board/board.json'])
+        return board['source_run'], {d['d']: d.get('sleep') for p in board['people'] for d in p['days']}
+
+    @staticmethod
+    def published_asleep(bucket):
+        """minutesAsleep from the tier set readers currently fetch."""
+        from sentra.tiers import fetch
+        with tempfile.TemporaryDirectory() as folder:
+            fetch(bucket, Path(folder) / 'tiers')
+            m = pd.read_parquet(Path(folder) / 'tiers' / 'measurements.parquet')
+        return float(m[m.metric == '/sleep/summary/minutesAsleep'].value.iloc[0])
+
+    def test_repeated_corrected_and_interrupted_refreshes_keep_tiers_and_board_consistent(self):
+        bucket = Bucket()
+        first, correction = datetime(2026, 10, 11, 0, 5, tzinfo=UTC), datetime(2026, 10, 12, 0, 5, tzinfo=UTC)
+        self.assertEqual(self.refresh(bucket, first, 400)['status'], 'published')
+        self.assertEqual(self.board(bucket), (first.isoformat(), {'2026-10-10': 400}))
+        self.assertEqual(self.published_asleep(bucket), 400)
+        slot = json.loads(bucket.objects['size_report.json'])['prefix']
+
+        # Repeating the run without new collection data changes nothing and reads no tiers.
+        before = dict(bucket.objects)
+        self.assertEqual(self.refresh(bucket, first, 999)['status'], 'skipped')
+        self.assertEqual(bucket.objects, before)
+
+        # A tier upload interrupted part-way keeps readers and the board on the previous complete set.
+        bucket.fail = ('slot-b/' if slot == 'slot-a/' else 'slot-a/') + 'sessions.parquet'
+        with self.assertRaises(SentraError):
+            self.refresh(bucket, correction, 380)
+        self.assertEqual(json.loads(bucket.objects['size_report.json'])['prefix'], slot)
+        self.assertEqual(self.published_asleep(bucket), 400)
+        self.assertEqual(self.board(bucket), (first.isoformat(), {'2026-10-10': 400}))
+
+        # Tiers switch but the board upload fails: the board stays complete and the next run repairs it.
+        bucket.fail = 'board/board.json'
+        with self.assertRaises(SentraError):
+            self.refresh(bucket, correction, 380)
+        self.assertEqual(self.published_asleep(bucket), 380)
+        self.assertEqual(self.board(bucket), (first.isoformat(), {'2026-10-10': 400}))
+        bucket.fail = None
+        self.assertEqual(self.refresh(bucket, correction, 380)['status'], 'published')
+
+        # The corrected reading (same record, new value) now reaches both published outputs.
+        self.assertEqual(self.published_asleep(bucket), 380)
+        self.assertEqual(self.board(bucket), (correction.isoformat(), {'2026-10-10': 380}))
+        self.assertEqual(self.refresh(bucket, correction, 380)['status'], 'skipped')
 
 
 class ViewerBoardTests(unittest.TestCase):

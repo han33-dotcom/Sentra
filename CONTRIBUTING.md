@@ -35,10 +35,10 @@ locally per the stage guides and are never committed.
 | `fix/<short-name>` | Bug fix | You |
 | `chore/`, `ci/`, `docs/` | Tooling, pipelines, documentation | You |
 
-`main` and `develop` are protected: no direct pushes, a PR with green `guard` and
-`test` checks and one approving code-owner review. The code owners are
-`han33-dotcom`, `MohamadNasrallah` and `mhmdaboulhoda`; another listed owner must
-approve an owner's PR.
+`main` and `develop` require PRs, green `guard`, Linux/Windows `test`, `pr-policy`
+and `local-acceptance` checks. Code review and human approval are optional.
+The [local delivery worker](docs/local-delivery.md) runs on a team member's computer
+using their existing ChatGPT-authenticated Codex subscription and merges eligible PRs.
 
 Work branches are squash-merged. GitHub's **Automatically delete head branches**
 setting is enabled: work branches are deleted after their PR merges, including PRs
@@ -49,7 +49,7 @@ commits and open PR dependencies before deletion.
 
 Required checks use strict up-to-date enforcement. Bring the target branch into
 work branches deliberately and rerun checks after integration changes. Releases
-and back-merges follow the reviewed merge-commit procedure below.
+and back-merges follow the merge-commit procedure below.
 
 ## Flow
 
@@ -57,8 +57,11 @@ and back-merges follow the reviewed merge-commit procedure below.
 2. Commit in small steps with conventional messages: `feat: add sedentary-period dataset`,
    `fix: ...`, `ci: ...`, `docs: ...`, `chore: ...`.
 3. `git push -u origin feat/<short-name>` and open a PR **into `develop`**. CI must be green.
-4. One teammate reviews. Squash-merge.
-5. Release (end of sprint / before a demo): PR `develop` → `main`.
+4. The local worker fixes failures, verifies PR scope and squash-merges when checks pass.
+5. The worker verifies integrated task acceptance, records evidence and closes fully
+   accepted tasks. Human-only observations stay open with verification instructions.
+6. The worker opens and merges a `develop` → `main` release when integrated changes
+   are available, then synchronizes release ancestry. Use `--no-release` to pause releases.
 
 Merging or deploying code never authorizes restarting collection. The daily
 collector (`.github/workflows/collect.yml`) stays paused until the team agrees and
@@ -68,19 +71,19 @@ both controls described in the [operating guide](docs/operating-guide.md) are se
 
 Release from `develop` into `main`, using a **merge commit** rather than squash or
 rebase. This preserves the integration ancestry. The `release` exemption accepts
-only this exact same-repository branch pair and a label applied by another
-configured teammate; `codex/release-*` work branches are not release exemptions.
+only this exact same-repository branch pair and a label applied by a configured
+team account, including the author or its local worker.
 
-After a release, bring `main` back into `develop` through a reviewed PR, also using
-a **merge commit**. Do not use GitHub's Update branch on a release PR to pull
-`main` into the protected `develop` branch without review.
+After a release, the worker brings `main` back into `develop` through a
+`codex/release-sync` PR using a **merge commit**. Integration branches are updated
+through PRs with passing checks.
 
 If the branches have already diverged (as after release #14), start a focused
 `codex/sync-main-into-develop` work branch from current `origin/develop`, merge
 `origin/main` into it locally, resolve conflicts, run CI and open a PR into
 `develop`. Link the same-repository release/synchronization issue and fill the
 normal handoff sections; do not claim the release exemption for this PR. Merge
-that reviewed synchronization PR with a **merge commit**, so `main` becomes an
+that synchronization PR with a **merge commit**, so `main` becomes an
 ancestor of `develop`. Recheck this before the next release:
 
 ```text
@@ -88,7 +91,7 @@ git fetch origin
 git merge-base --is-ancestor origin/main origin/develop
 ```
 
-Exit code 0 confirms the ancestry. A nonzero result needs the reviewed
+Exit code 0 confirms the ancestry. A nonzero result needs the
 synchronization above, never a force push or branch-protection bypass.
 
 ## Tests
@@ -113,11 +116,12 @@ and a simple dashboard date-filter example.
 Link the GitHub issue and acceptance criteria from the PR description. Explain what
 changed, why, validation and limitations. Keep actionable review findings on GitHub;
 the author's assistant reads accepted findings directly and updates the branch.
-A human teammate reviews the latest head and decides whether to approve.
+Reviews are optional. The worker's acceptance evidence and required CI gate merging.
 
 Record lasting decisions in project documents or the task. Implemented means the
-required implementation PRs merged into `develop`; Done requires human verification
-of acceptance criteria. Release/deployment work remains separate when required.
+required implementation PRs merged into `develop`; Done requires verified acceptance
+criteria. Agents perform every accessible check. Only inaccessible observations
+remain for human verification, with steps and expected evidence on the issue.
 Native Slack PR/review notifications and Project status synchronization are enabled;
 see the current [team workflow](docs/team-workflow.md) for scope and limitations.
 Use the issue number as the stable task ID: `[SEN-41] description` on tasks and

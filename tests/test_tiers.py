@@ -13,7 +13,7 @@ from pglast import parse_sql
 
 from sentra.errors import SentraError
 from sentra.shared import CapacityStop, Limits
-from sentra.tiers import AuditReader, HOT_DAYS, TIER_BUCKET, build, fetch, publish
+from sentra.tiers import AuditReader, HOT_DAYS, TIER_BUCKET, build, fetch, publish, tier_query
 
 NOW = datetime(2026, 10, 11, 12, tzinfo=timezone.utc)
 T = lambda days, seconds=0: NOW - timedelta(days=days) + timedelta(seconds=seconds)
@@ -36,14 +36,17 @@ ROWS = {
 
 class FakeDB:
     """Mimics the psycopg calls AuditReader uses; records every statement."""
-    def __init__(self, role='sentra_viewer', fail_reserve=False):
+    def __init__(self, role='sentra_viewer', fail_reserve=False, series=False):
         self.role, self.fail_reserve, self.statements, self.reserved = role, fail_reserve, [], []
+        self.series = series
 
     def execute(self, query, values=()):
         self.statements.append(query)
         result = None
         if query == 'select session_user':
             result = (self.role,)
+        elif 'to_regclass' in query:
+            result = (self.series,)
         elif 'sentra_reserve_viewer_egress' in query:
             if self.fail_reserve:
                 import psycopg
@@ -140,6 +143,26 @@ class TierTests(unittest.TestCase):
         reader = Reader(db, Limits(), budget_db=budget_db)
         self.assertEqual(reader.read('hr_raw'), ROWS['hr_raw'])
         self.assertGreater(sum(budget_db.reserved), reader.read_bytes)
+
+    def test_compact_series_fill_in_only_removed_per_field_rows(self):
+        for series in (False, True):
+            db = FakeDB(series=series)
+            reader = Reader(db, Limits())
+            for name in ('hr_raw', 'hr_minute', 'measurements', 'sessions'):
+                reader.read(name)
+                size_query = next(q for q in reversed(db.statements) if q.startswith('select count(*)'))
+                compact = 'audit.series_rows' in size_query
+                self.assertEqual(compact, series and name != 'sessions', (series, name))
+                if compact:  # same snapshot, same filter for both parts, per-field rows win
+                    self.assertIn('union all', size_query)
+                    self.assertIn('not exists (select 1 from audit.measurements m', size_query)
+                    self.assertIn('r.source_response_id=c.source_response_id', size_query)  # still the current response
+            # The installed-migration check runs once per reader, not once per tier.
+            self.assertEqual(sum('to_regclass' in q for q in db.statements), 1)
+        query, values = tier_query('hr_minute', series=True)
+        self.assertEqual(query.count('%s'), len(values))
+        query, values = tier_query('measurements', series=False)
+        self.assertEqual((query.count('%s'), 'series_rows' in query), (len(values), False))
 
     def test_build_reserves_egress_and_produces_expected_tiers(self):
         db = FakeDB(); reader = Reader(db, Limits())
