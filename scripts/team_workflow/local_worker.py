@@ -301,7 +301,9 @@ class Worker:
         checks = self.tests()
         if any(result["returncode"] for result in checks) or ci == "failed":
             if release:
-                self.client.status(pr["head"]["sha"], "failure", "Release tests failed; fix through a work PR")
+                self.client.status(pr["head"]["sha"], "failure", "Release tests failed; opening a work PR")
+                self.create_fix_pr(self.client.issue(86), {"summary": "Fix failed integrated release checks.",
+                                   "pr": pr, "checks": checks})
                 return
             self.agent(self.prompt("Fix the failing checks for this PR. Inspect GitHub CI through available "
                        "read-only tooling if needed.\n" + json.dumps({"pr": pr, "issues": issues, "checks": checks})), "fix")
@@ -334,6 +336,8 @@ class Worker:
                 self.agent(self.prompt("Fix these demonstrated acceptance failures.\n" + json.dumps(report)), "acceptance-fix")
                 if self.git("status", "--porcelain"):
                     self.push_fixes(pr)
+            else:
+                self.create_fix_pr(self.client.issue(86), report)
             return
         self.client.status(pr["head"]["sha"], "success", "Agent-verifiable acceptance passed; evidence on PR")
         fresh = self.client.pull(pr["number"])
@@ -342,8 +346,10 @@ class Worker:
             return
         # GitHub also enforces required checks and strict target freshness at merge time.
         method = "merge" if release or pr["head"]["ref"] == "codex/release-sync" else "squash"
-        self.client.write(f"/pulls/{pr['number']}/merge", {"sha": pr["head"]["sha"],
-                          "merge_method": method}, method="PUT")
+        result = self.client.write(f"/pulls/{pr['number']}/merge", {"sha": pr["head"]["sha"],
+                                   "merge_method": method}, method="PUT")
+        if not result.get("merged"):
+            raise RuntimeError("GitHub did not merge the PR; retry after rereading current state.")
 
     def process_issue(self, issue, pulls):
         merged = {str(p["number"]): p["merge_commit_sha"] for p in pulls if p.get("merged_at")}

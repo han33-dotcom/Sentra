@@ -142,6 +142,7 @@ class WorkerTests(unittest.TestCase):
     def delivery_worker(self):
         worker = Worker.__new__(Worker)
         worker.client = Mock()
+        worker.client.write.return_value = {"merged": True}
         worker.client.issue.return_value = {"number": 86, "body": "## Acceptance criteria\n- [ ] It works"}
         worker.client.pull.return_value = pull()
         worker.prepare = Mock(); worker.publish = Mock(); worker.prompt = lambda text: text
@@ -178,6 +179,23 @@ class WorkerTests(unittest.TestCase):
             worker.process_pr(pull())
         worker.client.write.assert_not_called()
         worker.publish.assert_not_called()
+
+    def test_failed_release_opens_a_fix_pr_without_pushing_the_integration_branch(self):
+        worker = self.delivery_worker()
+        worker.create_fix_pr = Mock()
+        pr = pull(); pr["base"]["ref"] = "main"; pr["head"]["ref"] = "develop"
+        worker.tests.return_value = [{"returncode": 1, "output": "Synthetic failure"}]
+        with patch("scripts.team_workflow.local_worker.ci_state", return_value="passed"):
+            worker.process_pr(pr)
+        worker.create_fix_pr.assert_called_once()
+        worker.client.write.assert_not_called()
+        self.assertFalse(any(call.args[0] == "push" for call in worker.git.call_args_list))
+
+    def test_unsuccessful_merge_response_is_not_reported_as_complete(self):
+        worker = self.delivery_worker()
+        worker.client.write.return_value = {"merged": False}
+        with patch("scripts.team_workflow.local_worker.ci_state", return_value="passed"), self.assertRaises(RuntimeError):
+            worker.process_pr(pull())
 
     def test_protection_migration_keeps_ci_sources_and_protection_flags(self):
         current = {"required_status_checks": {"checks": [{"context": "custom", "app_id": 42}]},

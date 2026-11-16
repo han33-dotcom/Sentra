@@ -29,6 +29,8 @@ Authentication and allowance failures pause work for retry.
    the integrated release, and uses a merge commit after CI. A
    `codex/release-sync` PR brings release ancestry back with a merge commit.
    Outstanding human-only observations stay on their tasks across releases.
+   Failed release checks or acceptance create a repair PR into `develop`; the
+   worker never repairs an integration branch by pushing directly to it.
 
 Release/synchronization bookkeeping links SEN-86 and does not declare feature
 issues as new implementation. Release acceptance identifies outstanding
