@@ -16,6 +16,8 @@ Tasks belong in [GitHub Issues](https://github.com/han33-dotcom/Sentra/issues); 
 
 ## Documents
 
+- [Local automated delivery](local-delivery.md)
+
 - [collaborator setup](collaborator-setup.md)
 - [collection restart readiness](collection-restart-readiness.md)
 - [data dictionary](data-dictionary.md)

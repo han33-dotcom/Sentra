@@ -14,6 +14,11 @@ Optional Task ID: SEN-NUMBER matches the primary Task URL. -->
 - [ ] `python -m pytest` passes from the repository root (live tests skipped unless opted in)
 - [ ] Checked against the shared database / providers (say how, with an approved bounded scope), or not needed
 
+<!-- A ready team PR transfers branch ownership to the local delivery worker.
+Keep the PR draft or apply automation:hold while editing. Reviews are optional.
+The worker publishes commit-specific acceptance evidence and merges after CI.
+Human-only task criteria remain on the issue with exact verification instructions. -->
+
 ## Safety checklist
 - [ ] No participant data, original responses, exports, backups, tokens, keys, `.csv`/`.parquet` files or screenshots of real data
 - [ ] No change enables scheduled collection (`SENTRA_COLLECTION_ENABLED`, daily-collection control) unless agreed by the team

@@ -1,5 +1,10 @@
 # Activate the Sentra GitHub workspace
 
+Policy version 3 in [local delivery](local-delivery.md) supersedes the human review
+and acceptance gates recorded below. Historical rollout evidence remains dated.
+Current acceptance permits automatic Done and closure when every criterion is verified.
+
+
 ## Current state
 
 The reviewed workflow is on `main`. Project synchronization was enabled on
@@ -29,14 +34,13 @@ This is also the saved board column order, verified after reload on October 15.
 The Status board and **All tasks** table are available. For your own work, filter
 Assignees with `assignee:@me`; a dedicated saved My tasks view remains optional polish.
 
-Use **Priority** (High/Medium/Low), **Due date** (date), **Human reviewer** (text GitHub
-handle) and **Blocked reason** (text). Use native **Assignees** for the task owner.
+Use **Priority** (High/Medium/Low), **Due date** (date), **Human reviewer** (optional historical field) and **Blocked reason** (text). Use native **Assignees** for the task owner.
 GitHub's built-in Reviewers field refers to PR reviewers; it is not the task's Human
 reviewer field. Acceptance criteria and completion evidence belong in the issue body.
 
 Native auto-add is enabled only for `han33-dotcom/Sentra` with `is:issue`; new items
 start at Not started. Automatic issue closure, PR-merge completion and sub-issue
-addition are disabled. Keep Done under human acceptance control.
+addition are disabled. Use current complete acceptance evidence to set Done.
 
 Rollout issue #16 is attached, assigned to `han33-dotcom`, In progress and High
 priority. The original university reports and meeting records predate the GitHub

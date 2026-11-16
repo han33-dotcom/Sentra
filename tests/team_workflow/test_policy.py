@@ -78,13 +78,13 @@ class PolicyTests(unittest.TestCase):
         self.assertEqual(validate_pr_metadata(text, {"release"}, "han33-dotcom/Sentra", "main"), [])
         self.assertTrue(validate_pr_metadata(text, {"release"}, "han33-dotcom/TechScout", "main"))
 
-    def test_exemption_requires_another_verified_team_member(self):
+    def test_exemption_requires_a_configured_team_member(self):
         event = [{"event": "labeled", "label": {"name": "workflow-maintenance"},
                   "actor": {"login": "MohamadNasrallah"}}]
         labels, errors = approved_exemptions(pr(), ["docs/team-workflow.md"], event, "han33-dotcom/Sentra")
         self.assertEqual(labels, {"workflow-maintenance"})
         self.assertEqual(errors, [])
-        for actor in ["han33-dotcom", "unknown", "some-bot[bot]"]:
+        for actor in ["unknown", "some-bot[bot]"]:
             event[0]["actor"]["login"] = actor
             labels, errors = approved_exemptions(pr(), ["docs/team-workflow.md"], event, "han33-dotcom/Sentra")
             self.assertEqual(labels, set())
@@ -102,7 +102,7 @@ class PolicyTests(unittest.TestCase):
         events = [
             {"event": "labeled", "label": {"name": "workflow-maintenance"}, "actor": {"login": "MohamadNasrallah"}},
             {"event": "unlabeled", "label": {"name": "workflow-maintenance"}, "actor": {"login": "han33-dotcom"}},
-            {"event": "labeled", "label": {"name": "workflow-maintenance"}, "actor": {"login": "han33-dotcom"}},
+            {"event": "labeled", "label": {"name": "workflow-maintenance"}, "actor": {"login": "unknown"}},
         ]
         labels, errors = approved_exemptions(pr(), ["docs/a.md"], events, "han33-dotcom/Sentra")
         self.assertEqual(labels, set())

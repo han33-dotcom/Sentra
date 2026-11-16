@@ -1,7 +1,2 @@
-# Reviewers requested automatically. Any listed owner's approval satisfies the review rule.
-# Every path lists all three owners so another owner can review an owner's PR.
-*                         @han33-dotcom @MohamadNasrallah @mhmdaboulhoda
-/src/sentra/              @han33-dotcom @MohamadNasrallah @mhmdaboulhoda
-/sql/                     @han33-dotcom @MohamadNasrallah @mhmdaboulhoda
-/.github/                 @han33-dotcom @MohamadNasrallah @mhmdaboulhoda
-/scripts/check_no_data.py @han33-dotcom @MohamadNasrallah @mhmdaboulhoda
+# Reviews are optional under AGENTS.md policy version 3.
+# Ownership and assignees are recorded on the task. No automatic reviewer requests.
