@@ -4,7 +4,7 @@ Task: [SEN-32](https://github.com/han33-dotcom/Sentra/issues/32). One consolidat
 from the limitations recorded in each merged PR and the reviewed documents. Each item links its
 source; owners keep their own items current. See also the [evaluation table](evaluation.md).
 
-Last updated: November 12, 2026, from `develop` at `464222e`.
+Last updated: November 12, 2026, from `develop` at `5b011cd`.
 
 ## Meaning of the results
 
@@ -15,8 +15,9 @@ Last updated: November 12, 2026, from `develop` at `464222e`.
   long inactivity uses a hardcoded 08:00–18:00 shift window). See
   [medical evidence](medical-evidence.md). (#56)
 - **Devices measure differently.** Fitbit and WHOOP define HRV, resting heart rate and sleep
-  differently. The organization overview reports devices separately, and baselines are personal.
-  Device separation in the cohort API is still in review. (#56, #62, #79)
+  differently. The overview, processing and the read API report devices separately, and baselines
+  are personal. A participant with readings from both devices counts toward no device statistic.
+  (#56, #62, #79)
 - **Rounded evidence.** The board publishes rounded values; rules run on the unrounded readings, and
   observations say so. Group medians use board display precision. (#62, #65)
 - **Only some rules are explained.** Sustained high heart rate and long inactivity flags are not on
@@ -64,12 +65,20 @@ Last updated: November 12, 2026, from `develop` at `464222e`.
   implemented. (#58, [retention policy](retention-policy.md))
 - **Supabase's own backups remain unverified.** The full backup and isolated restore have
   synthetic evidence. A fresh shared backup and the operator rehearsal remain pending. Apply
-  migration 010 to a rehearsal target if the archive contains follow-up tables. (#58, #67)
+  migration 010 to a rehearsal target if the archive contains follow-up tables, and 011 if the
+  live project has it. (#58, #67, #78)
 - **Compact storage is extra space for now.** Removing the per-field rows (phase 3) stays gated on
   the retention policy, a verified backup, the recovery rehearsal and both owners' approval. (#59)
 - **Publishing keeps two tier slots.** Tiers can be one run ahead of the board after an
   interrupted upload. The next successful refresh repairs the board. Old root objects remain
-  until an admin removes them. (#57, #80)
+  until an admin removes them. A manual `tiers-build` upload is outside the refresh's
+  concurrency group. (#57, #80)
+- **Every refresh with new data rebuilds all tiers.** Incremental monthly partitions are phase 4
+  of the storage plan and follow #46. (#57)
+- **Rollout needs one refresh.** A board published before #79 is rebuilt only when the wellness
+  refresh next runs; while its schedule is off, run it once after deploying. (#79)
+- **Compact reads depend on records.** Phase 3 must keep `audit.records`, whose response ID proves
+  a compact reading is current. The private viewer still reads only per-field rows. (#81)
 - **Growth forecast pending.** The next-batch recommendation needs enough days of collection;
   egress comparisons are only valid within one month. (#60)
 

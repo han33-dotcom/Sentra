@@ -40,12 +40,21 @@ therefore still target the live project.
 4. After `shared-bootstrap`, apply the organization, enrollment and follow-up migrations the
    backup needs, using the same private operator process as for the live project:
    - always `sql/007` and `sql/008` for a full backup;
+   - also `sql/009` when `series` appears under `tables`; this restores compact
+     readings and their identity sequence as well as the per-field projection;
    - also `sql/010` (Follow-ups, SEN-31) when the live `shared-backup-verify` lists
      `org.follow_ups` and `org.follow_up_events` under `tables`. When they appear under
-     `not_installed` instead, the source never had them and 010 is not needed.
+     `not_installed` instead, the source never had them and 010 is not needed;
+   - also `sql/011` (Fitbit sign-in links, SEN-28) whenever it is applied to the live project,
+     after 010 if both apply. Hosted sign-ins for linked Fitbit participants are stored in
+     `enrollment_private.identities` with a `fitbit-link:` prefix that only 011's check
+     constraint accepts. 011 also adds the trigger that protects their operator-managed
+     credential. Without it the restore stops on that constraint and rolls back. The
+     `fitbit_link_invites` table itself is not backed up; issue new links after recovery.
 
-   The restore checks this before writing anything and stops if a table in the backup has no
-   counterpart on the target. It also resets the participant-number and identity sequences, which
+   The restore checks that backed-up private tables exist on the target before inserting rows.
+   Migration 011 changes the identity constraint without changing the backup table list, so check
+   its installation separately. The restore also resets the participant-number and identity sequences, which
    needs the admin role used by `shared-restore` to own them; otherwise it stops with a
    permission error and rolls back.
 
@@ -80,8 +89,8 @@ differs. The original responses are uploaded into the rehearsal project's own
 | Item | Expected | Actual |
 | --- | --- | --- |
 | Backup created at / selection | full, after collection paused | |
-| `shared-backup-verify` | `verified`, N originals, `not_covered` empty. `tables`: the 7 audit tables plus each installed organization, enrollment and follow-up table (15 with Follow-ups installed, 13 without) | |
-| Inventory reconciled with the source | every table installed in the live project is under `tables`; `not_installed` lists only tables it lacks (both follow-up tables before `sql/010`). Check against the migrations applied to the live project | |
+| `shared-backup-verify` | `verified`, N originals, `not_covered` empty. `tables`: the seven required audit tables, compact `series` when installed, and installed private tables in the backup allowlist | |
+| Inventory reconciled with the source | Compare source migrations against `TABLES`, `OPTIONAL_TABLES` and `PRIVATE_TABLES` in [the backup code](../src/sentra/shared_backup.py). Every installed table in that supported inventory appears under `tables`; absent optional/private tables appear under `not_installed` (for example, `audit.series` before 009 or both follow-up tables before 010). Record intentional exclusions separately, even when `not_covered` is empty | |
 | Restore result | `restored_and_verified` | |
 | Row counts per table | equal to the manifest | |
 | Table fingerprints | equal to the manifest | |
@@ -101,6 +110,13 @@ enrollment service is deployed against the target.
 ## Not covered (record as unverified)
 
 - Enrollment browser sessions and rate limits, which are short-lived and excluded on purpose.
+- Pending Fitbit sign-in links (`enrollment_private.fitbit_link_invites`). Issue new links
+  after recovery if needed.
+- Older backups without compact coverage report `audit.series` under `not_covered`.
+  Take a fresh backup using #85 before rehearsing a source with 009 installed. Verification
+  of an older archive does not establish compact-only recovery. Current backups include
+  installed compact rows; the rehearsal must verify their fingerprints, re-expansion and
+  processing results before any per-field deletion ([storage plan](storage-plan.md)).
 - Provider credentials, storage accounts and keys. They are excluded on purpose, so after
   a real loss participants must reconnect and keys come from secure recovery.
 - Parquet tiers and the board. They are derived and rebuilt from the restored audit data.
