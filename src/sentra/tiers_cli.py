@@ -13,6 +13,7 @@ from .shared_config import read_shared
 from .shared_setup import read_admin
 from .tiers import DEFAULT_MAX_READ_BYTES, TIER_BUCKET, AuditReader, build, publish
 from .vault import local_cipher
+from . import monthly_tiers
 
 MIGRATION = Path(__file__).resolve().parents[2] / 'sql' / '006_parquet_tiers.sql'
 
@@ -25,6 +26,7 @@ def add_commands(sub):
                    help='Per-run database egress cap in decimal MB; default 500')
     p.add_argument('--employees', type=int, default=10)
     p.add_argument('--days', type=int, default=30)
+    p.add_argument('--full',action='store_true',help='Rebuild all monthly source partitions instead of reusing verified unchanged ones')
 
 
 def migrate(private):
@@ -62,12 +64,16 @@ def run_command(args):
     collector, _, _ = read_shared(args.config, cipher, role='collector')
     with connect_db(viewer) as db, connect_db(viewer) as budget_db:
         reader = AuditReader(db, limits, budget_db=budget_db, max_read_bytes=args.max_read_mb * 1_000_000)
-        objects, report = build(reader, limits, employees=args.employees, period_days=args.days)
         # Writes use the collector storage account; the database side stays read-only.
         storage = PrivateStorage(collector, reader.reserve, bucket=TIER_BUCKET)
+        monthly_tiers.lock(reader)
         try:
+            objects, report = monthly_tiers.build(reader,limits,storage,employees=args.employees,
+                                                  period_days=args.days,force=args.full)
             result = publish(objects, report, storage, reader, limits, local_dir=args.local)
+            if args.local is not None: monthly_tiers.materialize(objects,args.local)
         finally:
+            monthly_tiers.unlock(reader)
             storage.session.close()
         print(json.dumps({**result, **report}, indent=2))
         return 0
