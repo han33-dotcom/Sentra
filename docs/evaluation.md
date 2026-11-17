@@ -136,4 +136,8 @@ Actual branch settings were read November 17: develop and main both require stri
 current `guard`, Linux/Windows Python 3.11 `test`, and `pr-policy` checks, enforce
 admins, and disallow force-push/deletion. Required human review is off under policy 4.
 Native deletion of merged work branches is enabled. No Slack message/cutover or
-Project completion is claimed by this evidence entry.
+Project completion is claimed by this evidence entry. A separate board-refresh
+preflight at 15:22 UTC estimated 47,955,372 bytes of database reservations against
+809,441,501 bytes remaining. The user authorized one refresh of stored data after
+the next release, capped at 100 MB total reservations, with collection paused;
+this entry records authorization/preflight, not successful execution.
