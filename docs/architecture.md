@@ -67,6 +67,7 @@ applies it and in what order.
 | `006_parquet_tiers.sql` | The private `sentra-tiers` bucket for derived tiers |
 | `007_organization_access.sql` | The `org` schema: organizations, users, memberships, consent history |
 | `008_self_service_enrollment.sql` | The enrollment role; invitations, participant sign-in identities and sessions; encrypted provider credentials |
+| `012_compact_writes.sql` | Disabled-by-default compact writer switch and compatible bounded enrollment recency; apply after 008/009. Collection authorization is separate. |
 | `009_compact_series.sql` | Lossless compact series (additive; nothing deleted); included in new backups since #85. Older archives report `audit.series` as not covered ([storage plan](storage-plan.md)) |
 | `010_follow_ups.sql` | Follow-ups, their append-only history and the follow-up role |
 | `011_fitbit_link_invites.sql` | Separate links for existing Fitbit participants to use hosted sign-in |

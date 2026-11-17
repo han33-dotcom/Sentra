@@ -41,7 +41,14 @@ def pending(db, participant, provider, dataset, *, limit):
 
 def build(db, participant, provider, dataset, responses):
     """(Re)build the series of the given responses from their current measurement rows."""
+    _require_additive_mode(db)
     scope = _scope(participant, provider, dataset)
+    from .tiers import COMPACT_ONLY
+    if db.execute(f'''select exists(select 1 from audit.series_rows c where
+            c.{SCOPE.replace(' and ', ' and c.')} and c.source_response_id=any(%s)
+            and {COMPACT_ONLY})''', (*scope,responses)).fetchone()[0]:
+        raise SentraError('Current compact-only readings cannot be rebuilt from per-field rows; '
+                          'use shared-verify and preserve the compact copy.')
     db.execute(f'delete from audit.series where {SCOPE} and source_response_id = any(%s)', (*scope, responses))
     order = 'order by record_key'
     aggregates = ', '.join(f'array_agg({c} {order})' for c in PER_READING)
@@ -71,6 +78,7 @@ def _comparison(scope, responses):
 
 def verify(db, participant, provider, dataset, responses=None):
     """Compare every compacted response (or the given ones) with its measurement rows."""
+    _require_additive_mode(db)
     query, params = _comparison(_scope(participant, provider, dataset), responses)
     rows = db.execute(query + '''select count(*) filter (where sn is not null and not stale),
                count(*) filter (where stale), count(*) filter (where sn is null),
@@ -107,6 +115,7 @@ def compact(db, guard, participant, provider, dataset, *, limit=200, repair=Fals
     With repair=True the batch is instead the stale responses (corrected after compaction, or whose
     readings moved to another response): each is rebuilt from its current rows, and one with no rows
     left loses its series copy. The measurement rows themselves are never changed."""
+    _require_additive_mode(db)
     select = stale if repair else pending
     with db.transaction():
         responses = select(db, participant, provider, dataset, limit=limit)
@@ -121,3 +130,10 @@ def compact(db, guard, participant, provider, dataset, *, limit=200, repair=Fals
             raise SentraError('Compacted series differ from measurement rows; batch rolled back, nothing kept.')
     overall = verify(db, participant, provider, dataset)
     return {'compacted_responses': len(responses), 'batch_verified_rows': result['verified_rows'], **overall}
+
+
+def _require_additive_mode(db):
+    from .compact_writer import enabled
+    if enabled(db):
+        raise SentraError('Compact collector writes are enabled. Additive rebuild/repair is unavailable; '
+                          'use shared-verify to compare current projections with preserved records.')
