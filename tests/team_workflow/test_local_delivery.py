@@ -62,6 +62,16 @@ class AcceptanceTests(unittest.TestCase):
         comments.append({"user": {"login": "han33-dotcom"}, "body": evidence_comment(report)})
         self.assertFalse(accepted_issue(self.issue, comments, {"1": "merge"}, {"han33-dotcom"}))
 
+    def test_windows_comment_newlines_preserve_acceptance_and_latest_failure(self):
+        def comment(report):
+            return {"user":{"login":"han33-dotcom"},
+                    "body":evidence_comment(report).replace("\n","\r\n")}
+        comments=[comment(self.report)]
+        self.assertTrue(accepted_issue(self.issue,comments,{"1":"merge"},{"han33-dotcom"}))
+        failed=deepcopy(self.report); failed['criteria'][0]['status']='failed'
+        comments.append(comment(failed))
+        self.assertFalse(accepted_issue(self.issue,comments,{"1":"merge"},{"han33-dotcom"}))
+
 
 class ProtectionTests(unittest.TestCase):
     def test_remove_only_retired_acceptance_gate_and_keep_existing_checks(self):
