@@ -69,11 +69,15 @@ not to the 28-day baseline, because baselines use daily values.
 - **Coverage:** a full backup also includes the consent history and organization tables
   (`org.organizations`, `org.org_users`, `org.memberships`, `org.consents`), the follow-up
   history (`org.follow_ups`, `org.follow_up_events`, once sql/010 is installed), and the enrollment
-  invitations and provider identities (`enrollment_private.invites`, `identities`). Tables not yet
-  installed are listed by `shared-backup-verify` as `not_installed` and hold nothing. They are read
+  invitations and provider identities (`enrollment_private.invites`, `identities`). Every backup,
+  full or partial, also includes the compact series (`audit.series`) once sql/009 is installed,
+  with the same row count and fingerprint checks; it is restored with its ids after the response
+  manifest it refers to. Tables not yet installed are listed by `shared-backup-verify` as
+  `not_installed` and hold nothing. A backup made before the compact series was included lists
+  `audit.series` under `not_covered`. They are read
   by the admin role inside the same database snapshot as the audit tables, so the full backup
   needs `.private/supabase-admin.json`. Excluded on purpose: credentials, enrollment browser
-  sessions and rate limits. Partial (`--participant`/`--provider`/`--dataset`) and `--audit-only`
+  sessions and rate limits, and pending Fitbit sign-in links (`fitbit_link_invites`). Partial (`--participant`/`--provider`/`--dataset`) and `--audit-only`
   backups contain the audit tables only, and `shared-backup-verify` lists what they do not cover
   (`not_covered`). Only a full backup with an empty `not_covered` satisfies the gates below.
   These tables force row-level security, so the backup reads them with `row_security = off`.
