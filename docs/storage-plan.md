@@ -297,3 +297,30 @@ Rollout order:
 The 400 MB database ceiling, 20 MB reserve, 700 MB object ceiling, 100 MB viewer
 per-call cap and destructive-storage gates are unchanged. A verified archive still
 needs an isolated recovery rehearsal and the decisions listed in the retention policy.
+
+### Rollout and verified backup observed November 18
+
+Implementation PR #114, release #115 (`a6f3061e2c3ffbadc95000a46563d28369e18f8b`)
+and ancestry sync #116 passed required CI and merged. Migration 015 preserved all
+baseline, reserved-byte and purpose rows. Operator, hosted viewer and paused
+collector configuration now use 4.5 GB. Render served `/health` and `/join` with
+HTTP 200 after deployment. The rebooted Streamlit app accepted the updated limit
+and denied the inactive test identity, which was then signed out. Its platform
+used Python 3.11 and replaced pinned PyArrow 25.0.1 with 24.0.0 during deployment;
+that platform behavior is separate from repository CI evidence.
+
+The one authorized full backup completed at 23:00:26 UTC on November 17
+(November 18 in Beirut), after starting at 22:47:02 UTC. Offline verification
+passed for 16 tables, 251,971 rows, 220 original responses and 662 encrypted
+members, with empty `not_covered` and `not_installed` lists. The archive occupied
+31,798,384 bytes; the private root occupied 282,417,425 bytes. Reservations were
+992,910,104 bytes, within the additional 1.1 GB run cap. Manifest SHA-256:
+`33569268be28dcb2ec289d1cee05ced2bd0147de9fe6a3929041c0b3907f402e`.
+Collection remained paused and no deletion ran. This verifies the supported
+archive inventory, not provider-managed backups, retention agreement or recovery.
+
+The isolated recovery preflight estimates 883,232,170 bytes of reservations and
+327,713,382 bytes of database growth allowance. A separately configured Free
+organization/project is used so its reservations do not compete with the live
+organization's remaining headroom. No live ledger is reset. See the
+[recovery record](recovery-rehearsal.md) for outcome and remaining scenarios.

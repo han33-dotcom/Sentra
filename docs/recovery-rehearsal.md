@@ -1,6 +1,6 @@
 # Recovery rehearsal (#30)
 
-Status: **runbook, not yet run.** Run it after a verified backup ([retention-policy.md](retention-policy.md))
+Status: **full backup verified; hosted rehearsal being prepared.** Run it after a verified backup ([retention-policy.md](retention-policy.md))
 and before any destructive storage step (#46). Record the results table below in the task,
 never the backup itself. NIST SP 800-34 treats restoring from backup media as part of
 contingency testing (see [retention-evidence.md](retention-evidence.md), reference 16).
@@ -19,6 +19,18 @@ crossed. Backups taken before `table_bytes` existed fall back to their serialize
 larger than the real storage: take a fresh backup before a full rehearsal. A full restore fits in an
 empty Free project only while the live audit tables plus this margin stay below the guard. Compare
 `restore_estimate_bytes` with the target's `shared-status` first.
+
+Rows are submitted with Psycopg `executemany()` once per bounded encrypted chunk.
+This avoids waiting for a separate cloud round trip for every row. The same outer
+transaction, capacity checkpoints, table fingerprints and identity-sequence
+rollback apply. A constraint failure within a chunk must roll back earlier rows
+and allocator changes; the real-PostgreSQL regression suite checks this.
+
+Organization egress is shared across its projects. If the live organization's
+remaining allowance cannot cover recovery, use a separately verified Free
+organization within the account's Free project limit. Establish a conservative
+baseline for that organization; never reset the live ledger or assume a new
+project in the same organization has a fresh allowance.
 
 Use a **separate, throwaway Supabase Free project** and a **separate checkout** for it. A
 different `--config` file name in the live checkout is not enough: `load_connection()` and

@@ -56,6 +56,9 @@ not to the 28-day baseline, because baselines use daily values.
   per-backup ceiling and 4.5 GB monthly transfer ceiling. See the
   [rollout and preserved guards](storage-plan.md#november-18-approved-backup-headroom).
   This capacity authorization does not agree the proposed retention schedule.
+  That one backup completed and passed offline verification on November 18
+  (Beirut): 16 tables, 220 originals and no unsupported installed inventory gaps.
+  See the dated [backup record](storage-plan.md#rollout-and-verified-backup-observed-november-18).
 
 - Use the existing `shared-backup` command. It is encrypted with the local key, takes one
   consistent read-only snapshot of the audit tables and includes every original response.

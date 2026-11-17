@@ -396,8 +396,10 @@ def restore_backup(reader, backend, admin_db, *, empty_audit=False):
                     target(table), sql.SQL('overriding system value ' if table in IDENTITY_TABLES else ''), target(table))
                 for name in chunks(reader.info, table):
                     body = reader.read(name)
-                    for line in body.splitlines():
-                        admin_db.execute(insert, (Jsonb(json.loads(line)),))
+                    # Pipeline one already-bounded archive chunk at a time, avoiding a network
+                    # round trip per row while retaining the transaction and usage checkpoints.
+                    with admin_db.cursor() as cursor:
+                        cursor.executemany(insert, ((Jsonb(json.loads(line)),) for line in body.splitlines()))
                     # Recheck real usage as rows land; uncommitted rows already occupy database space.
                     pending += len(body)
                     if pending >= 1_000_000:
