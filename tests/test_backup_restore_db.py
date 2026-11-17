@@ -255,6 +255,23 @@ class BackupRestoreDatabaseTests(unittest.TestCase):
             if db.execute('select to_regclass(%s)', (m.qualified(table),)).fetchone()[0] is not None]
         return {name: db.execute(f'select last_value,is_called from {name}').fetchone() for name in names}
 
+    def test_constraint_failure_inside_a_batch_rolls_back_earlier_rows(self):
+        target, _ = self.database()
+        try:
+            # Both follow-up events share one archive chunk. One fails after earlier
+            # tables and their identity allocators have been restored.
+            target.execute("alter table org.follow_up_events add check (status <> 'resolved')")
+            before = self.allocators(target)
+            with tempfile.TemporaryDirectory() as folder:
+                reader = self.backup(folder, self.admin)
+                with self.assertRaises(self.psycopg.errors.CheckViolation):
+                    m.restore_backup(reader, self.Backend(self.source), target, empty_audit=True)
+            for table in ('audit.participants', 'org.follow_ups', 'org.follow_up_events'):
+                self.assertEqual(target.execute(f'select count(*) from {table}').fetchone()[0], 0)
+            self.assertEqual(self.allocators(target), before)
+        finally:
+            target.close()
+
     def test_failed_restore_leaves_every_allocator_where_it_was(self):
         # The allocators move as their tables land, before later tables are written and verified. If a
         # later step fails, they must roll back with the rows: both when they advance normally (p150)
