@@ -1,5 +1,12 @@
 # Viewer redesign and ongoing collection review — 10 October 2026
 
+> Historical stage delivery record: commit/publication approval, independent
+> review and stage sequencing below describe the original rollout. Current code
+> delivery follows [AGENTS.md](../AGENTS.md) and [agent-owned delivery](local-delivery.md):
+> implementation-agent self-review, acceptance, CI, develop, then main. Old code
+> publication gates do not apply. Operational, consent, expert and destructive-data
+> approvals remain in force; historical activation never authorizes collection now.
+
 ## Sprint 5 closeout
 
 The user approved merging the complete ETL MVP and redesigned viewer into `main`,

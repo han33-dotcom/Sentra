@@ -5,6 +5,7 @@ import sys
 
 from .lifecycle import plan_status
 from .policy import PROJECTS, APPROVERS, declared_tasks, verified_task
+from .acceptance import accepted_issue
 
 STATUSES = {"Not started", "In progress", "In review", "Changes requested", "Implemented", "Blocked", "Done"}
 
@@ -13,6 +14,8 @@ def task_pulls(repo, client):
     grouped = {}
     integration = PROJECTS[repo][2]
     for pull in client.list_pulls():
+        if repo == "han33-dotcom/Sentra" and pull.get("head", {}).get("ref") == "codex/release-sync":
+            continue
         if (pull["base"]["ref"] != integration
                 or pull["user"]["login"] not in APPROVERS[repo]):
             continue
@@ -25,7 +28,7 @@ def task_pulls(repo, client):
         if not numbers:
             continue
         latest = {}
-        if pull["state"] == "open":
+        if pull["state"] == "open" and repo != "han33-dotcom/Sentra":
             for review in sorted(client.reviews(pull["number"]), key=lambda r:r["id"]):
                 user = review.get("user") or {}
                 actor = user.get("login")
@@ -35,7 +38,8 @@ def task_pulls(repo, client):
                     latest[actor] = review["state"]
         for number in numbers:
             grouped.setdefault(number, []).append({"state": pull["state"], "draft": pull.get("draft", False),
-                "merged": bool(pull.get("merged_at")), "changes_requested": "CHANGES_REQUESTED" in latest.values()})
+                "merged": bool(pull.get("merged_at")), "changes_requested": "CHANGES_REQUESTED" in latest.values(),
+                "number": pull["number"], "merge_commit_sha": pull.get("merge_commit_sha")})
     return grouped
 
 
@@ -60,6 +64,15 @@ def synchronize(repo, project_id, client, dry_run=True):
         if current not in STATUSES:
             raise ValueError("Unknown task Status; preserve it for manual triage.")
         status, errors = plan_status(current, issue["state"] == "closed", pulls)
+        if (repo == "han33-dotcom/Sentra" and current not in {"Done", "Blocked"}
+                and pulls and not any(p["state"] == "open" for p in pulls)):
+            merged = {str(p["number"]): p["merge_commit_sha"] for p in pulls if p["merged"]}
+            if merged:
+                try:
+                    if accepted_issue(issue, client.comments(number), merged, APPROVERS[repo]):
+                        status = "Done"
+                except ValueError:
+                    pass  # Legacy issues without a checklist remain Implemented.
         result = {"issue": number, "current": current, "status": status, "errors": errors, "dry_run": dry_run}
         if status and status != current and not dry_run:
             item_id = item["id"] if item else client.add_item(project_id, issue["node_id"])

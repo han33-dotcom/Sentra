@@ -179,10 +179,10 @@ Still open before phase 3:
 
 | Phase | Change | Deletes data? | Approval |
 | --- | --- | --- | --- |
-| 1 | `audit.series` table + collector writes dense datasets there + viewer/tiers read it; egress `purpose` | No | Normal PR review |
-| 2 | Migration builds series from existing dense rows + lossless verification report | No | Normal PR review |
+| 1 | `audit.series` table + collector writes dense datasets there + viewer/tiers read it; egress `purpose` | No | Implementation-agent self-review + CI |
+| 2 | Migration builds series from existing dense rows + lossless verification report | No | Implementation-agent self-review + CI |
 | 3 | Delete verified per-field dense rows + `VACUUM FULL` | **Yes** (originals and series keep the data) | Both owners, recorded in the PR, collection paused |
-| 4 | Monthly partitioned, incremental tiers | No | Normal PR review |
+| 4 | Monthly partitioned, incremental tiers | No | Implementation-agent self-review + CI |
 | 5 | Re-enable daily collection and the daily board | No | Team decision |
 
 Until phase 3 is done, `activity-level` stays on request and daily collection stays

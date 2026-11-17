@@ -1,5 +1,12 @@
 # Stage 5 — private team audit viewer
 
+> Historical stage delivery record: commit/publication approval, independent
+> review and stage sequencing below describe the original rollout. Current code
+> delivery follows [AGENTS.md](../AGENTS.md) and [agent-owned delivery](local-delivery.md):
+> implementation-agent self-review, acceptance, CI, develop, then main. Old code
+> publication gates do not apply. Operational, consent, expert and destructive-data
+> approvals remain in force; historical activation never authorizes collection now.
+
 Implemented on `ETL-pipeline`, 8 October 2026; **private hosted acceptance completed
 9 October 2026** using the authorized owner's real Google session.
 Open the [private team viewer](https://sentra-wearable-audit.streamlit.app).
@@ -91,8 +98,9 @@ supports one private app. Apps from private repositories default to private, and
 invited viewers can invite others. The application allowlist remains the authority
 even when repository developers or other platform-invited viewers reach the app.
 
-1. Publish reviewed code after the user's commit/push approval. Choose the reviewed
-   branch in Streamlit; deploying `ETL-pipeline` avoids a needless merge into main.
+1. Deliver code through develop and main using [agent-owned delivery](local-delivery.md).
+   Deployment remains a separately authorized operator action. Select the intended
+   released revision in Streamlit; `ETL-pipeline` below records the historical host.
    Entrypoint: `viewer/app.py`; Python **3.11**. `viewer/requirements.txt` takes
    precedence over the root package definition; it pins viewer/cloud dependencies.
    The deployed runtime is Python 3.11.17. The host replaced pinned PyArrow 25.0.1

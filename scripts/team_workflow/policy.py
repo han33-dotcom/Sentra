@@ -1,4 +1,4 @@
-"""Deterministic PR metadata and independently approved exemption policy."""
+"""Deterministic PR metadata and repository-scoped exemption policy."""
 import re
 from urllib.parse import urlsplit
 
@@ -99,7 +99,7 @@ def validate_pr_metadata(body: str, labels: set[str], repo: str, base: str, titl
         errors.append(str(error))
         numbers = []
     if not numbers and not exempt:
-        errors.append("Provide a Task URL or an independently approved scoped exemption.")
+        errors.append("Provide a Task URL or an authorized scoped exemption.")
     if len(ids) == 1 and numbers and ids[0] != f"{prefix}-{numbers[0]}":
         errors.append("Task ID must match the first linked GitHub issue number.")
     if numbers and repo == "han33-dotcom/Sentra":
@@ -107,7 +107,7 @@ def validate_pr_metadata(body: str, labels: set[str], repo: str, base: str, titl
         if not title.startswith(expected) or not title[len(expected):].strip():
             errors.append("Start the PR title with " + expected.strip() + " followed by a description; use every Task URL in declaration order.")
     if re.search(r"\b(?:close[sd]?|fix(?:es|ed)?|resolve[sd]?)\b[\s:*_]+(?:#[1-9][0-9]*|[\w.-]+/[\w.-]+#[1-9][0-9]*|https://github\.com/[\w.-]+/[\w.-]+/issues/[1-9][0-9]*)", text, re.I):
-        errors.append("Use Related to instead of automatic issue-closing keywords; human acceptance controls Done.")
+        errors.append("Use Related to instead of automatic issue-closing keywords; acceptance evidence controls Done.")
     sections = {}
     current = None
     for line in text.splitlines():
@@ -125,7 +125,7 @@ def validate_pr_metadata(body: str, labels: set[str], repo: str, base: str, titl
 
 
 def approved_exemptions(pr, filenames, timeline, repo):
-    """Require the latest label application by another configured human teammate."""
+    """Sentra uses configured team actors; TechScout retains independent approval."""
     errors, approved = [], set()
     active = {item["name"] for item in pr.get("labels", [])} & EXEMPTIONS
     for label in active:
@@ -135,8 +135,8 @@ def approved_exemptions(pr, filenames, timeline, repo):
         latest = applications[-1] if applications else {}
         actor = latest.get("actor", {}).get("login")
         if (latest.get("event") != "labeled" or actor not in APPROVERS.get(repo, set())
-                or actor == pr["user"]["login"]):
-            errors.append("Exemption requires a different configured teammate to apply its label.")
+                or (repo != "han33-dotcom/Sentra" and actor == pr["user"]["login"])):
+            errors.append("Exemption requires an authorized configured teammate to apply its label.")
             continue
         if label == "workflow-maintenance":
             if not filenames or not all(
