@@ -154,7 +154,11 @@ def create_app(settings=None, store_factory=None, provider_login=None):
             fitbit_email_hash = value.get('fitbit_email_hash')
             if fitbit_email_hash and data.provider != 'google_health':
                 raise EnrollmentError('Use the original Fitbit account for this link.', 403)
-            url, pending = login().begin(data.provider, fitbit_email_hash=fitbit_email_hash)
+            # Returning Google sign-in proves identity only. Reconnect is a distinct
+            # action after login; it must not request health consent just to manage sharing.
+            identity_only = data.provider == 'google_health' and not account and not value.get('invite_hash')
+            url, pending = login().begin(data.provider, fitbit_email_hash=fitbit_email_hash,
+                                         identity_only=identity_only)
             repository.pending(sid(request), request.headers.get('x-csrf-token', ''), data.provider, data.model_dump(exclude={'provider'}), pending)
         return {'url': url}
 

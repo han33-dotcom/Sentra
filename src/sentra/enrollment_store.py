@@ -181,6 +181,9 @@ class EnrollmentStore:
             row = self.db.execute('''select participant_id,identity_hash from enrollment_private.identities
                 where provider=%s and identity_hash=any(%s)''', (provider, identity_keys)).fetchone()
             expected = pending.get('expected_pid')
+            identity_only = pending.get('identity_only') is True
+            if identity_only and (provider != 'google_health' or not row or expected or value.get('invite_hash')):
+                raise EnrollmentError('Use your invitation to join, or sign in to an existing participation.', 403)
             if expected and row and row[0] != expected:
                 raise EnrollmentError('That wearable belongs to a different participation. Sign out and try again.', 409)
             pid = row[0] if row else expected
@@ -246,7 +249,7 @@ class EnrollmentStore:
             # Linking and later sign-ins prove the hosted identity, not the source of the legacy token.
             operator_managed = fitbit_link or (row is not None and row[1].startswith(FITBIT_LINK_IDENTITY_PREFIX))
             # A login to a withdrawn account can view that state, but cannot restart it.
-            if not operator_managed and consent['open'] and not consent['withdrawn']:
+            if not identity_only and not operator_managed and consent['open'] and not consent['withdrawn']:
                 repo = TokenRepository(self.db)
                 with repo.lock(pid, provider):
                     previous = repo.read(pid, provider, required=False)
