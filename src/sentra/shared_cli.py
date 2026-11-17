@@ -50,7 +50,7 @@ def add_commands(sub):
             p.add_argument('--repair',action='store_true',help='rebuild compacted responses whose measurement rows changed since')
     p = sub.add_parser('shared-backup-verify',help='Offline check of an encrypted backup: hashes, row counts, fingerprints, originals')
     p.add_argument('backup',type=Path)
-    p = sub.add_parser('shared-restore',help='Restore health-only backup into a new isolated private schema')
+    p = sub.add_parser('shared-restore',help='Restore a verified backup into a new isolated private schema')
     p.add_argument('backup',type=Path)
     p.add_argument('--empty-audit',action='store_true',help='Operational restoration only into completely empty initialized audit tables')
     p.add_argument('--target-project',help='project ref of the configured target; required with --empty-audit')

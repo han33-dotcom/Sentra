@@ -163,6 +163,10 @@ when verified per-field dense rows are removed. The opt-in PostgreSQL tests in
 omitted by a newer response, written through the collector's `put_records`. Without `sql/009`, tiers read
 `audit.measurements` as before.
 
+Full backups include `audit.series` once sql/009 is installed. It is verified by row count and
+fingerprint and restored with its ids, so a verified backup also covers readings kept only in
+the compact copy. A restore stops before writing if the target lacks sql/009.
+
 Still open before phase 3:
 - The collector still writes per-field rows (phase 1 collector change, coordinated with the
   collection owner, #47).
