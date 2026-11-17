@@ -208,13 +208,16 @@ class DemonstrationCopyTests(unittest.TestCase):
         self.assertEqual(report['group_summary'], [])
         self.assertEqual(report['group_trends'], [])
         self.assertEqual(report['participation']['connected'], '<5')
+        self.assertEqual(report['participation']['enrolled'], '<5')
+        self.assertIn('| <5 |', text)
+        self.assertIn('<5', pdf_text(reports.pdf(report)))
         self.assertNotIn('p92', text)
 
     def test_a_demonstration_set_cannot_widen_the_users_own_decision(self):
         rows = agreed('p91')
         report, text = build('officer@a.test', rows, demonstration=EVERYONE)  # caller passes too much
         self.assertEqual([p['id'] for p in report['individuals']], ['p91'])
-        self.assertEqual(report['participation']['enrolled'], '1')
+        self.assertEqual(report['participation']['enrolled'], '<5')
         for pid in EVERYONE - {'p91'}:
             self.assertNotIn(pid, text)
 

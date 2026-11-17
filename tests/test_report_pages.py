@@ -116,7 +116,8 @@ class ReportPageTests(unittest.TestCase):
         self.assertEqual(app.multiselect(key='audit_report_people').options, [])  # p91 did not agree
         [text] = downloads(app)
         self.assertIn('Demonstration copy', text)
-        self.assertIn('| 2 |', text)  # enrolled: the two who agreed
+        self.assertIn('| <5 |', text)  # demonstration consent is a private subset of the roster
+        self.assertNotIn('| 2 |', text)
         self.assertIn('No group statistic can be shown', text)  # fewer than 5 agreed
         self.assertRegex(filename(app), r'-7d-demo\.md$')
         self.assertIn('Demonstration copy', pdf_text(pdf_download(app)))

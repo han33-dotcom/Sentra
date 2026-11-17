@@ -109,7 +109,9 @@ def build(decision, *, board, group_people, scope, enrolled, catalog, include, d
     version = board.get('assessment_version')
     counts = participation(scope, catalog, group_people, today=today, assessment_version=version)
     counts['enrolled'] = len(scope.intersection(enrolled))
-    shown = {k: (str(v) if team or k == 'enrolled' else shown_count(v))
+    # The normal roster count is public within its organization; the demonstration
+    # subset reveals private consent choices and needs the same small-count guard.
+    shown = {k: (str(v) if team or (k == 'enrolled' and demonstration is None) else shown_count(v))
              for k, v in counts.items() if k != 'recent_days'}
     end = latest_group_day(group_people) if team else publishable_end(group_people, scope)
     selected = scope.intersection(include)
