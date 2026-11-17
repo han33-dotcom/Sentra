@@ -7,6 +7,11 @@ from sentra.shared import Limits, CapacityStop
 
 
 class ViewerReaderTests(unittest.TestCase):
+    def budget(self):
+        db=Mock()
+        db.execute.return_value.fetchone.return_value=(False,)
+        return db
+
     def module(self):
         try:
             from sentra import viewer_reader
@@ -32,14 +37,14 @@ class ViewerReaderTests(unittest.TestCase):
             db=Mock()
             db.cursor.return_value.__enter__=Mock(return_value=Mock(execute=Mock(side_effect=missing('absent'))))
             db.cursor.return_value.__exit__=Mock(return_value=False)
-            reader=m.ViewerReader({},Limits(),lambda:'officer@a.test',db=db,budget_db=Mock())
+            reader=m.ViewerReader({},Limits(),lambda:'officer@a.test',db=db,budget_db=self.budget())
             with self.subTest(error=missing.__name__):
                 self.assertEqual(reader.organization_rows(),([],[]))
                 db.rollback.assert_called_once()
         db=Mock()
         db.cursor.return_value.__enter__=Mock(return_value=Mock(execute=Mock(side_effect=psycopg.OperationalError('down'))))
         db.cursor.return_value.__exit__=Mock(return_value=False)
-        reader=m.ViewerReader({},Limits(),lambda:'officer@a.test',db=db,budget_db=Mock())
+        reader=m.ViewerReader({},Limits(),lambda:'officer@a.test',db=db,budget_db=self.budget())
         with self.assertRaisesRegex(SentraError,'unavailable'):reader.organization_rows()
         denied=Mock(side_effect=SentraError('denied'));db=Mock()
         with self.assertRaisesRegex(SentraError,'denied'):
@@ -53,7 +58,7 @@ class ViewerReaderTests(unittest.TestCase):
         db=MagicMock()
         db.cursor.return_value.__enter__=Mock(return_value=Mock(execute=Mock(side_effect=psycopg.errors.UndefinedTable('absent'))))
         db.cursor.return_value.__exit__=Mock(return_value=False)
-        reader=m.ViewerReader({},Limits(),lambda:'officer@a.test',db=db,budget_db=Mock())
+        reader=m.ViewerReader({},Limits(),lambda:'officer@a.test',db=db,budget_db=self.budget())
         self.assertEqual(reader.follow_up_rows(),([],[]))
         db.rollback.assert_called_once()
 
@@ -84,7 +89,7 @@ class ViewerReaderTests(unittest.TestCase):
         db.transaction.return_value.__exit__=Mock(return_value=False)
         db.execute.return_value.fetchone.return_value=(1,20_000_001)
         denied=Mock(side_effect=SentraError('denied'))
-        reader=m.ViewerReader({},Limits(),denied,db=db,budget_db=Mock())
+        reader=m.ViewerReader({},Limits(),denied,db=db,budget_db=self.budget())
         f=m.Selection('p99','whoop','sleep',date(2026,10,7),date(2026,10,8))
         with self.assertRaisesRegex(SentraError,'denied'):reader.records(f)
         db.execute.assert_not_called()
@@ -121,7 +126,7 @@ class ViewerReaderTests(unittest.TestCase):
         db=Mock()
         db.execute.return_value.fetchone.return_value=({'database_bytes':10,'object_bytes':10,
                                                         'egress_bytes':None},)
-        reader=m.ViewerReader({},Limits(),lambda:'allowed',db=db,budget_db=Mock())
+        reader=m.ViewerReader({},Limits(),lambda:'allowed',db=db,budget_db=self.budget())
         with self.assertRaises(CapacityStop): reader.usage()
 
     def test_payload_reservation_survives_failed_read_transaction(self):
@@ -135,7 +140,7 @@ class ViewerReaderTests(unittest.TestCase):
         cursor=Mock();cursor.__enter__=Mock(return_value=cursor);cursor.__exit__=Mock(return_value=False)
         cursor.fetchall.side_effect=psycopg.OperationalError('simulated interrupted payload transfer')
         main.cursor.return_value=cursor
-        budget=Mock();budget.autocommit=True
+        budget=self.budget();budget.autocommit=True
         reader=m.ViewerReader({},Limits(),lambda:'allowed',db=main,budget_db=budget)
         with self.assertRaises(SentraError):
             reader.measurements(m.Selection('p99','whoop','sleep',date(2026,10,7),date(2026,10,8)))

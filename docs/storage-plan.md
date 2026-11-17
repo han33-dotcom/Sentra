@@ -92,9 +92,15 @@ tiers job ──►  sentra-tiers          monthly parquet partitions, built inc
 
 Egress is the allowance closest to its limit: 2.52 GB of the 3.5 GB guard by 11 October.
 
-- **Attribute it first.** Add a `purpose` to every egress reservation (collector,
-  viewer, tiers, backup, verify), so the monthly spend can be broken down. Today only
-  the total is known.
+- **Attribute reservations.** `sql/013_egress_purpose.sql` records collector, viewer,
+  tiers, backup, verify, processing, enrollment, followups and operations reservations.
+  `shared-status` includes `egress_reserved_by_purpose`. These are conservative reserved
+  allowances, not measured network traffic. The pre-migration reserved total remains
+  `prior_unattributed`; the dashboard baseline stays separate. Nothing resets the ledger
+  or changes ceilings, freshness, independent viewer reservations or retry accounting.
+  Old clients retain their two-argument functions; updated clients fall back only when
+  the new function is absent, never after a failed reservation. Apply after 005; no
+  collection authorization is implied.
 - **Incremental tiers** (step 4), and a refresh only after a new collection run
   (already in place).
 - **Board instead of database queries.** The board reads one JSON file of about 1 MB or
@@ -195,7 +201,7 @@ recovery, with 012 defaulting off. Synthetic PostgreSQL tests compare all 22 col
 exercise role permissions, retries, correction/omission, rollback and capacity rejection.
 
 Still open before phase 3:
-- Egress `purpose` attribution is not added yet.
+- Egress purpose attribution is implemented by sql/013 and compatible clients; apply the migration to begin the breakdown.
 - Phase 3 deletion stays gated as below.
 
 ## Phases and approvals
