@@ -1,8 +1,16 @@
 # Readable viewer and ongoing collection implementation plan
 
+> Historical stage delivery record: commit/publication approval, independent
+> review and stage sequencing below describe the original rollout. Current code
+> delivery follows [AGENTS.md](../AGENTS.md) and [agent-owned delivery](local-delivery.md):
+> implementation-agent self-review, acceptance, CI, develop, then main. Old code
+> publication gates do not apply. Operational, consent, expert and destructive-data
+> approvals remain in force; historical activation never authorizes collection now.
+
 **Goal:** Implement the approved private viewer design and an explicit ongoing daily collection control.
 
-**Architecture:** Compute curated daily/session tables from existing audit records without another stored copy. Keep the existing reader, identity checks, original exports, quota guards and collector locks. Explicit ongoing mode supplements the legacy bounded window; publication remains subject to human review.
+**Architecture:** Compute curated daily/session tables from existing audit records without another stored copy. Keep the existing reader, identity checks, original exports, quota guards and collector locks. Explicit ongoing mode supplements the legacy bounded window; publication follows [local delivery](local-delivery.md), with optional additional code review.
+Collection activation still requires explicit operator authorization.
 
 **Stack:** Existing Python, PostgreSQL/Supabase Free, Streamlit and GitHub Actions.
 

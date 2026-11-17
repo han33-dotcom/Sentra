@@ -1,5 +1,12 @@
 # Stage 5 — private audit viewer plan
 
+> Historical stage delivery record: commit/publication approval, independent
+> review and stage sequencing below describe the original rollout. Current code
+> delivery follows [AGENTS.md](../AGENTS.md) and [agent-owned delivery](local-delivery.md):
+> implementation-agent self-review, acceptance, CI, develop, then main. Old code
+> publication gates do not apply. Operational, consent, expert and destructive-data
+> approvals remain in force; historical activation never authorizes collection now.
+
 Approved stage, 8 October 2026. Keep `ETL-pipeline`; implement inline. The user's
 instruction to complete authorized work within a stage overrides repeated design
 approval and automatic skill commits/worktrees. Stage 4 documentation approval

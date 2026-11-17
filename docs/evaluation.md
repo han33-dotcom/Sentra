@@ -10,8 +10,9 @@ Two kinds of verification are kept apart:
 - **Real/hosted**: observed on the deployed services or real accounts, recorded privately by the
   owner; only aggregate, non-identifying results appear here.
 
-"Pending" means not yet recorded, not failed. A task is Done only when a teammate verifies its
-acceptance on the issue; this table does not close anything.
+"Pending" means not yet recorded, not failed. A task is Done when every acceptance criterion has recorded evidence under
+[local delivery](local-delivery.md). Agents verify accessible criteria; only inaccessible
+observations need human instructions. This table does not close anything.
 
 Last updated: November 12, 2026, from `develop` at `5b011cd`.
 
