@@ -19,6 +19,6 @@ team_data_agreement = false
 confirmed_free_plan = false # Verify the organization billing page before setting true.
 database_bytes = 400000000
 object_bytes = 700000000
-monthly_egress_bytes = 3500000000
+monthly_egress_bytes = 4500000000
 reserve_bytes = 20000000
 # Encrypted collector/viewer credentials are created beneath .private/shared.

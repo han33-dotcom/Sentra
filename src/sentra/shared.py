@@ -7,12 +7,15 @@ from .datasets import canonical
 from .errors import SentraError
 from .local_store import CapacityStop,compact_record
 
+# Owner-approved November 18, 2026; retain 500 MB below the Free allowance.
+MONTHLY_EGRESS_CEILING = 4_500_000_000
+
 
 @dataclass(frozen=True)
 class Limits:
     database_bytes: int = 400_000_000
     object_bytes: int = 700_000_000
-    monthly_egress_bytes: int = 3_500_000_000
+    monthly_egress_bytes: int = MONTHLY_EGRESS_CEILING
     reserve_bytes: int = 20_000_000
 
     def __post_init__(self):

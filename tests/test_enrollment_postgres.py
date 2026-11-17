@@ -109,6 +109,25 @@ class EnrollmentPostgresTests(unittest.TestCase):
     def browser(self):
         return TestClient(self.app, base_url=self.config.origin, follow_redirects=False)
 
+    def test_enrollment_above_old_ceiling_remains_bounded_by_approved_limit(self):
+        with self.admin_db() as db:
+            saved = db.execute('select baseline_bytes,reserved_bytes from collector_private.egress_budget').fetchone()
+            db.execute('update collector_private.egress_budget set baseline_bytes=3600000000,reserved_bytes=0')
+        try:
+            with open_store(self.config):
+                pass
+            with self.admin_db() as db:
+                self.assertEqual(db.execute('select reserved_bytes from collector_private.egress_budget').fetchone()[0],65536)
+                db.execute('update collector_private.egress_budget set baseline_bytes=4499934464,reserved_bytes=0')
+            with self.assertRaises(EnrollmentError):
+                with open_store(self.config):
+                    self.fail('A request at the ceiling must stop before yielding a store')
+            with self.admin_db() as db:
+                self.assertEqual(db.execute('select reserved_bytes from collector_private.egress_budget').fetchone()[0],0)
+        finally:
+            with self.admin_db() as db:
+                db.execute('update collector_private.egress_budget set baseline_bytes=%s,reserved_bytes=%s',saved)
+
     @contextmanager
     def admin_db(self):
         with psycopg.connect(**self.admin_config, autocommit=True) as db:
@@ -474,8 +493,8 @@ class EnrollmentPostgresTests(unittest.TestCase):
             # Stale publication, old assessment version and future/old day stay unknown.
             for day,at,version in ((today,now-timedelta(days=4),ASSESSMENT_VERSION),
                                   (today,now,'old-contract'),
-                                  ((now.date()+timedelta(days=1)).isoformat(),now,ASSESSMENT_VERSION),
-                                  ((now.date()-timedelta(days=4)).isoformat(),now,ASSESSMENT_VERSION)):
+                                  ((date.fromisoformat(today)+timedelta(days=1)).isoformat(),now,ASSESSMENT_VERSION),
+                                  ((date.fromisoformat(today)-timedelta(days=4)).isoformat(),now,ASSESSMENT_VERSION)):
                 db.execute('delete from collector_private.assessment_eligibility')
                 db.execute('insert into collector_private.assessment_eligibility values(%s,%s,true)',(person['participant_id'],day))
                 db.execute('update collector_private.assessment_publication set published_at=%s,version=%s',(at,version))

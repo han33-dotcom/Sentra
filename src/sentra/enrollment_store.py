@@ -12,6 +12,7 @@ import psycopg
 from .cloud_tokens import TokenRepository
 from .enrollment import EnrollmentError, digest
 from .processing.pipeline import ASSESSMENT_VERSION
+from .shared import MONTHLY_EGRESS_CEILING
 
 FITBIT_LINK_CREDENTIAL_STATES = ('active', 'refresh_pending')
 FITBIT_LINK_IDENTITY_PREFIX = 'fitbit-link:'
@@ -29,7 +30,7 @@ def open_store(settings):
                 application_name='sentra-enrollment',
                 options='-c statement_timeout=15000 -c lock_timeout=5000') as db:
             # Every database request consumes the existing conservative shared budget.
-            db.execute('select collector_private.reserve_egress(65536,3500000000)')
+            db.execute('select collector_private.reserve_egress(65536,%s)', (MONTHLY_EGRESS_CEILING,))
             if db.execute('select pg_database_size(current_database())').fetchone()[0] + 65536 >= 380_000_000:
                 raise EnrollmentError('Enrollment is temporarily unavailable. Please try later.', 503)
             yield EnrollmentStore(db, settings)
@@ -333,7 +334,7 @@ class EnrollmentStore:
                       assessable=0, assessment_unknown=0, withdrawn=0)
         for (pid,) in people:
             # Credential envelopes/status queries get their own conservative allowance.
-            self.db.execute('select collector_private.reserve_egress(65536,3500000000)')
+            self.db.execute('select collector_private.reserve_egress(65536,%s)', (MONTHLY_EGRESS_CEILING,))
             consent = self._consent(pid)
             if not consent or consent['org_id'] != org_id:
                 continue

@@ -115,7 +115,7 @@ allows, and the board only needs minute heart rate.
 - **Objects:** the tiers are about 3–4 MB and `board.json` is under 1 MB; both are
   replaced on each run.
 - **Egress:** each refresh after new collection reads about 40 MB from the database (the
-  full tier rebuild). Daily, that is about 1.2 GB per month of the 3.5 GB monthly
+  full tier rebuild). Daily, that is about 1.2 GB per month of the 4.5 GB monthly
   budget. When collection is paused, a run reads only a few kilobytes.
 - **Daily collection itself:** about 4.5 MB of database per participant-day. With about
   70 MB left before the 380 MB import stop, two participants fill it in roughly a week.

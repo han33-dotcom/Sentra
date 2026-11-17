@@ -14,13 +14,13 @@ Two kinds of verification are kept apart:
 [local delivery](local-delivery.md). Agents verify accessible criteria; only inaccessible
 observations need human instructions. This table does not close anything.
 
-Last updated: November 17, 2026. Implementation and hosted observations are distinguished below; a later release does not retroactively change a tested deployment.
+Last updated: November 18, 2026. Implementation and hosted observations are distinguished below; a later release does not retroactively change a tested deployment.
 
 ## Privacy and access (SEN-27, SEN-26, SEN-32)
 
 | Item | Expected | Actual (recorded) | Evidence | Tests | Real/hosted |
 | --- | --- | --- | --- | --- | --- |
-| Deny by default | Unknown, inactive or ambiguous accounts see nothing and cause no protected read | Denied before any protected read; removed officers denied on the next render | #51, #55, #64; `test_access.py`, `test_viewer_access.py`, `test_privacy_matrix.py` | Yes | Pending (hosted procedure below) |
+| Deny by default | Unknown, inactive or ambiguous accounts see nothing and cause no protected read | Denied before any protected read; removed officers denied on the next render | #51, #55, #64; `test_access.py`, `test_viewer_access.py`, `test_privacy_matrix.py` | Yes | Sequential no-role/inactive denial passed November 17; see scope below |
 | Organization isolation | An organization user never sees another organization's participants | Holds on all ten viewer pages, including both Trends views, Follow-ups and Reports (page and downloaded file), even when the reader returns everyone | `test_privacy_matrix.py` (officer and reviewer of org A, officer of org B) | Yes | Pending |
 | Sharing scope | `group_only` participants count only in group statistics, never individually | Never shown individually on any page; counted in the overview | `test_privacy_matrix.py`, `test_organization_pages.py` | Yes | Pending |
 | Small groups | Each group statistic needs ≥ 5 eligible contributors of its own; small counts not revealed | Statistics below 5 show "Not shown" and "<5"; organization users never see counts 1–4 | #62; `test_organization.py`, `test_privacy_matrix.py` | Yes | Pending |
@@ -38,7 +38,7 @@ Last updated: November 17, 2026. Implementation and hosted observations are dist
 | Overview and profiles | Participation states counted separately; group statistics per device with k = 5; profiles only within sharing | Implemented as expected | #62; `test_organization*.py` | Yes | Team overview/profiles rendered November 17; organization-account matrix pending |
 | Observations | What changed, which readings, limitations; wellness vs collection vs medical kept apart; provisional labels | Implemented; stale or future data draws no conclusion | #65; `test_observations.py` | Yes | Hosted stale-data explanation observed November 17 |
 | Trends | Selectable periods, personal baseline comparison, group exploration with k = 5 per statistic, gaps kept | Implemented; organization users see only devices that reach 5 and no hidden-day counts; department comparisons deferred | #68; `test_trends.py`, `test_organization_pages.py`, `test_privacy_matrix.py` | Yes | Team Trends rendered November 17; no eligible real group statistic |
-| Follow-ups | Assignee, open/ongoing/resolved history, narrow write path, same boundaries | Merged into `develop`. The viewer uses a separate write role. Migration 010 is applied; private hosted write-role configuration and officer acceptance remain | #72; `test_follow_ups_db.py`, `test_privacy_matrix.py` | Yes | Team read-only view rendered November 17; officer write acceptance pending |
+| Follow-ups | Assignee, open/ongoing/resolved history, narrow write path, same boundaries | Merged into `develop`. The viewer uses a separate write role. Migration 010 and the private hosted write-role configuration are applied; sequential synthetic group-note acceptance passed | #72; `test_follow_ups_db.py`, `test_privacy_matrix.py` | Yes | Officer create/update, assigned-reviewer update, cross-organization history exclusion and deactivation denial passed November 17 |
 | Reports | Permitted summaries, trends, explanations and limitations; same boundaries for downloads | Merged/released in #82/#100: preview with Markdown and PDF downloads from the same content, rebuilt from the current access decision each load; follow-ups as counts only; demonstration copy limited to people who agreed | SEN-42; `test_reports.py`, `test_report_pages.py`, `test_privacy_matrix.py`; [reports](reports.md) | Yes | Reports preview and both download controls rendered November 17; permitted demonstration remains pending |
 
 ## Enrollment and collection (SEN-28, SEN-38, SEN-44, SEN-47)
@@ -53,10 +53,10 @@ Last updated: November 17, 2026. Implementation and hosted observations are dist
 
 | Item | Expected | Actual (recorded) | Evidence | Tests | Real/hosted |
 | --- | --- | --- | --- | --- | --- |
-| Incomplete assessments | Missing inputs or short history never read as calm; states consistent everywhere | "Partial" and "Not enough information" states; versioned board. Group statistics in processing and the read API are per device, as in the overview, with matching contributor counts; mixed-device participants enter no device statistic; the API refuses a pooled pre-device snapshot | #56, #79; [indicator contract](indicator-contract.md#consistency-checks); `test_processing.py::GroupStatisticConsistencyTests` | Yes | Pending (board rebuild and one wellness refresh after release) |
-| Indicator definitions | Agreed names, states and meanings; expert package; provisional until reviewed | Contract and evidence documents merged | #56; [medical evidence](medical-evidence.md) | — | Team agreement and expert review pending |
+| Incomplete assessments | Missing inputs or short history never read as calm; states consistent everywhere | "Partial" and "Not enough information" states; versioned board. Group statistics in processing and the read API are per device, as in the overview, with matching contributor counts; mixed-device participants enter no device statistic; the API refuses a pooled pre-device snapshot | #56, #79; [indicator contract](indicator-contract.md#consistency-checks); `test_processing.py::GroupStatisticConsistencyTests` | Yes | November 17 authorized stored-data refresh and compatible board/assessment readback passed; no collection restarted |
+| Indicator definitions | Agreed names, states and meanings; expert package; provisional until reviewed | Contract and evidence documents merged | #56; [medical evidence](medical-evidence.md) | — | Dashboard owner agreed v0 names/states/meanings November 14; expert threshold sign-off remains pending |
 | Consistent updates | Changed information refreshed efficiently; repeated runs safe; failed processing keeps the previous complete view | Each published tier set and board is complete. Monthly publication in #106 detects historical corrections/omissions through source fingerprints and reuses verified unchanged objects; an interrupted board upload retains the old complete board and is repaired on retry. Full compact-cache processing and obsolete-object storage remain limitations | #57, #80, #106; [publication consistency](wellness-board.md#publication-consistency-48) | Yes | Pending |
-| Backup readiness | Policy agreed; fresh verified backup; destructive steps gated | Policy proposed. Full encrypted backups include consent, enrollment, installed follow-up tables and compact series, with offline verification (#85) | #58, #67, #72; [retention policy](retention-policy.md) | Yes | Fresh backup preflight stopped by egress/private-storage guards November 17 |
+| Backup readiness | Policy agreed; fresh verified backup; destructive steps gated | Policy proposed. Full encrypted backups include consent, enrollment, installed follow-up tables and compact series, with offline verification (#85) | #58, #67, #72; [retention policy](retention-policy.md) | Yes | November 18 capacity exception approved; execution/verification remain to be recorded |
 | Recovery rehearsal | Restore into an isolated project; counts and fingerprints match | Verified isolated restore with synthetic data, including follow-up history and rollback of allocator changes after failure | #58, #67; `test_backup_restore_db.py`; [recovery rehearsal](recovery-rehearsal.md) | Yes (throwaway PostgreSQL) | Pending (operator) |
 | Lossless storage | Compact without information loss; measured savings | Compact series with re-expansion; about 7× smaller in a local test. Tiers read a compact reading only when its per-field row is gone and its record still names the same response, so removing verified rows cannot change published tiers | #59, #81; [storage plan](storage-plan.md#implementation-status-46); `test_compaction_db.py` | Yes (throwaway PostgreSQL) | Live phase-3 deletion remains gated; see November 17 operations evidence |
 | Growth forecast | Measured costs and a recommendation for the next batch | Measurement log implemented | #60; [capacity measurements](capacity-measurements.md) | Yes | Measurements pending collection restart |
@@ -159,3 +159,15 @@ the need for additional Google accounts for these checks, but does not test
 simultaneous identities. Empty organizations do not establish hosted withdrawal,
 individual-data or five-contributor acceptance; those remain separately identified
 in the evaluation and are covered by isolated synthetic tests.
+
+## November 17 publication readback and November 18 capacity approval
+
+The one authorized stored-data refresh completed at 15:56 UTC on November 17.
+A separate 15:57 UTC readback confirmed `board-2`, `assessment-v1`, `monthly-v1`
+and matching publication hashes. Refresh plus verification reserved 67,823,723
+bytes, below its 100 MB authorization. Collection stayed paused. The earlier
+preflight-only paragraph above is historical; this entry records the actual outcome.
+
+On November 18 the owner authorized the two capacity ceilings and one full backup
+described in [storage rollout](storage-plan.md#november-18-approved-backup-headroom).
+This is authorization, not evidence of a completed archive or recovery rehearsal.

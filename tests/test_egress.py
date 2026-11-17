@@ -53,6 +53,10 @@ class EgressDatabaseTests(unittest.TestCase):
         cls.db.execute(Path('sql/013_egress_purpose.sql').read_text())
         cls.migrated=cls.db.execute('select baseline_bytes,reserved_bytes from collector_private.egress_budget').fetchone()
         cls.history=cls.db.execute('select purpose,reserved_bytes from collector_private.egress_purposes').fetchall()
+        before=cls.db.execute('select * from collector_private.egress_budget').fetchall()
+        cls.db.execute(Path('sql/015_approved_egress_ceiling.sql').read_text())
+        cls.headroom_preserved=(before==cls.db.execute('select * from collector_private.egress_budget').fetchall()
+            and cls.history==cls.db.execute('select purpose,reserved_bytes from collector_private.egress_purposes').fetchall())
 
     @classmethod
     def tearDownClass(cls):
@@ -68,6 +72,21 @@ class EgressDatabaseTests(unittest.TestCase):
     def test_migration_keeps_prior_reservations_and_baseline(self):
         self.assertEqual(self.migrated,(100,123))
         self.assertEqual(self.history,[('prior_unattributed',123)])
+        self.assertTrue(self.headroom_preserved)
+
+    def test_approved_ceiling_accepts_old_ceiling_usage_and_still_stops_at_new_limit(self):
+        self.db.execute('update collector_private.egress_budget set baseline_bytes=3600000000')
+        self.db.execute('set session authorization sentra_viewer')
+        reserve(self.db,100,4500000000,'viewer',viewer=True)
+        self.db.execute('select public.sentra_reserve_viewer_egress(100,4500000000)')
+        self.db.execute('reset session authorization')
+        self.assertEqual(self.db.execute('select baseline_bytes,reserved_bytes from collector_private.egress_budget').fetchone(),
+                         (3600000000,200))
+        self.db.execute('update collector_private.egress_budget set baseline_bytes=4499999799')
+        self.db.execute('set session authorization sentra_viewer')
+        with self.assertRaises(psycopg.Error): reserve(self.db,1,4500000000,'viewer',viewer=True)
+        self.db.execute('reset session authorization')
+        self.assertEqual(self.db.execute('select reserved_bytes from collector_private.egress_budget').fetchone()[0],200)
 
     def test_legacy_and_new_calls_share_one_atomic_ledger(self):
         self.db.execute('set session authorization sentra_collector')
@@ -88,7 +107,7 @@ class EgressDatabaseTests(unittest.TestCase):
         reserve(self.db,10,1000,'tiers',viewer=True)
         self.db.execute('select public.sentra_reserve_viewer_egress(20,1000)')
         for amount,ceiling,purpose in ((-1,1000,'tiers'),(100000001,3500000000,'tiers'),
-                                     (1,3500000001,'tiers'),(1,1000,'backup'),(1,1000,None)):
+                                     (1,4500000001,'tiers'),(1,1000,'backup'),(1,1000,None)):
             with self.assertRaises(psycopg.Error): reserve(self.db,amount,ceiling,purpose,viewer=True)
         with self.assertRaises(psycopg.Error): reserve(self.db,1,1000,'collector')
         self.db.execute('reset session authorization')
