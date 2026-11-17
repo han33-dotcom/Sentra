@@ -40,6 +40,8 @@ therefore still target the live project.
 4. After `shared-bootstrap`, apply the organization, enrollment and follow-up migrations the
    backup needs, using the same private operator process as for the live project:
    - always `sql/007` and `sql/008` for a full backup;
+   - also `sql/009` when `series` appears under `tables`; this restores compact
+     readings and their identity sequence as well as the per-field projection;
    - also `sql/010` (Follow-ups, SEN-31) when the live `shared-backup-verify` lists
      `org.follow_ups` and `org.follow_up_events` under `tables`. When they appear under
      `not_installed` instead, the source never had them and 010 is not needed;
@@ -87,8 +89,8 @@ differs. The original responses are uploaded into the rehearsal project's own
 | Item | Expected | Actual |
 | --- | --- | --- |
 | Backup created at / selection | full, after collection paused | |
-| `shared-backup-verify` | `verified`, N originals, `not_covered` empty. `tables`: the seven supported audit tables plus the installed private tables in the backup allowlist (15 with Follow-ups installed, 13 without) | |
-| Inventory reconciled with the source | Compare the migrations applied to the source against `TABLES` and `PRIVATE_TABLES` in [the backup code](../src/sentra/shared_backup.py). Every installed table in that inventory appears under `tables`. Only absent tables from the private allowlist appear under `not_installed` (for example, both follow-up tables before `sql/010`). Record intentional exclusions separately, even when `not_covered` is empty | |
+| `shared-backup-verify` | `verified`, N originals, `not_covered` empty. `tables`: the seven required audit tables, compact `series` when installed, and installed private tables in the backup allowlist | |
+| Inventory reconciled with the source | Compare source migrations against `TABLES`, `OPTIONAL_TABLES` and `PRIVATE_TABLES` in [the backup code](../src/sentra/shared_backup.py). Every installed table in that supported inventory appears under `tables`; absent optional/private tables appear under `not_installed` (for example, `audit.series` before 009 or both follow-up tables before 010). Record intentional exclusions separately, even when `not_covered` is empty | |
 | Restore result | `restored_and_verified` | |
 | Row counts per table | equal to the manifest | |
 | Table fingerprints | equal to the manifest | |
@@ -110,10 +112,11 @@ enrollment service is deployed against the target.
 - Enrollment browser sessions and rate limits, which are short-lived and excluded on purpose.
 - Pending Fitbit sign-in links (`enrollment_private.fitbit_link_invites`). Issue new links
   after recovery if needed.
-- Compact readings (`audit.series`, added by `sql/009`). If 009 is installed on the source,
-  record compact-series recovery as unverified in this rehearsal. In particular, verification
-  of the backed-up tables does not establish recovery of readings stored only in the compact
-  table. See the [storage plan](storage-plan.md) before any deletion of per-field rows.
+- Older backups without compact coverage report `audit.series` under `not_covered`.
+  Take a fresh backup using #85 before rehearsing a source with 009 installed. Verification
+  of an older archive does not establish compact-only recovery. Current backups include
+  installed compact rows; the rehearsal must verify their fingerprints, re-expansion and
+  processing results before any per-field deletion ([storage plan](storage-plan.md)).
 - Provider credentials, storage accounts and keys. They are excluded on purpose, so after
   a real loss participants must reconnect and keys come from secure recovery.
 - Parquet tiers and the board. They are derived and rebuilt from the restored audit data.
