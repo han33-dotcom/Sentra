@@ -34,6 +34,11 @@ Streamlit viewer "Wellness board" page      ->  reads board/board.json, renders 
      `sentra-tiers/board/board.json` last. If the board upload fails, the previous board
      stays published and the next run rebuilds it, because the board's `source_run` is older
      than the newest collection.
+  4. With sql/014 installed, the existing collector database role publishes only bounded
+     eligibility metadata for enrollment after board success. The original read-only
+     viewer role still performs health reads. A failed feed update reports that the
+     board was published; the next unchanged refresh repairs the feed from that board.
+     No data or assessment thresholds are changed and no collection control is enabled.
 - **Viewer:** the **Wellness board** page. It is available only after the existing Google
   sign-in and approved-email check, and it is cleared on sign-out like other private
   state.

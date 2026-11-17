@@ -258,8 +258,11 @@ class RefreshTests(unittest.TestCase):
                                        row('p02', 'whoop', 'recovery', 'c1', '/score/hrv_rmssd_milli', value=61)])
             objects = {p.relative_to(folder).as_posix(): p.read_bytes() for p in Path(folder).rglob('*.parquet')}
         storage = self.Storage()
+        def feed(board):
+            self.assertEqual(json.loads(storage.posts['board/board.json'][0]),board)
+            return 'published'
         with mock.patch.object(w, 'build', return_value=(objects, {})), mock.patch.object(w, 'publish') as publish:
-            result = w.refresh(self.Reader(datetime(2026, 10, 11, tzinfo=UTC)), Limits(), storage, now=NOW, log=lambda *_: None)
+            result = w.refresh(self.Reader(datetime(2026, 10, 11, tzinfo=UTC)), Limits(), storage, now=NOW, log=lambda *_: None, eligibility_writer=feed)
         publish.assert_called_once()
         data, upsert, kind = storage.posts['board/board.json']
         board = json.loads(data)
@@ -288,11 +291,12 @@ class RefreshTests(unittest.TestCase):
 
     def test_processing_failure_publishes_neither_tiers_nor_board(self):
         from sentra import wellness_refresh as w
-        storage = self.Storage()
+        storage = self.Storage(); writer=mock.Mock()
         with mock.patch.object(w, 'build', return_value=({'measurements.parquet': b'not parquet'}, {})), \
                 mock.patch.object(w, 'publish') as publish, self.assertRaises(Exception):
-            w.refresh(self.Reader(datetime(2026, 10, 11, tzinfo=UTC)), Limits(), storage, now=NOW, log=lambda *_: None)
+            w.refresh(self.Reader(datetime(2026, 10, 11, tzinfo=UTC)), Limits(), storage, now=NOW, log=lambda *_: None, eligibility_writer=writer)
         publish.assert_not_called()
+        writer.assert_not_called()
         self.assertEqual(storage.posts, {})
 
     def test_collector_storage_requires_complete_credentials(self):
