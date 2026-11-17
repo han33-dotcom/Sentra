@@ -112,7 +112,7 @@ class ViewerReader:
         """Organization users and current consent for access decisions; empty until migration 007 exists."""
         try:
             users=self._rows('select org_id,email,role,active from org.org_users',allowance=65_536)
-            consents=self._rows('''select participant_id,org_id,sharing,withdrawn,membership_open
+            consents=self._rows('''select participant_id,org_id,sharing,withdrawn,membership_open,demonstration
               from org.current_consent''',allowance=65_536)
             return users,consents
         except (psycopg.errors.UndefinedTable,psycopg.errors.InvalidSchemaName):

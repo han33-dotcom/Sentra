@@ -26,6 +26,7 @@ pydeck==0.9.3
 python-dateutil==2.9.0.post0
 python-multipart==0.0.32
 referencing==0.37.0
+reportlab==5.0.1
 rpds-py==2026.9.1
 six==1.17.0
 starlette==1.7.0

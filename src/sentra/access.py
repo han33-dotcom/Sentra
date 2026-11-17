@@ -32,6 +32,7 @@ class Access:
     org_id: str | None
     individuals: frozenset = frozenset()
     contributors: frozenset = frozenset()
+    demonstrators: frozenset = frozenset()  # contributors who also agreed to internal demonstrations (#42)
 
     @property
     def is_team(self):
@@ -55,6 +56,22 @@ def publishable(contributor_count, k=K_ANONYMITY):
     return isinstance(contributor_count, int) and not isinstance(contributor_count, bool) and contributor_count >= k
 
 
+def current(c):
+    """A consent row in force: valid pseudonym and sharing level, not withdrawn, membership still open."""
+    pid = c.get('participant_id')
+    return (isinstance(pid, str) and PSEUDONYM.fullmatch(pid) is not None and c.get('withdrawn') is False
+            and c.get('membership_open') is True and c.get('sharing') in SHARING)
+
+
+def demonstration_ids(consents, org_id=None):
+    """Participants whose consent in force allows internal demonstrations; `demonstration` must be exactly True.
+
+    Used for the team's demonstration copy; organization users get the same set, limited to their
+    organization, as `Access.demonstrators` from the same consent read as their decision."""
+    return {c['participant_id'] for c in consents if current(c) and c.get('demonstration') is True
+            and (org_id is None or c.get('org_id') == org_id)}
+
+
 def resolve(email, *, team_emails, org_users=(), consents=()):
     """Decide what `email` (from verified sign-in) may see; raise SentraError when nothing is allowed."""
     if not isinstance(email, str) or not email.strip():
@@ -74,12 +91,10 @@ def resolve(email, *, team_emails, org_users=(), consents=()):
     role = 'officer' if any(r == 'officer' for _, r in memberships) else 'reviewer'
     individuals, contributors = set(), set()
     for c in consents:
-        pid = c.get('participant_id')
-        if (c.get('org_id') != org_id or not isinstance(pid, str) or not PSEUDONYM.fullmatch(pid)
-                or c.get('withdrawn') is not False or c.get('membership_open') is not True
-                or c.get('sharing') not in SHARING):
+        if c.get('org_id') != org_id or not current(c):
             continue
-        contributors.add(pid)
+        contributors.add(c['participant_id'])
         if c.get('sharing') == 'individual':
-            individuals.add(pid)
-    return Access(email, role, org_id, frozenset(individuals), frozenset(contributors))
+            individuals.add(c['participant_id'])
+    return Access(email, role, org_id, frozenset(individuals), frozenset(contributors),
+                  frozenset(demonstration_ids(consents, org_id) & contributors))
