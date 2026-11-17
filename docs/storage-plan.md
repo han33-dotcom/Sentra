@@ -324,3 +324,9 @@ The isolated recovery preflight estimates 883,232,170 bytes of reservations and
 organization/project is used so its reservations do not compete with the live
 organization's remaining headroom. No live ledger is reset. See the
 [recovery record](recovery-rehearsal.md) for outcome and remaining scenarios.
+
+The subsequent isolated recovery passed: all 16 tables and all 220 destination
+originals matched the source snapshot. Compact arrays reconstructed 774 readings.
+Final database usage was 307,066,547 bytes. See the dated recovery record for
+reservations, timings, access/allocator checks and unverified scenarios. This
+does not authorize duplicate-row deletion or agree the retention proposal.
