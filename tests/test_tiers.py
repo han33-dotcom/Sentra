@@ -45,6 +45,8 @@ class FakeDB:
         result = None
         if query == 'select session_user':
             result = (self.role,)
+        elif 'to_regprocedure' in query:
+            result = (False,)
         elif 'to_regclass' in query:
             result = (self.series,)
         elif 'sentra_reserve_viewer_egress' in query:

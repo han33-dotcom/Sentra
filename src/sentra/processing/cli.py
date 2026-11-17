@@ -37,7 +37,7 @@ def run_command(args):
     viewer, limits, _ = read_shared(args.config, local_cipher(), role='viewer')
     db = connect_db(viewer)
     try:
-        storage = PrivateStorage(viewer, AuditReader(db, limits).reserve, bucket=TIER_BUCKET)
+        storage = PrivateStorage(viewer, AuditReader(db, limits, purpose='processing').reserve, bucket=TIER_BUCKET)
         with tempfile.TemporaryDirectory(dir=private) as folder:
             fetch(storage, folder)
             run(load(folder), out, devices=devices(folder))

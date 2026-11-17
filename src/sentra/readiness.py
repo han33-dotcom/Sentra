@@ -162,6 +162,7 @@ def run_readiness(config):
     credentials, limits, private = read_shared(config, cipher)
     setup = read_setup(config, cipher)
     backend = SharedBackend(credentials, limits)
+    backend.egress_purpose = 'operations'
     try:
         report = inspect_readiness(backend, setup['config']['participants'], Fernet(setup['token_key'].encode()))
     finally:

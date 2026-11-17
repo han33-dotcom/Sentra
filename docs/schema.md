@@ -10,7 +10,7 @@ See [Stage 3 operations](stage-3-storage.md) for setup, evidence and remaining b
 | `audit.participants` | Stable pseudonyms such as `p01`, `p02`; no names, emails or vendor account IDs |
 | `audit.records` | Stable provider/dataset record key, complete normalized/vendor context, content hash and original-response reference; parent context can be shared losslessly across metric JSON |
 | `audit.measurements` | Participant/provider/dataset/metric, standardized value/unit, vendor value/unit, point time or interval, vendor time, collection time, resolution, classification and source pointer; vendor metric paths also remain in record JSON |
-| `audit.series` (sql/009) | Lossless compact copy of dense measurement rows: one row per participant/provider/dense dataset/metric/original response, shared fields once, per-reading fields as parallel arrays. `audit.series_rows` re-expands it column-for-column. Derived and rebuildable; see [storage-plan.md](storage-plan.md#implementation-status-46) |
+| `audit.series` (sql/009) | Lossless compact copy of dense measurement rows: one row per participant/provider/dense dataset/metric/original response, shared fields once, per-reading fields as parallel arrays. `audit.series_rows` re-expands it column-for-column. Derived; rebuildable only while per-field source rows remain. Direct compact writes can split a response into bounded batches; see [storage-plan.md](storage-plan.md#implementation-status-46) |
 | `audit.sessions` | Sleep/workout/cycle record keys, interval, score state and provisional flag; join `records` for complete vendor fields, provider IDs and source reference |
 | `audit.raw_response_manifest` | Endpoint, requested range/resolution, collection time, private object location, hash of unchanged response bytes and compressed size |
 | `audit.collection_runs` | Participant/provider run status and full durable local context: requested/stored intervals, counts, sanitized failures and local storage statistics |
@@ -147,3 +147,29 @@ and open/ongoing/resolved history. Both are append-only with forced RLS; `sentra
 only read them. Writes go through two security-definer functions, executable only by a separate
 `sentra_followups` role with no table privileges, which re-check the officer, assignee and
 `individual` consent rules. See [follow-ups](follow-ups.md).
+
+## Egress attribution (sql/013)
+
+`collector_private.egress_purposes` stores monthly reserved-byte totals by purpose.
+Only security-definer reservation functions write it, atomically with the existing
+budget update. Runtime roles cannot read/write its rows directly; aggregate usage
+includes its current-month breakdown. Historical reservations become `prior_unattributed`;
+baselines, ceilings and seven-day freshness checks remain unchanged. Existing function
+signatures and privileges stay compatible. Viewer calls retain their role check,
+100 MB call cap and 3.5 GB ceiling. Purpose is an accounting label, not authorization.
+
+## Compact writer control (sql/012)
+
+`collector_private.compact_control` is a singleton, disabled by default. Only the admin
+can enable compact writes; the collector can read it. It is independent of collection
+authorization. The migration also makes the bounded enrollment recency function read
+current compact-only measurements without granting enrollment access to health tables.
+See [storage rollout](storage-plan.md#implementation-status-46).
+
+## Enrollment assessment eligibility (sql/014)
+
+Two private derived tables hold one publication watermark/digest and at most 100
+participant/day/completeness rows. The collector can publish through a bounded
+security-definer function; enrollment can read a single participant's dated eligibility
+through another. Neither role gets direct table access. Unknown/stale/incompatible
+results stay unknown. See [eligibility feed](self-service-enrollment.md#published-eligibility-feed-sql014).

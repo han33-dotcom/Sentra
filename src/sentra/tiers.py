@@ -22,6 +22,7 @@ import tempfile
 import psycopg
 
 from .errors import SentraError
+from .egress import reserve as reserve_egress
 from .shared import CapacityStop
 
 TIER_BUCKET = 'sentra-tiers'
@@ -85,9 +86,10 @@ def _pa():
 class AuditReader:
     """Read-only access: refuses any role but sentra_viewer and reserves egress before reading."""
 
-    def __init__(self, db, limits, *, budget_db=None, max_read_bytes=DEFAULT_MAX_READ_BYTES):
+    def __init__(self, db, limits, *, budget_db=None, max_read_bytes=DEFAULT_MAX_READ_BYTES, purpose='tiers'):
         self.db, self.limits, self.max_read_bytes, self.read_bytes = db, limits, max_read_bytes, 0
         self.series = None
+        self.egress_purpose = purpose
         self.budget_db = budget_db if budget_db is not None else db
         try:
             role = db.execute('select session_user').fetchone()[0]
@@ -101,7 +103,7 @@ class AuditReader:
             while amount > 0:
                 chunk = min(amount, RESERVE_CHUNK)
                 # Reservations must persist outside the read-only snapshot, even if the read fails.
-                self.budget_db.execute('select public.sentra_reserve_viewer_egress(%s,%s)', (chunk, self.limits.monthly_egress_bytes))
+                reserve_egress(self.budget_db,chunk,self.limits.monthly_egress_bytes,self.egress_purpose,viewer=True)
                 amount -= chunk
         except psycopg.Error:
             raise CapacityStop('Egress allowance unavailable, stale or exhausted; no tier data read.') from None
@@ -138,6 +140,19 @@ class AuditReader:
                     return cursor.fetchall()
         except psycopg.Error:
             raise SentraError('Tier read failed; sensitive details omitted. Nothing was uploaded.') from None
+
+    def read_partition(self, query, values):
+        """Caller holds one read-only repeatable-read snapshot for the complete build."""
+        count,size=self.db.execute(f'select count(*),coalesce(sum(octet_length(t::text)),0) from ({query}) t',values).fetchone()
+        size=int(size)+int(count)*64
+        if self.read_bytes+size>self.max_read_bytes:
+            raise CapacityStop('Monthly tier read exceeds the per-run egress cap; nothing published.')
+        self.reserve(int(size*1.2)+65_536)
+        self.read_bytes+=size
+        with self.db.cursor(name='sentra_monthly_partition') as cursor:
+            cursor.itersize=5000
+            cursor.execute(query,values)
+            return cursor.fetchall()
 
 
 def epoch(value):
@@ -327,8 +342,14 @@ def fetch(storage, folder, *, maximum=MAX_OBJECT_BYTES, attempts=3):
         with tempfile.TemporaryDirectory(prefix='.sentra-tiers-', dir=folder.parent) as staging:
             if not _download(storage, staging, report, maximum):
                 continue
+            if report.get('layout')=='monthly-v1':
+                from .monthly_tiers import materialize
+                materialize({key:(Path(staging)/key).read_bytes() for key in report['objects']},staging)
+                wanted={p.relative_to(staging).as_posix() for p in Path(staging).rglob('*.parquet')
+                        if not p.relative_to(staging).as_posix().startswith('months/')}
+            else:
+                wanted = set(report.get('objects', {}))
             folder.mkdir(parents=True, exist_ok=True)
-            wanted = set(report.get('objects', {}))
             # These directories belong to this derived cache; preserve unrelated files.
             for directory in ('hr_raw', 'hr_minute'):
                 for old in (folder / directory).glob('*.parquet'):
@@ -345,16 +366,23 @@ def fetch(storage, folder, *, maximum=MAX_OBJECT_BYTES, attempts=3):
 def _download(storage, folder, report, maximum):
     """True when every listed object matched the report; False when one changed since it was written."""
     prefix, digests = report.get('prefix', ''), report.get('sha256', {})
+    if report.get('layout')=='monthly-v1':
+        sizes=list(report.get('objects',{}).values())
+        if any(type(size) is not int or size<0 for size in sizes) or sum(sizes)>500_000_000:
+            raise SentraError('Monthly cache exceeds its bounded read cap.')
     if prefix not in SLOTS + ('',):
         raise SentraError('Tier report names an unknown slot; nothing processed.')
-    if prefix and set(digests) != set(report.get('objects', {})):
+    if (prefix or report.get('layout')=='monthly-v1') and set(digests) != set(report.get('objects', {})):
         raise SentraError('Tier report lacks object digests; nothing processed.')
     for key, size in report.get('objects', {}).items():
         path = (Path(folder) / key).resolve()
         if (not isinstance(size, int) or not 0 <= size <= maximum or '..' in key
                 or '\\' in key or ':' in key or not path.is_relative_to(Path(folder).resolve())):
             raise SentraError('Tier report lists an invalid object; nothing processed.')
-        code, data = storage.request('GET', prefix + key, maximum=size + 65_536)
+        location=report.get('locations',{}).get(key,prefix+key)
+        if report.get('layout')=='monthly-v1' and location!=f'monthly/{digests.get(key)}.parquet':
+            raise SentraError('Invalid monthly object location; nothing processed.')
+        code, data = storage.request('GET', location, maximum=size + 65_536)
         if code != 200:
             raise SentraError(f'Tier object {key} missing; rebuild tiers.')
         if key in digests:
@@ -404,6 +432,9 @@ def publish(objects, report, storage, reader, limits, *, local_dir=None, extra_b
     over in one replace. A failed upload therefore leaves the previous complete set in use.
     extra_bytes covers anything uploaded right after (the board), so one capacity check spans it all.
     """
+    if report.get('layout')=='monthly-v1' and local_dir is None:
+        from .monthly_tiers import publish as publish_monthly
+        return publish_monthly(objects,report,storage,reader,limits,extra_bytes=extra_bytes)
     if any(len(b) > MAX_OBJECT_BYTES for b in objects.values()):
         raise SentraError('A tier object exceeds the 50 MB bucket limit; split the tier before uploading.')
     if local_dir is not None:

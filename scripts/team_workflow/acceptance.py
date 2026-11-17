@@ -76,7 +76,9 @@ def accepted_issue(issue, comments, merged_pulls, actors):
     for comment in reversed(comments):
         if comment.get("user", {}).get("login") not in actors:
             continue
-        body = comment.get("body") or ""
+        # Windows-authored files retain CRLF in GitHub comments. Normalize only the
+        # carrier text; the issue digest and embedded report values stay exact.
+        body = (comment.get("body") or "").replace("\r\n", "\n")
         if not body.startswith(MARKER):
             continue
         match = re.search(r"```json\n(.*?)\n```", body, re.S)

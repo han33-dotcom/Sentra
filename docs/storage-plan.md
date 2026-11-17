@@ -69,11 +69,12 @@ tiers job ──►  sentra-tiers          monthly parquet partitions, built inc
       migrated per-field rows inside the same guarded migration.
    4. Run `VACUUM FULL` on the two audit tables once. Plain `DELETE` does not shrink
       `pg_database_size`; the admin role runs this during a paused window.
-4. **Incremental, partitioned tiers.** Tiers become monthly partitions
-   (`measurements/2026-10.parquet`, `hr_minute/p01/2026-10.parquet` …). Each refresh
-   rebuilds only the open partitions: the current month, plus the previous month for 3
-   days after it ends to catch corrections. A refresh then reads a few MB instead of
-   about 40 MB.
+4. **Incremental, partitioned tiers.** Implemented as versioned monthly logical
+   partitions backed by immutable content-addressed objects. Full source fingerprints
+   invalidate any corrected, moved or omitted month, including older history; a
+   three-day archive cutoff is unsafe. Only changed database partitions are read and
+   new object hashes uploaded. See [tier publication](parquet-tiers.md) for bounds,
+   compatibility, retry, hot expiry and the remaining cache/cleanup limitations.
 5. **Postgres stays the recent working set; parquet holds the long history.** Sparse
    daily and session data stay in Postgres for the project's lifetime (about 0.4 MB
    per participant-day). A retention window for older per-field rows is a later, separate
@@ -92,9 +93,15 @@ tiers job ──►  sentra-tiers          monthly parquet partitions, built inc
 
 Egress is the allowance closest to its limit: 2.52 GB of the 3.5 GB guard by 11 October.
 
-- **Attribute it first.** Add a `purpose` to every egress reservation (collector,
-  viewer, tiers, backup, verify), so the monthly spend can be broken down. Today only
-  the total is known.
+- **Attribute reservations.** `sql/013_egress_purpose.sql` records collector, viewer,
+  tiers, backup, verify, processing, enrollment, followups and operations reservations.
+  `shared-status` includes `egress_reserved_by_purpose`. These are conservative reserved
+  allowances, not measured network traffic. The pre-migration reserved total remains
+  `prior_unattributed`; the dashboard baseline stays separate. Nothing resets the ledger
+  or changes ceilings, freshness, independent viewer reservations or retry accounting.
+  Old clients retain their two-argument functions; updated clients fall back only when
+  the new function is absent, never after a failed reservation. Apply after 005; no
+  collection authorization is implied.
 - **Incremental tiers** (step 4), and a refresh only after a new collection run
   (already in place).
 - **Board instead of database queries.** The board reads one JSON file of about 1 MB or
@@ -126,7 +133,8 @@ rows.**
   **exit 1**, so a mismatched copy is never taken as lossless evidence.
 - `sentra shared-compact --repair …` rebuilds those stale responses from their current rows,
   with the same lock, capacity guard and batch verification. A response with no rows left
-  loses its series copy. Measurement rows are never changed.
+  loses its series copy only if no current compact-only reading depends on it. Rebuilds
+  refuse to remove the only current projection. Measurement rows are never changed.
 
 **Measured (3 Nov 2026, local throwaway PostgreSQL 16, not Supabase):** 65 days of one
 participant's real minute step readings were loaded in the collector's exact row shape:
@@ -173,10 +181,28 @@ when 009 is installed, with per-field corrections taking precedence and the curr
 response required. Without 009 it uses the original per-field queries. Expanded selections
 retain the existing row/byte limits, access checks, snapshot and egress reservations.
 
+**Compact collector writes are opt-in (sql/012).** Apply after 008 and 009. The migration
+creates `collector_private.compact_control` with `enabled=false`; collector/viewer/enrollment
+roles cannot change the switch. With it disabled or absent, the existing write path remains.
+With it enabled, each bounded dense input batch writes exact parallel arrays. Retries,
+corrections and omissions replace only those record keys transactionally; sparse datasets
+keep per-field rows. All `audit.records` and original responses remain. Counts, growth,
+capacity snapshots, projection verification and enrollment recency read current logical
+measurements. The enrollment role still receives only its bounded metadata summary.
+
+Roll out while collection is paused: finish the additive copy/verification first, retain
+its evidence, deploy compatible readers/writers, and apply 012. Enable the switch only as
+part of the coordinated storage rollout; it does not authorize restarting collection or
+bulk phase-3 deletion. After compact writes begin, use `shared-verify` for record/projection
+checks. Additive `shared-compact`/`--repair` refuses while the switch is enabled, and refuses
+rebuilding any response with current compact-only readings even after disabling it. Turning
+the switch off restores per-field writes for future corrections; it does not erase arrays.
+Full backups cover compact data; operational controls remain separately configured on
+recovery, with 012 defaulting off. Synthetic PostgreSQL tests compare all 22 columns and
+exercise role permissions, retries, correction/omission, rollback and capacity rejection.
+
 Still open before phase 3:
-- The collector still writes per-field rows (phase 1 collector change, coordinated with the
-  collection owner, #47).
-- Egress `purpose` attribution is not added yet.
+- Egress purpose attribution is implemented by sql/013 and compatible clients; apply the migration to begin the breakdown.
 - Phase 3 deletion stays gated as below.
 
 ## Phases and approvals
@@ -191,3 +217,49 @@ Still open before phase 3:
 
 Until phase 3 is done, `activity-level` stays on request and daily collection stays
 paused.
+
+## Bounded phase-3 removal command
+
+`shared-removal-preview` and `shared-removal-apply` use the existing private operator
+configuration. They lock the collector and affected tables; the operator connection
+is needed to lock the admin-only compact-write control without expanding runtime
+roles. Collection must be explicitly paused and compact writes still disabled.
+No command in this flow enables either control.
+
+1. Complete and verify a full encrypted backup, including compact series and all
+   installed private tables, after recording the paused control state. Recover it
+   into an isolated target and verify original objects and table counts. The backup
+   must be less than 24 hours old. Preserve the exact encrypted manifest.
+2. Create a private preview, for example:
+   `sentra shared-removal-preview --participant p01 --provider google_health --dataset minute_steps --limit 20 --output .private/operations/removal-plan.json`.
+   Each plan covers at most 200 original responses, 100,000 rows and 32 MB of row
+   payload. It expires after 24 hours. The preview checks all 22 logical columns
+   against current compact rows and records the paused-control timestamp.
+3. Save private recovery evidence as JSON with `status: restored_and_verified`,
+   `backup_manifest_sha256` (the encrypted manifest's SHA-256),
+   `source_project_url`, `target_project_url`, `isolation_verified: true`, `counts`
+   (the complete offline verification table-count mapping), `originals_verified`
+   (verified object count), and `retention_decision_url` (the recorded Sentra issue
+   or PR decision). These are attestations from the actual recovery run, not a
+   substitute for performing it. Include any additional dated recovery evidence;
+   the complete JSON is bound to the owners' approval.
+4. Both designated owners, `han33-dotcom` and `MohamadNasrallah`, review the actual
+   backup/recovery and retention decision. Each posts a separate comment on the
+   same Sentra PR with this exact line, using the plan SHA-256 and the canonical
+   evidence digest (`sentra.compact_removal.digest(evidence)`):
+   `APPROVE SENTRA PHASE3 <plan-sha256> EVIDENCE <evidence-sha256>`.
+   Agents do not create owner approval comments or substitute their code review.
+5. Apply with `sentra shared-removal-apply --plan .private/operations/removal-plan.json
+   --backup .private/backups/<backup-id>/manifest.enc --evidence .private/operations/recovery.json
+   --approval <first-owner-comment-url> --approval <second-owner-comment-url>`.
+   The command fetches and verifies both actual GitHub comments, authenticates the
+   backup offline, proves every selected current row is in it, then rechecks the
+   paused state, preview fingerprint and lossless compact copy inside one locked
+   transaction. Changed data, missing evidence or any mismatch rolls back.
+
+Only the approved duplicate per-field rows are removed. Records, source originals,
+sparse data and compact arrays remain. Retrying an already applied plan fails
+closed rather than broadening its scope. No `VACUUM` runs automatically: DELETE
+alone does not reduce allocated database size. Measure actual post-removal size;
+any `VACUUM FULL` requires its separately reviewed operator maintenance window.
+Do not publish private plans, backup contents, participant scopes or recovery files.

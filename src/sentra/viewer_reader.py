@@ -8,6 +8,7 @@ from psycopg.pq import TransactionStatus
 from psycopg.rows import dict_row
 
 from .errors import SentraError
+from .egress import reserve as reserve_egress
 from .shared import CapacityStop, object_key
 from .shared_backend import BUCKET, PrivateStorage, connect_db
 from .viewer_data import MAX_BYTES, MAX_ROWS, Selection
@@ -94,7 +95,7 @@ class ViewerReader:
             # must not roll back the reservation for bytes already received.
             if self.budget_db is None:
                 self.budget_db = connect_db(self.credentials)
-            self.budget_db.execute('select public.sentra_reserve_viewer_egress(%s,%s)',(amount,self.limits.monthly_egress_bytes))
+            reserve_egress(self.budget_db,amount,self.limits.monthly_egress_bytes,'viewer',viewer=True)
         except psycopg.Error:
             raise CapacityStop('Viewer egress allowance is unavailable, stale or exhausted. Ask the operator to verify usage and refresh the baseline.') from None
 

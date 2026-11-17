@@ -12,7 +12,7 @@ from .errors import SentraError
 from .local_store import LocalStore
 from .providers import PROVIDERS
 from .shared_backend import SharedBackend,PrivateStorage,connect_db,BUCKET
-from . import capacity, compaction
+from . import capacity, compaction, compact_removal
 from .shared_backup import make_backup,BackupReader,restore_backup,verify_backup
 from .shared_config import read_shared
 from .shared_setup import bootstrap,read_admin,set_budget
@@ -54,6 +54,24 @@ def add_commands(sub):
     p.add_argument('backup',type=Path)
     p.add_argument('--empty-audit',action='store_true',help='Operational restoration only into completely empty initialized audit tables')
     p.add_argument('--target-project',help='project ref of the configured target; required with --empty-audit')
+    p = sub.add_parser('shared-removal-preview',help='Write a private bounded phase-3 plan; never deletes data')
+    p.add_argument('--participant',required=True)
+    p.add_argument('--provider',choices=PROVIDERS,required=True)
+    p.add_argument('--dataset',required=True)
+    p.add_argument('--limit',type=int,default=20)
+    p.add_argument('--output',type=Path,required=True)
+    p = sub.add_parser('shared-removal-apply',help='Remove exactly verified duplicates with fresh backup, recovery evidence and both owner comments')
+    p.add_argument('--plan',type=Path,required=True)
+    p.add_argument('--backup',type=Path,required=True)
+    p.add_argument('--evidence',type=Path,required=True)
+    p.add_argument('--approval',action='append',required=True)
+
+
+def private_file(path,private):
+    path=path.resolve()
+    if not path.is_relative_to(private.resolve()):
+        raise SentraError('Keep removal plans and recovery evidence beneath the configured private directory.')
+    return path
 
 
 def project_ref(url):
@@ -136,7 +154,19 @@ def run_command(args):
         return 0
     credentials,limits,private = read_shared(args.config,cipher)
     backend = SharedBackend(credentials,limits)
+    backend.egress_purpose = ('backup' if args.command in ('shared-backup','shared-restore') else
+                              'verify' if args.command in ('shared-verify','shared-compact-verify') else
+                              'collector' if args.command == 'shared-sync' else 'operations')
     try:
+        if args.command in ('shared-removal-preview','shared-removal-apply'):
+            # Exclusive control-table locks require the operator role, never additional
+            # grants to the continuously configured collector/viewer roles.
+            admin=read_admin(private)
+            if admin['url']!=credentials['url']:
+                raise SentraError('Removal operator and collector configurations name different projects.')
+            operator_db=connect_db(admin)
+            backend.db.close()
+            backend.db=operator_db
         if args.command == 'shared-status':
             print(json.dumps(backend.usage(),indent=2))
         elif args.command == 'shared-measure':
@@ -211,6 +241,24 @@ def run_command(args):
                 # Not lossless evidence: stale copies need `shared-compact --repair` before any later storage step.
                 print('Compacted series differ from measurement rows for some responses; run shared-compact --repair.',flush=True)
                 return 1
+        elif args.command == 'shared-removal-preview':
+            target=private_file(args.output,private)
+            if target.exists(): raise SentraError('Preview output already exists; use a new private filename.')
+            plan=compact_removal.preview(backend,args.participant,args.provider,args.dataset,limit=args.limit)
+            target.parent.mkdir(parents=True,exist_ok=True)
+            with target.open('x',encoding='utf-8') as stream: json.dump(plan,stream,indent=2)
+            print(json.dumps({'status':'preview_only','rows':plan['rows'],'row_payload_bytes':plan['row_payload_bytes'],
+                              'plan_sha256':plan['sha256'],'expires_at':plan['expires_at']}))
+        elif args.command == 'shared-removal-apply':
+            plan_path=private_file(args.plan,private); evidence_path=private_file(args.evidence,private)
+            if plan_path.stat().st_size>1_000_000 or evidence_path.stat().st_size>1_000_000:
+                raise SentraError('Removal plan or evidence exceeds the bounded size.')
+            path=args.backup.resolve()
+            if not path.is_relative_to((private/'backups').resolve()):
+                raise SentraError('Keep the encrypted backup beneath .private/backups.')
+            plan=json.loads(plan_path.read_text(encoding='utf-8'))
+            evidence=json.loads(evidence_path.read_text(encoding='utf-8'))
+            print(json.dumps(compact_removal.remove(backend,plan,BackupReader(path,cipher),evidence,args.approval)))
         elif args.command == 'shared-restore':
             path = args.backup.resolve()
             if not path.is_relative_to(private/'backups'):

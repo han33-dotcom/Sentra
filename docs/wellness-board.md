@@ -21,19 +21,23 @@ Streamlit viewer "Wellness board" page      ->  reads board/board.json, renders 
   `.github/workflows/wellness.yml`.
   1. Checks finished `audit.collection_runs` against durable record-write timestamps,
      including partial runs whose counters omit already committed pages.
-     Paused and unchanged attempts do not advance the watermark. Without new changes,
-     only metadata and the previous board are checked; tier reads and publication are skipped,
-     **unless** the previous board was built under a different `assessment_version` or
-     `board_version` (or none). Then it is rebuilt from the existing data, so new assessment
-     rules or board meaning (for example single-provider device labels, #45) apply without
-     restarting collection.
-  2. Otherwise it rebuilds the tiers and runs processing **before publishing anything**.
-     A processing failure leaves the previous tiers and board unchanged.
-  3. It then publishes the tiers into the unused slot (see
-     [parquet-tiers.md](parquet-tiers.md)), switches `size_report.json`, and uploads
-     `sentra-tiers/board/board.json` last. If the board upload fails, the previous board
-     stays published and the next run rebuilds it, because the board's `source_run` is older
-     than the newest collection.
+     Paused and unchanged attempts do not advance the watermark. The incremental path
+     also compares complete monthly source fingerprints, so old corrections and
+     omissions cannot hide behind an unchanged run timestamp. Unchanged source and
+     current board/rules skip processing and publication after cache verification.
+  2. It rebuilds changed monthly partitions, materializes the full compact cache and
+     runs processing **before publishing anything**. Processing failure retains the
+     previous tiers and board. Changed assessment/board versions rerun processing;
+     changed tier layout versions rebuild source partitions too.
+  3. It uploads new immutable monthly objects, switches the complete tier manifest,
+     then uploads `sentra-tiers/board/board.json`. The board records the corresponding
+     tier hashes. A failed board upload retains the old board; the hash mismatch
+     forces the next run to retry even if the collection watermark did not change.
+  4. With sql/014 installed, the existing collector database role publishes only bounded
+     eligibility metadata for enrollment after board success. The original read-only
+     viewer role still performs health reads. A failed feed update reports that the
+     board was published; the next unchanged refresh repairs the feed from that board.
+     No data or assessment thresholds are changed and no collection control is enabled.
 - **Viewer:** the **Wellness board** page. It is available only after the existing Google
   sign-in and approved-email check, and it is cleared on sign-out like other private
   state.
@@ -45,35 +49,34 @@ then.
 ## Publication consistency (#48)
 
 What a refresh guarantees, and the synthetic test that checks it
-(`tests/test_wellness_board.py::PublicationConsistencyTests`). The test runs the real slot
+(`tests/test_wellness_board.py::PublicationConsistencyTests`, `tests/test_monthly_tiers.py`
+and the real PostgreSQL monthly-correction case in `tests/test_compaction_db.py`). The test runs the real slot
 publisher, `fetch` and `refresh` against an in-memory bucket.
 
 | Situation | Published result |
 | --- | --- |
-| Repeated run, no new collection | Skipped: no tier read, no write, bucket unchanged |
+| Repeated run, no new collection | Source fingerprints and compact cache verified; no database partition reads or writes |
 | Processing fails | Nothing published; previous tiers and board stay |
-| Tier upload interrupted part-way | `size_report.json` still names the previous slot; readers and the board keep the previous complete set |
-| Tiers switch, board upload fails | Board keeps its previous complete version; the next run sees an older `source_run` and rebuilds it |
+| Tier upload interrupted part-way | `size_report.json` still names the previous complete objects; readers and the board keep the previous complete set |
+| Tiers switch, board upload fails | Board keeps its previous complete version; the next run sees different tier hashes and rebuilds it |
 | Corrected reading (same record, new value, newer collection run) | The next run republishes it; tiers and board both show the corrected value, and the run after that skips |
 
 Corrections reach Sentra because the collector rechecks recent days. For a changed record,
 `put_records` replaces the record and its measurements under the same record key, and updates
-the record's `collected_at`. That moves the durable-write watermark, and the full rebuild
-picks up the corrected reading. The original responses in `sentra-originals` are never
+the record's `collected_at`. Monthly source fingerprints detect the changed contents, and the affected partitions
+are rebuilt even for older corrections. The original responses in `sentra-originals` are never
 rewritten.
 
 Limitations:
 
-- Each refresh with new data rebuilds every tier in full. Incremental monthly partitions
-  are phase 4 of [storage-plan.md](storage-plan.md) and depend on the compact storage
-  work (#46).
+- Monthly fingerprint scans still inspect source rows server-side. Complete compact
+  cache download and processing remain bounded but are not incremental processing.
 - Publication is ordered (tiers, then report, then board) but not one atomic step. Between a
   tier switch and a failed board upload, the tiers can be one run newer than the board until
   the next run.
-- The workflow's `sentra-wellness` concurrency group serializes scheduled and manual
-  refreshes. A manual `sentra tiers-build` upload is outside that group: run it only while no
-  refresh is running, or two writers can share the unused slot. `fetch` then refuses the
-  mixed set ("Tiers kept changing…") until the next complete publication.
+- Scheduled/manual refreshes and `tiers-build` share a database publication lock.
+  Obsolete immutable objects remain until a separately reviewed cleanup; their
+  storage is included in capacity checks.
 - Not yet exercised against the shared bucket: collection and the daily refresh stay paused.
 
 ## Data used
