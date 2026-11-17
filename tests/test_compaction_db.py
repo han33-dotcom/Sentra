@@ -353,7 +353,93 @@ class CompactionDatabaseTests(unittest.TestCase):
         self.assertGreater(report['ratio'], 1)
 
 
+    def removal_fixture(self):
+        from datetime import datetime, timedelta, timezone
+        from unittest.mock import Mock
+        from sentra import compact_removal as removal
+        import json, hashlib
+        self.db.execute("update collector_private.observation_control set settings='{\"enabled\":false}',updated_at=now()-interval '1 hour'")
+        self.rows(RESPONSE,['12',None,'7.50','0'],resolution='60.0')
+        self.rows('b'*64,['3'])
+        compaction.compact(self.db,self.guard,'p01','google_health','minute_steps')
+        backend=self.collector(); backend.credentials={'url':'https://source.invalid'}
+        now=datetime.now(timezone.utc)
+        plan=removal.preview(backend,'p01','google_health','minute_steps',limit=1,now=now)
+        # Archive authentication/count validation has its own real encrypted backup suite.
+        # Here the synthetic archive reader exercises exact row inclusion and transactional gates.
+        rows=self.db.execute('select to_jsonb(m) from audit.measurements m').fetchall()
+        reader=Mock(info={'files':{'measurements-00000':{}}})
+        reader.path.read_bytes.return_value=b'synthetic encrypted manifest'
+        reader.read.return_value='\n'.join(json.dumps(row) for row, in rows).encode()
+        verified={'created_at':(now-timedelta(minutes=1)).isoformat(),'selection':{},'not_covered':[],
+                  'project_url':backend.credentials['url'],'tables':{'measurements':5,'series':2},'originals':2}
+        evidence={'backup_manifest_sha256':hashlib.sha256(reader.path.read_bytes()).hexdigest(),
+                  'status':'restored_and_verified','source_project_url':backend.credentials['url'],
+                  'target_project_url':'https://isolated.invalid','isolation_verified':True,
+                  'counts':verified['tables'],'originals_verified':2,
+                  'retention_decision_url':'https://github.com/han33-dotcom/Sentra/issues/29'}
+        return removal,backend,plan,reader,verified,evidence
+
+    def test_removal_preserves_logical_readings_records_and_other_responses(self):
+        from unittest.mock import patch,Mock
+        m,b,plan,reader,verified,evidence=self.removal_fixture()
+        before=self.tier_rows(); check=Mock()
+        with patch.object(m,'verify_backup',return_value=verified):
+            result=m.remove(b,plan,reader,evidence,['owner-a','owner-b'],check_approvals=check)
+        self.assertEqual(result['rows'],4)
+        self.assertEqual(self.tier_rows(),before)
+        self.assertEqual(self.db.execute('select count(*) from audit.records').fetchone()[0],5)
+        self.assertEqual(self.db.execute('select count(*) from audit.measurements').fetchone()[0],1)
+        check.assert_called_once_with(['owner-a','owner-b'],plan['sha256'],m.digest(evidence))
+
+    def test_removal_stops_for_changed_state_missing_backup_or_approval(self):
+        from unittest.mock import patch,Mock
+        m,b,plan,reader,verified,evidence=self.removal_fixture()
+        check=Mock()
+        with patch.object(m,'verify_backup',return_value=verified):
+            for changed in ({**evidence,'isolation_verified':False},{**evidence,'target_project_url':plan['project_url']}):
+                with self.assertRaises(SentraError): m.remove(b,plan,reader,changed,[],check_approvals=check)
+            check.assert_not_called()
+            with self.assertRaisesRegex(SentraError,'approval rejected'):
+                m.remove(b,plan,reader,evidence,[],check_approvals=Mock(side_effect=SentraError('approval rejected')))
+            reader.read.return_value=b''
+            with self.assertRaisesRegex(SentraError,'every current row'):
+                m.remove(b,plan,reader,evidence,[],check_approvals=check)
+            self.db.execute('update audit.measurements set value=99 where source_response_id=%s',(RESPONSE,))
+            with self.assertRaisesRegex(SentraError,'lossless'):
+                m.remove(b,plan,reader,evidence,[],check_approvals=check)
+        self.assertEqual(self.db.execute('select count(*) from audit.measurements').fetchone()[0],5)
+
+    def test_removal_preview_requires_paused_additive_current_data(self):
+        m,b,plan,reader,verified,evidence=self.removal_fixture()
+        self.db.execute('update collector_private.compact_control set enabled=true')
+        with self.assertRaisesRegex(SentraError,'Compact collector writes'):
+            m.preview(b,'p01','google_health','minute_steps')
+        self.db.execute('update collector_private.compact_control set enabled=false')
+        self.db.execute("update collector_private.observation_control set settings='{\"enabled\":true}'")
+        with self.assertRaisesRegex(SentraError,'paused'):
+            m.preview(b,'p01','google_health','minute_steps')
+        self.db.execute("update collector_private.observation_control set settings='{\"enabled\":false}'")
+
+
 class DenseDatasetTests(unittest.TestCase):
+    def test_removal_owner_comments_bind_exact_plan_and_recovery_evidence(self):
+        from unittest.mock import Mock
+        from sentra import compact_removal as m
+        import json
+        def response(author,body=None):
+            r=Mock(status_code=200)
+            r.__enter__=Mock(return_value=r); r.__exit__=Mock(return_value=False)
+            r.iter_content.return_value=[json.dumps({'user':{'login':author},
+                'issue_url':'https://api.github.com/repos/han33-dotcom/Sentra/issues/105',
+                'body':body or 'APPROVE SENTRA PHASE3 plan EVIDENCE recovery'}).encode()]
+            return r
+        urls=['https://github.com/han33-dotcom/Sentra/pull/105#issuecomment-'+str(i) for i in (1,2)]
+        m.approval_comments(urls,'plan','recovery',get=Mock(side_effect=[response(a) for a in m.OWNERS]))
+        for responses in ([response('han33-dotcom'),response('han33-dotcom')],
+                          [response(a,'APPROVE SENTRA PHASE3 old EVIDENCE recovery') for a in m.OWNERS]):
+            with self.assertRaises(SentraError): m.approval_comments(urls,'plan','recovery',get=Mock(side_effect=responses))
+
     def test_migration_parses_and_never_deletes_measurements(self):
         from pglast import parse_sql
         text = Path('sql/009_compact_series.sql').read_text(encoding='utf-8')
