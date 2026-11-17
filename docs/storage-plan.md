@@ -69,11 +69,12 @@ tiers job ──►  sentra-tiers          monthly parquet partitions, built inc
       migrated per-field rows inside the same guarded migration.
    4. Run `VACUUM FULL` on the two audit tables once. Plain `DELETE` does not shrink
       `pg_database_size`; the admin role runs this during a paused window.
-4. **Incremental, partitioned tiers.** Tiers become monthly partitions
-   (`measurements/2026-10.parquet`, `hr_minute/p01/2026-10.parquet` …). Each refresh
-   rebuilds only the open partitions: the current month, plus the previous month for 3
-   days after it ends to catch corrections. A refresh then reads a few MB instead of
-   about 40 MB.
+4. **Incremental, partitioned tiers.** Implemented as versioned monthly logical
+   partitions backed by immutable content-addressed objects. Full source fingerprints
+   invalidate any corrected, moved or omitted month, including older history; a
+   three-day archive cutoff is unsafe. Only changed database partitions are read and
+   new object hashes uploaded. See [tier publication](parquet-tiers.md) for bounds,
+   compatibility, retry, hot expiry and the remaining cache/cleanup limitations.
 5. **Postgres stays the recent working set; parquet holds the long history.** Sparse
    daily and session data stay in Postgres for the project's lifetime (about 0.4 MB
    per participant-day). A retention window for older per-field rows is a later, separate

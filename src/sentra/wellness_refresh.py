@@ -20,6 +20,7 @@ from urllib.parse import urlsplit
 
 from .errors import SentraError
 from . import eligibility
+from . import monthly_tiers
 from .processing.board import BOARD_VERSION, payload
 from .processing.job import runtime_config as viewer_config
 from .processing.observations import devices as participant_devices, load
@@ -75,9 +76,10 @@ def _eligibility(writer, board):
         raise SentraError('Board is published, but eligibility metadata could not be updated. Retry the refresh; existing data is retained.') from None
 
 
-def refresh(reader, limits, storage, *, force=False, now=None, log=print, eligibility_writer=None):
+def refresh(reader, limits, storage, *, force=False, now=None, log=print, eligibility_writer=None, incremental=False):
     now = now or datetime.now(timezone.utc)
     source = latest_run(reader)
+    before={}
     if not force:
         before = previous_board(storage) if source is not None else {}
         previous = before.get('source_run')
@@ -85,20 +87,29 @@ def refresh(reader, limits, storage, *, force=False, now=None, log=print, eligib
         # labels before #45) is rebuilt from existing data even without new collection data.
         current_rules = (before.get('assessment_version') == ASSESSMENT_VERSION
                          and before.get('board_version') == BOARD_VERSION)
-        if source is None or (current_rules and previous and datetime.fromisoformat(source) <= datetime.fromisoformat(previous)):
+        if not incremental and (source is None or (current_rules and previous and datetime.fromisoformat(source) <= datetime.fromisoformat(previous))):
             log('No changed collection data or rules since the last board; tiers not read or published.')
             feed = _eligibility(eligibility_writer,before) if current_rules else 'not_available'
             return {'status': 'skipped', 'source_run': source, 'eligibility':feed}
-    objects, report = build(reader, limits, now=now)
+    objects, report = (monthly_tiers.build(reader,limits,storage,now=now,force=force) if incremental
+                       else build(reader, limits, now=now))
+    if (incremental and not force and report.get('unchanged')
+            and before.get('assessment_version')==ASSESSMENT_VERSION and before.get('board_version')==BOARD_VERSION
+            and before.get('tier_sha256')==report['sha256']):
+        return {'status':'skipped','source_run':source,'eligibility':_eligibility(eligibility_writer,before)}
     # Process before publishing anything: a processing failure leaves both tiers and board unchanged.
     with tempfile.TemporaryDirectory(prefix='sentra-wellness-') as folder:
-        for key, data in objects.items():
-            path = Path(folder) / key
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_bytes(data)
+        if incremental:
+            monthly_tiers.materialize(objects,folder)
+        else:
+            for key, data in objects.items():
+                path = Path(folder) / key
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(data)
         devices = participant_devices(folder)
         _, daily, _, _ = run(load(folder), Path(folder) / 'processed', log=lambda *_: None, devices=devices)
     board = payload(daily, devices, built_at=now.isoformat(), source_run=source)
+    if incremental: board.update(tier_layout=monthly_tiers.VERSION,tier_sha256=report['sha256'])
     body = json.dumps(board, separators=(',', ':')).encode()
     if len(body) > MAX_BOARD_BYTES:
         raise SentraError('Board payload exceeds 5 MB; narrow the history before publishing.')
@@ -125,9 +136,11 @@ def main(argv=None):
                 storage = PrivateStorage(collector_storage(), reader.reserve, bucket=TIER_BUCKET)
                 publisher = eligibility.from_config(json.loads(os.environ['SENTRA_COLLECTOR_CONFIG']),folder)
                 try:
+                    monthly_tiers.lock(reader)
                     print(json.dumps(refresh(reader, limits, storage, force=args.force,
-                        eligibility_writer=lambda board:eligibility.publish(publisher,board))), flush=True)
+                        eligibility_writer=lambda board:eligibility.publish(publisher,board),incremental=True)), flush=True)
                 finally:
+                    monthly_tiers.unlock(reader)
                     publisher.close()
                     storage.session.close()
         return 0

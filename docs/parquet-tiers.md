@@ -15,26 +15,39 @@ change and need a separate, reviewed decision.
 | `hr_minute/<pid>.parquet` | Per-minute heart rate: vendor 60 s rollups (`vendor_60s_rollup`: mean/min/max) and Sentra minutes from raw readings (`sentra_from_raw`: mean/min/max/n). The two are kept as separate rows and never merged. | Warm: all history |
 | `measurements.parquet` | Every other measurement: participant, provider, dataset, record key, vendor metric path, `ts`/`end_ts`, civil date, `value` (float64), unit, value kind, availability. `vendor_value` is filled only for non-numeric values such as enums. | All history |
 | `sessions.parquet` | `audit.sessions`: type, start/end, score state, provisional | All history |
-| `size_report.json` | Bytes and person-days per tier, plus a 10-employee / 30-day projection; `prefix` names the slot holding the current complete set | Latest run |
+| `size_report.json` | Bytes and person-days per tier, plus a 10-employee / 30-day projection; versioned object hashes/locations identify the complete monthly set | Latest run |
 
-The tier objects above live under one of two slots, `slot-a/` or `slot-b/`. A build
-uploads every object to the slot readers are **not** using and writes `size_report.json`
-last, so readers switch to the new set in one replace. If any upload fails, the report
-still points at the previous complete set; repeating the build is safe.
+The table describes the processor's local compatibility layout. New publications use
+`monthly-v1`: logical names `months/YYYY-MM/<tier-or-person>.parquet` map to immutable
+`monthly/<sha256>.parquet` objects in the private bucket. Undated observations have
+an explicit `undated` partition. `fetch()` verifies the complete manifest and object
+hashes, then materializes the established layout locally for processing.
 
-- **Which slot is live:** only an explicit "not found" for `size_report.json` (the first
-  build) starts at `slot-a/`. Any other read failure or a malformed report stops the build
-  before it writes, so the live slot is never overwritten.
-- **Readers get one complete set:** the report lists each object's SHA-256. `fetch()` checks
-  every download against it. If a slot was rewritten mid-download (two publications during
-  one slow read), it reads the report again and fetches the whole set afresh, up to three
-  times, and never returns a mixed set.
-- **Capacity:** one check before any write covers the tiers, the report and the board together.
+Each refresh computes bounded per-tier/month row counts and two-half row-hash sums
+inside one read-only repeatable-read database snapshot. Changed months alone are
+read in full; unchanged partitions are downloaded from the compact private cache.
+Corrections, omissions and moves between months invalidate their old/new partitions,
+including old history outside the collector's ordinary correction window. No
+three-day cutoff is used to decide that an archive can never change. A layout-version
+change or `--full` forces a complete source rebuild. Hot raw data ages out of current
+publication without rereading historical raw samples; warm minute archives remain.
 
-Reports without `prefix` (written before slots) are read from the bucket root, checked by
-size only. Two slots keep at most two
-copies of the few-MB tiers; the bucket has no delete policy, so the original root objects
-remain until an admin removes them.
+Only new object hashes are uploaded. The complete `size_report.json` is replaced
+last, so an interrupted upload leaves the previous complete publication readable.
+A shared PostgreSQL advisory lock serializes both command-line and wellness writers.
+The source inventory is capped at 1,200 partitions, the downloaded/derived cache at
+500 MB, and each object at the existing 50 MB bucket limit. Database reads retain
+the per-run and monthly egress guards. A capacity check before any write covers all
+new objects, the report and the pending board together.
+
+Old root and alternating-slot publications remain readable; their first incremental
+refresh rebuilds all source partitions. Old slots and unreferenced immutable objects
+are not automatically deleted. Their actual storage continues to count against the
+guard; cleanup requires a separately reviewed retention operation. Historical raw
+objects may therefore remain until that operation even after leaving the hot view.
+Digest scans still inspect source rows on the database, and processing still reads
+the complete compact cache. This reduces database transfer and uploads, not all
+server work. Live savings have not yet been measured with collection paused.
 
 Missing values stay null. Nothing is zero-filled, interpolated or deduplicated across
 sources. Only identical readings at the same instant collapse to one row in `hr_raw`.
@@ -50,7 +63,7 @@ Participants appear only as pseudonymous IDs.
   exhausted budget stops the run. Each run is also capped at `--max-read-mb` (default
   500 MB).
 - **Objects:** before uploading, `Limits.check` must accept current object usage plus the
-  **full** size of the new tiers. Replaced objects are not netted out. No object may
+  size of every new content-addressed object plus publication metadata. Existing obsolete objects are not netted out. No object may
   exceed the bucket's 50 MB file limit.
 - **Writes:** uploads use the collector storage account and go only to `sentra-tiers`.
   `x-upsert` is never sent for `sentra-originals`, so originals stay immutable, and there
@@ -67,7 +80,7 @@ Participants appear only as pseudonymous IDs.
 
 `tiers-migrate` applies `sql/006_parquet_tiers.sql` once with the admin credentials and
 records it in `collector_private.schema_versions`. `tiers-build` prints the size report.
-Use `--employees` and `--days` to change the projection.
+Use `--employees` and `--days` to change the projection, or `--full` to rebuild every source partition.
 
 ## Expected size (synthetic, before the first real run)
 

@@ -352,6 +352,56 @@ class CompactionDatabaseTests(unittest.TestCase):
         self.assertEqual((report['measurement_rows'], report['series_rows']), (60, 1))
         self.assertGreater(report['ratio'], 1)
 
+    def test_monthly_refresh_detects_old_corrections_moves_omissions_and_retries(self):
+        from datetime import datetime,timezone,timedelta
+        from unittest.mock import Mock
+        import io,json,tempfile
+        import pyarrow.parquet as pq
+        from sentra import monthly_tiers as monthly, tiers
+        from sentra.shared import Limits
+        from test_tiers import Bucket
+        self.rows(RESPONSE,['12',None,'7.50','0'],resolution='60.0')
+        compaction.compact(self.db,self.guard,'p01','google_health','minute_steps')
+        # Also verify the partitioned reader sees the compact-only logical source.
+        self.db.execute('delete from audit.measurements')
+        reader=tiers.AuditReader.__new__(tiers.AuditReader)
+        reader.db=self.db; reader.series=None; reader.read_bytes=0; reader.max_read_bytes=10_000_000
+        reader.reserve=lambda amount:None
+        reader.usage=lambda:{'database_bytes':1000,'object_bytes':1000,'audit_bytes':1000,'egress_bytes':1000}
+        storage=Bucket(); limits=Limits(); now=datetime(2026,11,17,tzinfo=timezone.utc)
+        objects,report=monthly.build(reader,limits,storage,now=now)
+        self.assertEqual(report['rebuilt_months'],['2026-10'])
+        tiers.publish(objects,report,storage,reader,limits)
+        reader.read_partition=Mock(wraps=reader.read_partition)
+        same,same_report=monthly.build(reader,limits,storage,now=now)
+        reader.read_partition.assert_not_called(); self.assertTrue(same_report['unchanged'])
+        # A months-old correction moves a record to September and changes its value.
+        self.db.execute("update audit.series set interval_start[1]='2026-09-01T08:00Z',interval_end[1]='2026-09-01T08:01Z',vals[1]=99")
+        changed,changed_report=monthly.build(reader,limits,storage,now=now)
+        self.assertEqual(changed_report['rebuilt_months'],['2026-09','2026-10'])
+        previous=storage.objects['size_report.json']; storage.fail_at=0
+        with self.assertRaises(SentraError): tiers.publish(changed,changed_report,storage,reader,limits)
+        self.assertEqual(storage.objects['size_report.json'],previous)
+        storage.fail_at=None
+        tiers.publish(changed,changed_report,storage,reader,limits)
+        with tempfile.TemporaryDirectory() as folder:
+            tiers.fetch(storage,folder)
+            records=pq.read_table(Path(folder)/'measurements.parquet').to_pylist()
+            self.assertEqual(len(records),4)
+            self.assertIn(99,[r['value'] for r in records])
+        # Omitting the only record in September invalidates and removes that partition.
+        self.db.execute("update audit.records set source_response_id=%s where record_key=%s",('b'*64,f'{RESPONSE[:4]}-0000'))
+        omitted,omitted_report=monthly.build(reader,limits,storage,now=now)
+        self.assertFalse(any(key.startswith('months/2026-09/') for key in omitted))
+        tiers.publish(omitted,omitted_report,storage,reader,limits)
+        # A layout version change and explicit --full both rebuild all source partitions.
+        legacy={**omitted_report,'layout':'monthly-v0'}
+        storage.objects['size_report.json']=json.dumps(legacy).encode()
+        rebuilt,rebuilt_report=monthly.build(reader,limits,storage,now=now)
+        self.assertEqual(rebuilt_report['rebuilt_months'],['2026-10'])
+        tiers.publish(rebuilt,rebuilt_report,storage,reader,limits)
+        self.assertEqual(monthly.build(reader,limits,storage,now=now,force=True)[1]['rebuilt_months'],['2026-10'])
+
 
     def removal_fixture(self):
         from datetime import datetime, timedelta, timezone
