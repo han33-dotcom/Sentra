@@ -1,6 +1,14 @@
 # Activate the Sentra GitHub workspace
 
-## Current state
+This is the historical workspace activation record. Policy version 4 in
+[agent-owned delivery](local-delivery.md) supersedes its human review, separate
+acceptance and background-worker gates. The implementation agent now self-reviews,
+verifies and delivers through main. See [team workflow](team-workflow.md) for current
+status. Dated observations and unfinished historical pilot steps below are not
+current delivery instructions.
+
+
+## Historical rollout state (October 21, 2026)
 
 The reviewed workflow is on `main`. Project synchronization was enabled on
 October 21, 2026 after successful credentialed no-write previews and the owner's
@@ -29,14 +37,13 @@ This is also the saved board column order, verified after reload on October 15.
 The Status board and **All tasks** table are available. For your own work, filter
 Assignees with `assignee:@me`; a dedicated saved My tasks view remains optional polish.
 
-Use **Priority** (High/Medium/Low), **Due date** (date), **Human reviewer** (text GitHub
-handle) and **Blocked reason** (text). Use native **Assignees** for the task owner.
+Use **Priority** (High/Medium/Low), **Due date** (date), **Human reviewer** (optional historical field) and **Blocked reason** (text). Use native **Assignees** for the task owner.
 GitHub's built-in Reviewers field refers to PR reviewers; it is not the task's Human
 reviewer field. Acceptance criteria and completion evidence belong in the issue body.
 
 Native auto-add is enabled only for `han33-dotcom/Sentra` with `is:issue`; new items
 start at Not started. Automatic issue closure, PR-merge completion and sub-issue
-addition are disabled. Keep Done under human acceptance control.
+addition are disabled. Use current complete acceptance evidence to set Done.
 
 Rollout issue #16 is attached, assigned to `han33-dotcom`, In progress and High
 priority. The original university reports and meeting records predate the GitHub
@@ -196,7 +203,10 @@ notification does not automatically launch a teammate's personal AI assistant.
 - `workflow-maintenance` and `release` labels now exist. The owner confirmed
   `mhmdaboulhoda` may grant independent exemptions; CODEOWNERS remain unchanged.
 
-## Pilot
+## Historical policy-version-2 pilot (superseded)
+
+The following describes the earlier rollout. Current acceptance and merge rules
+are in [local delivery](local-delivery.md); these historical review gates no longer apply.
 
 Use dedicated pilot issue [#21](https://github.com/han33-dotcom/Sentra/issues/21)
 and PR [#23](https://github.com/han33-dotcom/Sentra/pull/23), with the

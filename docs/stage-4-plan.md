@@ -1,5 +1,12 @@
 # Stage 4 — daily cloud collection plan
 
+> Historical stage delivery record: commit/publication approval, independent
+> review and stage sequencing below describe the original rollout. Current code
+> delivery follows [AGENTS.md](../AGENTS.md) and [agent-owned delivery](local-delivery.md):
+> implementation-agent self-review, acceptance, CI, develop, then main. Old code
+> publication gates do not apply. Operational, consent, expert and destructive-data
+> approvals remain in force; historical activation never authorizes collection now.
+
 Branch: `ETL-pipeline`; approved stage, 8 October 2026. Implement inline using
 planning, executing-plans and TDD skills, with one independent review at the end.
 The user's stage/commit agreement overrides automatic skill commits, separate

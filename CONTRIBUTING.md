@@ -35,10 +35,11 @@ locally per the stage guides and are never committed.
 | `fix/<short-name>` | Bug fix | You |
 | `chore/`, `ci/`, `docs/` | Tooling, pipelines, documentation | You |
 
-`main` and `develop` are protected: no direct pushes, a PR with green `guard` and
-`test` checks and one approving code-owner review. The code owners are
-`han33-dotcom`, `MohamadNasrallah` and `mhmdaboulhoda`; another listed owner must
-approve an owner's PR.
+`main` and `develop` require PRs and green `guard`, Linux/Windows `test`, and
+`pr-policy` checks. The implementation agent self-reviews, verifies acceptance,
+and performs the merges using the same coding session. No teammate approval,
+separate review agent, background worker or `local-acceptance` status is required.
+See [agent-owned delivery](docs/local-delivery.md).
 
 Work branches are squash-merged. GitHub's **Automatically delete head branches**
 setting is enabled: work branches are deleted after their PR merges, including PRs
@@ -49,7 +50,7 @@ commits and open PR dependencies before deletion.
 
 Required checks use strict up-to-date enforcement. Bring the target branch into
 work branches deliberately and rerun checks after integration changes. Releases
-and back-merges follow the reviewed merge-commit procedure below.
+and back-merges follow the merge-commit procedure below.
 
 ## Flow
 
@@ -57,8 +58,14 @@ and back-merges follow the reviewed merge-commit procedure below.
 2. Commit in small steps with conventional messages: `feat: add sedentary-period dataset`,
    `fix: ...`, `ci: ...`, `docs: ...`, `chore: ...`.
 3. `git push -u origin feat/<short-name>` and open a PR **into `develop`**. CI must be green.
-4. One teammate reviews. Squash-merge.
-5. Release (end of sprint / before a demo): PR `develop` → `main`.
+4. The same agent self-reviews the current diff, fixes findings, verifies PR scope,
+   records evidence and squash-merges after current required CI passes.
+5. After all linked implementation PRs merge, the agent verifies every task criterion,
+   publishes structured evidence and closes fully accepted tasks. Inaccessible
+   observations stay open with exact human steps, expected results and evidence.
+6. The agent opens and merges a `develop` to `main` release, then synchronizes main
+   ancestry into develop through a merge-commit PR. Continue until delivery finishes;
+   if the coding session stops, resume it to finish. No background agent takes over.
 
 Merging or deploying code never authorizes restarting collection. The daily
 collector (`.github/workflows/collect.yml`) stays paused until the team agrees and
@@ -68,19 +75,19 @@ both controls described in the [operating guide](docs/operating-guide.md) are se
 
 Release from `develop` into `main`, using a **merge commit** rather than squash or
 rebase. This preserves the integration ancestry. The `release` exemption accepts
-only this exact same-repository branch pair and a label applied by another
-configured teammate; `codex/release-*` work branches are not release exemptions.
+only this exact same-repository branch pair and a label applied by a configured
+team account, including the author or their coding agent.
 
-After a release, bring `main` back into `develop` through a reviewed PR, also using
-a **merge commit**. Do not use GitHub's Update branch on a release PR to pull
-`main` into the protected `develop` branch without review.
+After a release, the same agent brings `main` back into `develop` through a
+`codex/release-sync` PR using a **merge commit**. Integration branches are updated
+through PRs with passing checks.
 
 If the branches have already diverged (as after release #14), start a focused
 `codex/sync-main-into-develop` work branch from current `origin/develop`, merge
 `origin/main` into it locally, resolve conflicts, run CI and open a PR into
 `develop`. Link the same-repository release/synchronization issue and fill the
 normal handoff sections; do not claim the release exemption for this PR. Merge
-that reviewed synchronization PR with a **merge commit**, so `main` becomes an
+that synchronization PR with a **merge commit**, so `main` becomes an
 ancestor of `develop`. Recheck this before the next release:
 
 ```text
@@ -88,7 +95,7 @@ git fetch origin
 git merge-base --is-ancestor origin/main origin/develop
 ```
 
-Exit code 0 confirms the ancestry. A nonzero result needs the reviewed
+Exit code 0 confirms the ancestry. A nonzero result needs the
 synchronization above, never a force push or branch-protection bypass.
 
 ## Tests
@@ -106,18 +113,24 @@ data in a test; build synthetic responses in the test or under `tests/fixtures/`
 ## Shared instructions and review handoff
 
 [AGENTS.md](AGENTS.md) is the canonical policy for coding and review agents.
-[CLAUDE.md](CLAUDE.md) imports it for Claude Code. The
+[CLAUDE.md](CLAUDE.md) imports it for Claude Code. Copilot and Cursor entry points
+also direct agents to this shared policy; see
+[discovery and refresh](docs/collaborator-setup.md#shared-policy-discovery-and-refresh).
+Historical stage plans and named reviewer assignments do not add code-publication
+gates. Operational, consent, expert and destructive-data approvals remain applicable. The
 [team workflow](docs/team-workflow.md) gives responsibilities, task status meanings
 and a simple dashboard date-filter example.
 
 Link the GitHub issue and acceptance criteria from the PR description. Explain what
 changed, why, validation and limitations. Keep actionable review findings on GitHub;
 the author's assistant reads accepted findings directly and updates the branch.
-A human teammate reviews the latest head and decides whether to approve.
+Self-review and acceptance belong to the implementation agent. Additional review
+is optional. Required CI still gates merging; no separate acceptance-status job runs.
 
 Record lasting decisions in project documents or the task. Implemented means the
-required implementation PRs merged into `develop`; Done requires human verification
-of acceptance criteria. Release/deployment work remains separate when required.
+required implementation PRs merged into `develop`; Done requires verified acceptance
+criteria. Agents perform every accessible check. Only inaccessible observations
+remain for human verification, with steps and expected evidence on the issue.
 Native Slack PR/review notifications and Project status synchronization are enabled;
 see the current [team workflow](docs/team-workflow.md) for scope and limitations.
 Use the issue number as the stable task ID: `[SEN-41] description` on tasks and

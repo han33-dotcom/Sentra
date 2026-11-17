@@ -1,5 +1,12 @@
 # Stage 3 implementation plan
 
+> Historical stage delivery record: commit/publication approval, independent
+> review and stage sequencing below describe the original rollout. Current code
+> delivery follows [AGENTS.md](../AGENTS.md) and [agent-owned delivery](local-delivery.md):
+> implementation-agent self-review, acceptance, CI, develop, then main. Old code
+> publication gates do not apply. Operational, consent, expert and destructive-data
+> approvals remain in force; historical activation never authorizes collection now.
+
 > Implement inline with the executing-plans skill; preserve ETL-pipeline and existing changes.
 
 **Goal:** Put the existing two-participant audit workspace in private Supabase Free storage, with bounded writes and a demonstrated backup restoration.

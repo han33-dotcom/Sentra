@@ -1,4 +1,4 @@
-"""Pure lifecycle planning; completion remains a human decision."""
+"""Pure lifecycle planning; acceptance evidence is checked by the reconciler."""
 
 
 def plan_status(current, issue_closed, pulls):

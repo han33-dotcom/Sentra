@@ -14,6 +14,13 @@ Optional Task ID: SEN-NUMBER matches the primary Task URL. -->
 - [ ] `python -m pytest` passes from the repository root (live tests skipped unless opted in)
 - [ ] Checked against the shared database / providers (say how, with an approved bounded scope), or not needed
 
+## Self-review and acceptance
+<!-- The implementation agent reviews its current diff and records the commit,
+findings/fixes, acceptance checks and results here or in a PR comment.
+The same agent waits for CI, merges into develop, releases to main and synchronizes
+ancestry. No separate reviewer, background worker or approval status is required.
+Only inaccessible criteria stay on the task with exact human verification steps. -->
+
 ## Safety checklist
 - [ ] No participant data, original responses, exports, backups, tokens, keys, `.csv`/`.parquet` files or screenshots of real data
 - [ ] No change enables scheduled collection (`SENTRA_COLLECTION_ENABLED`, daily-collection control) unless agreed by the team

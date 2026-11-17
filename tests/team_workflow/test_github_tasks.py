@@ -48,4 +48,4 @@ class GitHubTaskTests(unittest.TestCase):
     def test_pr_description_cannot_request_auto_closure(self):
         url = "https://github.com/han33-dotcom/Sentra/issues/16"
         for directive in ["Closes #16", "Closes: #16", "**Closes**: #16", "fixes han33-dotcom/Sentra#16", "Resolves " + url]:
-            self.assertIn("Use Related to instead of automatic issue-closing keywords; human acceptance controls Done.", validate_pr_metadata(body(url) + directive, set(), "han33-dotcom/Sentra", "develop"))
+            self.assertIn("Use Related to instead of automatic issue-closing keywords; acceptance evidence controls Done.", validate_pr_metadata(body(url) + directive, set(), "han33-dotcom/Sentra", "develop"))
