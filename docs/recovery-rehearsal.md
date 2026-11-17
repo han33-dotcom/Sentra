@@ -1,6 +1,7 @@
 # Recovery rehearsal (#30)
 
-Status: **full backup verified; hosted rehearsal being prepared.** Run it after a verified backup ([retention-policy.md](retention-policy.md))
+Status: **hosted full recovery verified November 18, 2026 (Beirut).** Repeat only under
+an explicit operator scope after a verified backup ([retention-policy.md](retention-policy.md))
 and before any destructive storage step (#46). Record the results table below in the task,
 never the backup itself. NIST SP 800-34 treats restoring from backup media as part of
 contingency testing (see [retention-evidence.md](retention-evidence.md), reference 16).
@@ -98,17 +99,48 @@ differs. The original responses are uploaded into the rehearsal project's own
 
 ## Record
 
+The owner-created isolated Free project in a separate Free organization was configured
+in a separate checkout with new target credentials, SSL enforcement and migrations
+001–015. The original live project and its ledger were preserved. The recovery ran
+released commit `07678e6af5cdf300374e6e09e77e1f806c1525bc`; no provider requests,
+collection restart, derived-board refresh or deletion ran.
+
+Source encrypted-manifest SHA-256:
+`33569268be28dcb2ec289d1cee05ced2bd0147de9fe6a3929041c0b3907f402e`.
+Comparison is against the coherent source snapshot in that authenticated archive,
+not a claim that the live database cannot change after the backup.
+
 | Item | Expected | Actual |
 | --- | --- | --- |
-| Backup created at / selection | full, after collection paused | |
-| `shared-backup-verify` | `verified`, N originals, `not_covered` empty. `tables`: the seven required audit tables, compact `series` when installed, and installed private tables in the backup allowlist | |
-| Inventory reconciled with the source | Compare source migrations against `TABLES`, `OPTIONAL_TABLES` and `PRIVATE_TABLES` in [the backup code](../src/sentra/shared_backup.py). Every installed table in that supported inventory appears under `tables`; absent optional/private tables appear under `not_installed` (for example, `audit.series` before 009 or both follow-up tables before 010). Record intentional exclusions separately, even when `not_covered` is empty | |
-| Restore result | `restored_and_verified` | |
-| Row counts per table | equal to the manifest | |
-| Table fingerprints | equal to the manifest | |
-| Originals re-hashed | all match | |
-| Processing from restored data | board and daily features identical to the live run for the same day | |
-| Time to restore | — | |
+| Backup created at / selection | full, after collection paused | Full backup completed November 17 23:00:26 UTC / November 18 Beirut; paused throughout |
+| `shared-backup-verify` | `verified`, all installed supported tables and originals | Passed offline before restore: 662 members, 16 tables, 220 originals; `not_covered=[]` |
+| Inventory reconciled with the source | Every installed table in the supported allowlist covered; exclusions stated | Seven required audit tables, compact series, four organization/consent tables, two follow-up tables and two enrollment tables; `not_installed=[]`. Intentional exclusions remain below |
+| Restore result | `restored_and_verified` | Passed at November 17 23:36:59 UTC / November 18 Beirut |
+| Row counts per table | equal to the manifest | All 16 match; 251,971 total rows |
+| Table fingerprints | equal to the manifest | All 16 order-independent SHA-256 fingerprints match inside the restore transaction |
+| Originals re-hashed | all match | All 220 destination objects downloaded with bounded requests and matched decompressed source digests |
+| Compact reconstruction | restored compact arrays expand correctly | 3 compact rows project to 774 readings, equal to the authenticated archive's array lengths |
+| Processing from restored data | board and daily features identical to the live run for the same day | Not run; derived outputs were not rebuilt and no new refresh is claimed |
+| Time to restore | — | 891.16 seconds including destination-original readback; database/original-upload transaction completed after 782.91 seconds |
+
+The run reserved 897,486,250 bytes within its 1,100,000,000-byte session cap.
+A separate bounded progress inspection reserved 98,304 bytes and post-checks
+reserved 65,536 bytes; combined recovery reservations were 897,650,090 bytes.
+The new organization started with a conservative 20 MB setup/rounding baseline;
+its ledger was not substituted for or deducted from the live organization's ledger.
+Final measured database size was 307,066,547 bytes and originals occupied 754,343
+bytes, below the unchanged database/object guards. Anonymous and unregistered
+authenticated roles had no SELECT privilege on any restored table; all restored
+identity allocators advanced past their IDs. Provider-credential rows were zero.
+Collection and compact writes remained disabled. Private receipts retain source/
+target identity, complete count mappings and the dated checks; no values or keys
+are published here.
+
+The existing Sentra account could administer the target, and this Windows account
+could decrypt the archive with its existing OS-vault key. A second custodian's
+independent recovery, off-machine key/backup availability, key-loss recovery and
+full derived-output reconstruction remain unverified. No original administrative
+access was removed based on this rehearsal.
 
 After an `--empty-audit` restore, membership and consent ids continue after the restored ones,
 and enrollment's participant-number allocator moves past the highest restored `pNNN`. A new
@@ -137,5 +169,10 @@ enrollment service is deployed against the target.
 
 ## Afterwards
 
-Delete the throwaway project, the rehearsal checkout's `.private` and the restored copies once
-the results are recorded. They contain participant data.
+After recording the result, obtain explicit authorization to permanently delete the
+named throwaway project and its rehearsal copies; they contain participant data.
+Keep the verified source archive and recovery evidence. Remove only the rehearsal's
+credentials, configuration and copied archive when authorized; preserve unrelated
+private files if an existing isolated checkout was reused. Until cleanup is authorized,
+keep the project private and collection disabled. A recovery result does not authorize
+deletion from the live project.
