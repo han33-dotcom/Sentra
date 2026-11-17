@@ -47,7 +47,7 @@ class FollowUpReader(OrgReader):
 
 
 class FollowUpPageTests(unittest.TestCase):
-    def open(self, email, writer='fake', rows=ROWS):
+    def open(self, email, writer='fake', rows=ROWS, users=USERS):
         from sentra import viewer_app
         from streamlit.testing.v1 import AppTest
         self.writer = Mock() if writer == 'fake' else writer
@@ -58,7 +58,7 @@ class FollowUpPageTests(unittest.TestCase):
         for p in (patch.object(viewer_app.st, 'user', User(email)),
                   patch.object(viewer_app, 'open_reader', reader),
                   patch.object(viewer_app, 'open_follow_up_writer', write),
-                  patch.object(viewer_app, 'load_organization_rows', Mock(return_value=(USERS, CONSENTS)))):
+                  patch.object(viewer_app, 'load_organization_rows', Mock(return_value=(users, CONSENTS)))):
             p.start()
             self.addCleanup(p.stop)
         FollowUpReader.scopes = []
@@ -72,6 +72,39 @@ class FollowUpPageTests(unittest.TestCase):
 
     def titles(self, app):
         return [m.value for m in app.markdown if m.value.startswith('**Follow-up')]
+
+    def test_one_identity_changes_role_and_org_without_retaining_access(self):
+        email = 'sequential@example.test'
+        user = {'org_id': 'org-a', 'email': email, 'role': 'officer', 'active': True}
+        rows = [row(11, 'org-a', None, email), row(12, 'org-a', None, 'other@example.test'),
+                row(13, 'org-b', None, email)]
+        app = self.open(email, rows=rows, users=[user])
+        self.assertEqual(set(self.titles(app)), {'**Follow-up 11 · Group**', '**Follow-up 12 · Group**'})
+        self.assertEqual(len(app.get('form')), 3)  # new record and both updates
+
+        user['role'] = 'reviewer'
+        app.run()  # same signed-in identity and existing session caches
+        self.assertFalse(app.exception)
+        self.assertEqual(len(app.get('form')), 1)  # assigned note only, no creation
+        app.text_input[0].input('Synthetic reviewer update.')
+        next(b for b in app.button if b.label == 'Save update').click().run()
+        self.writer.update.assert_called_once_with(email, 11, 'open', email, 'Synthetic reviewer update.')
+        self.writer.open.assert_not_called()
+
+        user.update(org_id='org-b', role='officer')
+        app.run()
+        self.assertFalse(app.exception)
+        self.assertEqual(self.titles(app), ['**Follow-up 13 · Group**'])
+        self.assertEqual(FollowUpReader.scopes[-1][0], 'org-b')
+        self.assertNotIn('**note 11**', [t.value for t in app.text])
+
+        user['active'] = False
+        app.run()
+        self.assertFalse(app.exception)
+        self.assertIn('Access restricted', ' '.join(e.value for e in app.error))
+        self.assertEqual(self.titles(app), [])
+        self.assertEqual(len(app.get('form')), 0)
+        self.assertNotIn('audit_follow_ups', app.session_state)
 
     def test_officer_sees_only_permitted_notes_and_records_one(self):
         app = self.open('officer@a.test')
