@@ -62,8 +62,8 @@ Last updated: November 18, 2026; see dated implementation/hosted evidence in [ev
 
 - **Retention periods are proposals.** The team, advisor and IRB decide them; no expiry is
   implemented. (#58, [retention policy](retention-policy.md))
-- **Supabase's own backups remain unverified.** The full backup and isolated restore have
-  synthetic evidence. A fresh shared backup and the operator rehearsal remain pending. Apply
+- **Supabase's own backups remain unverified.** The full encrypted application backup
+  passed offline verification on November 18; the hosted operator rehearsal remains pending. Apply
   migration 010 to a rehearsal target if the archive contains follow-up tables, and 011 if the
   live project has it. (#58, #67, #78)
 - **Compact storage is extra space for now.** Removing the per-field rows (phase 3) stays gated on
@@ -94,8 +94,8 @@ Last updated: November 18, 2026; see dated implementation/hosted evidence in [ev
   organizations. Individual consent/withdrawal and the five-contributor hosted matrix still
   need an isolated synthetic fixture. Temporary roles were deactivated. (#72, #111)
 
-- **Fresh full backup requires the approved headroom rollout.** The November 18 owner
-  authorization permits a 4.5 GB transfer ceiling, 500 MB private-backup ceiling and one
-  full backup. See [rollout order](storage-plan.md#november-18-approved-backup-headroom).
-  Authorization/preflight alone do not establish backup or recovery success. Retention
+- **Backup verification does not establish recovery or retention agreement.** The November 18
+  rollout and one full encrypted backup completed within the authorized 4.5 GB transfer
+  and 500 MB private-backup ceilings. See the [dated record](storage-plan.md#rollout-and-verified-backup-observed-november-18).
+  The hosted recovery rehearsal still needs its own result. Retention
   agreement, isolated recovery and destructive approvals remain separate gates.
