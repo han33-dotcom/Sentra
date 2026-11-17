@@ -1,6 +1,11 @@
 # Sentra technical documentation
 
-Start with [Team workflow](team-workflow.md), [Collaborator setup](collaborator-setup.md) and [Workspace activation](github-workspace-activation.md).
+Start with [AGENTS.md](../AGENTS.md), [Agent-owned delivery](local-delivery.md),
+[Team workflow](team-workflow.md) and [Collaborator setup](collaborator-setup.md).
+These define current code delivery. [Workspace activation](github-workspace-activation.md),
+[Workflow pilot](workflow-pilot.md), stage plans and dated validation records preserve
+historical evidence; their old publication/review gates are superseded. Operational
+authorization and data-protection constraints still apply.
 
 Tasks belong in [GitHub Issues](https://github.com/han33-dotcom/Sentra/issues); general reference and meeting notes belong in the [Wiki](https://github.com/han33-dotcom/Sentra/wiki) after publication.
 

@@ -1,5 +1,12 @@
 # Stage 1: foundation and authorization
 
+> Historical stage delivery record: commit/publication approval, independent
+> review and stage sequencing below describe the original rollout. Current code
+> delivery follows [AGENTS.md](../AGENTS.md) and [agent-owned delivery](local-delivery.md):
+> implementation-agent self-review, acceptance, CI, develop, then main. Old code
+> publication gates do not apply. Operational, consent, expert and destructive-data
+> approvals remain in force; historical activation never authorizes collection now.
+
 **Stage 1 acceptance checks passed on 8 October 2026; awaiting user review.** Google Health API is enabled in
 `sentra-510913`. Both participants' team-data agreement was confirmed by the user
 on 7 October 2026. Google Health and WHOOP authorization, populated samples and

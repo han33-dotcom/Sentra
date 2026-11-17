@@ -1,5 +1,12 @@
 # Stage 7 — bounded research dataset
 
+> Historical stage delivery record: commit/publication approval, independent
+> review and stage sequencing below describe the original rollout. Current code
+> delivery follows [AGENTS.md](../AGENTS.md) and [agent-owned delivery](local-delivery.md):
+> implementation-agent self-review, acceptance, CI, develop, then main. Old code
+> publication gates do not apply. Operational, consent, expert and destructive-data
+> approvals remain in force; historical activation never authorizes collection now.
+
 ## Current decision, 10 October 2026
 
 The human deferred continuous collection and scaling until project use cases are
@@ -50,8 +57,9 @@ and there is no wait before the approved viewer redesign. This is not a retentio
 
 ## Collection boundaries
 
-- Publish the reviewed ongoing/pause control only after explicit approval of the
-  completed revision. Approval to begin does not approve an unseen commit.
+- Deliver control-code changes using [agent-owned delivery](local-delivery.md).
+  Enabling collection still requires current explicit operator authorization;
+  a code merge or this historical observation decision does not authorize it.
 - Recheck Free plan, GitHub account-wide $0/Stop usage, organization egress,
   database/object capacity and credential gates before enabling. Record actual
   activation timestamps in UTC/Beirut and the first successful approved run.

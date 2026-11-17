@@ -1,7 +1,8 @@
 # Dashboard restoration
 
 Task: [#34](https://github.com/han33-dotcom/Sentra/issues/34). Owner: Hassan
-(`han33-dotcom`). Human reviewer: `MohamadNasrallah`.
+(`han33-dotcom`). Optional additional reviewer (historical assignment): `MohamadNasrallah`.
+Code delivery follows [agent-owned delivery](local-delivery.md).
 
 ## Hosted configuration and recovery
 

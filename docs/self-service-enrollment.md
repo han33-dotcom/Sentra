@@ -2,7 +2,8 @@
 
 Task [#28](https://github.com/han33-dotcom/Sentra/issues/28), with the hosted
 connection work in [#47](https://github.com/han33-dotcom/Sentra/issues/47).
-Owner: Hassan (`han33-dotcom`); independent reviewer: `MohamadNasrallah`.
+Owner: Hassan (`han33-dotcom`); optional additional reviewer: `MohamadNasrallah`.
+Code delivery follows [agent-owned delivery](local-delivery.md).
 
 ## Participant experience
 
@@ -279,7 +280,8 @@ Acceptance corrections in the current work branch:
 - Private aggregate counts preserve the difference between an unavailable
   assessment result and a verified zero.
 
-These corrections need independent review and release before they are claimed
+These corrections need implementation-agent self-review, acceptance, CI and release
+under [agent-owned delivery](local-delivery.md), plus verified deployment, before they are claimed
 as deployed behavior. Synthetic tests use fake accounts/records and an isolated
 loopback PostgreSQL database; they grant no real person organization access.
 
