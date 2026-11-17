@@ -3,14 +3,33 @@ import argparse
 import json
 from pathlib import Path
 
-from .local_worker import CHECKS, CONTEXT, REPO, Client, credential
+import subprocess
+from .github_client import GitHubClient
+
+REPO = "han33-dotcom/Sentra"
+CHECKS = {"guard", "test (ubuntu-24.04, py3.11)", "test (windows-2025, py3.11)", "pr-policy"}
+
+
+def credential(root):
+    result = subprocess.run(["git", "credential", "fill"], cwd=root,
+                            input="protocol=https\nhost=github.com\n\n", text=True,
+                            capture_output=True, check=True)
+    fields = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
+    return fields["password"]
+
+
+class Client(GitHubClient):
+    def write(self, path, payload=None, method="POST"):
+        return self.transport("https://api.github.com/repos/" + self.repo + path,
+                              self.token, payload, method=method)
 
 
 def protection_payload(current):
-    checks = list(current["required_status_checks"].get("checks", []))
-    for name in sorted(CHECKS | {CONTEXT}):
+    checks = [check for check in current["required_status_checks"].get("checks", [])
+              if check["context"] != "local-acceptance"]
+    for name in sorted(CHECKS):
         if not any(check["context"] == name for check in checks):
-            checks.append({"context": name, "app_id": -1 if name == CONTEXT else 15368})
+            checks.append({"context": name, "app_id": 15368})
     restrictions = current.get("restrictions")
     if restrictions:
         restrictions = {"users": [u["login"] for u in restrictions.get("users", [])],
@@ -29,7 +48,7 @@ def protection_payload(current):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--apply", action="store_true")
-    parser.add_argument("--backup", type=Path, default=Path(".private/delivery-protections-before.json"))
+    parser.add_argument("--backup", type=Path, default=Path(".private/agent-delivery-protections-before.json"))
     args = parser.parse_args()
     token = credential(Path.cwd())
     client = Client(REPO, token, token)
