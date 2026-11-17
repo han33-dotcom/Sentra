@@ -235,9 +235,12 @@ are required. Provider access can also be revoked in the provider's account sett
 Status counts distinguish enrolled, connected and recently contributing. Recency
 uses actual measurement dates in Beirut (including vendor civil dates), not fetch
 success. `assessable: null` and `assessment: not_available` explicitly mean this
-service does not yet have verified processing eligibility; it never infers an
-assessment from arbitrary readings or registration. Processing eligibility belongs
-to #45/#49. Organization-facing views/downloads still require #27's shared access
+service lacks a current verified eligibility feed; it never infers an assessment from
+arbitrary readings or registration. Migration 014, after 008, adds bounded metadata
+from the published #45/#49 board contract. A complete current day yields true; a
+current partial/insufficient day yields false. Missing participants, stale publication
+or measurement dates (older than three days), future dates and incompatible assessment
+versions remain unknown. No values or medical conclusions enter enrollment storage. Organization-facing views/downloads still require #27's shared access
 enforcement; a completed enrollment does not certify that separate release.
 
 With private enrollment configuration, operators can inspect bounded counts:
@@ -340,3 +343,15 @@ an isolated local cluster. Tests exercise replay, CSRF, expiry, seat/identity ra
 cross-organization linking, reconnect/account substitution, consent history,
 withdrawal during retries, role privileges and credential encryption. CI runs the
 protocol/HTTP tests; the disposable PostgreSQL fixture is skipped unless opted in.
+
+### Published eligibility feed (sql/014)
+
+The wellness refresh publishes the board first, then replaces at most 100 eligibility
+rows through one collector-only function. The metadata contains participant pseudonym,
+day and completeness, plus the publication time/version/digest. Enrollment can execute
+only a bounded per-participant summary, and no runtime role can read/write the metadata
+tables directly. This adds no access to readings. Failure leaves eligibility unknown or
+its prior dated state; retrying an unchanged board repairs the feed without rebuilding
+tiers. Older or conflicting publications are rejected. An absent migration retains the
+existing unknown state. The feed is derived and can be rebuilt after recovery from the
+current board; it is not consent or a new authoritative health record.

@@ -165,3 +165,11 @@ can enable compact writes; the collector can read it. It is independent of colle
 authorization. The migration also makes the bounded enrollment recency function read
 current compact-only measurements without granting enrollment access to health tables.
 See [storage rollout](storage-plan.md#implementation-status-46).
+
+## Enrollment assessment eligibility (sql/014)
+
+Two private derived tables hold one publication watermark/digest and at most 100
+participant/day/completeness rows. The collector can publish through a bounded
+security-definer function; enrollment can read a single participant's dated eligibility
+through another. Neither role gets direct table access. Unknown/stale/incompatible
+results stay unknown. See [eligibility feed](self-service-enrollment.md#published-eligibility-feed-sql014).

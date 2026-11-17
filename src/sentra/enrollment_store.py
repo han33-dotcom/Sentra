@@ -11,6 +11,7 @@ import psycopg
 
 from .cloud_tokens import TokenRepository
 from .enrollment import EnrollmentError, digest
+from .processing.pipeline import ASSESSMENT_VERSION
 
 FITBIT_LINK_CREDENTIAL_STATES = ('active', 'refresh_pending')
 FITBIT_LINK_IDENTITY_PREFIX = 'fitbit-link:'
@@ -304,6 +305,12 @@ class EnrollmentStore:
             providers[provider] = status if token.get('refresh_expires_at', float('inf')) > time.time() else 'expired'
         metadata = self.db.execute('select enrollment_private.participation_status(%s)', (pid,)).fetchone()[0]
         active = c['open'] and not c['withdrawn']
+        metadata['assessable']=None
+        if self.db.execute("select to_regprocedure('enrollment_private.assessment_eligibility(text,text)') is not null").fetchone()[0] is True:
+            metadata.update(self.db.execute('select enrollment_private.assessment_eligibility(%s,%s)',
+                                           (pid,ASSESSMENT_VERSION)).fetchone()[0])
+        if not active:
+            metadata.update(assessable=False,assessment='not_available')
         try:
             day = date.fromisoformat(metadata['latest_measurement_day'])
             recent = 0 <= (datetime.now(ZoneInfo('Asia/Beirut')).date() - day).days <= 3
@@ -314,7 +321,7 @@ class EnrollmentStore:
             recently_contributing=active and recent,
             providers={p: ('connected' if s == 'active' else 'reconnect_required') for p, s in providers.items()},
             # Assessment needs actual eligibility results, not a count of arbitrary readings.
-            assessable=None, **metadata)
+            **metadata)
 
     def summary(self, org_id):
         """Private operator counts, never identities, readings or credentials."""

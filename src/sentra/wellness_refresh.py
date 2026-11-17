@@ -2,7 +2,9 @@
 
 Runs in GitHub Actions after collection (.github/workflows/wellness.yml). Database reads use the
 read-only sentra_viewer role with reserved egress; object writes use the collector storage account
-and go only to `sentra-tiers`. Without changed collection data, tier reads and publication are skipped.
+and go only to `sentra-tiers`. After board publication, the collector role writes only bounded
+eligibility metadata through sql/014. Without changed data, tier reads/publication are skipped;
+eligibility is reconciled from the already-published board.
 
     python -m sentra.wellness_refresh            # skip if no new collection run
     python -m sentra.wellness_refresh --force    # rebuild anyway
@@ -17,6 +19,7 @@ from urllib.parse import urlsplit
 
 
 from .errors import SentraError
+from . import eligibility
 from .processing.board import BOARD_VERSION, payload
 from .processing.job import runtime_config as viewer_config
 from .processing.observations import devices as participant_devices, load
@@ -29,7 +32,7 @@ MAX_BOARD_BYTES = 5_000_000
 
 
 def collector_storage():
-    """Only the storage account from the collector bundle; its database and tokens are not used."""
+    """Storage fields only; the separate eligibility publisher uses the restricted DB role, never tokens."""
     try:
         credentials = json.loads(os.environ['SENTRA_COLLECTOR_CONFIG'])['credentials']
         url = urlsplit(credentials['url'])
@@ -63,7 +66,16 @@ def previous_board(storage):
         return {}
 
 
-def refresh(reader, limits, storage, *, force=False, now=None, log=print):
+def _eligibility(writer, board):
+    if writer is None:
+        return 'not_configured'
+    try:
+        return writer(board)
+    except Exception:
+        raise SentraError('Board is published, but eligibility metadata could not be updated. Retry the refresh; existing data is retained.') from None
+
+
+def refresh(reader, limits, storage, *, force=False, now=None, log=print, eligibility_writer=None):
     now = now or datetime.now(timezone.utc)
     source = latest_run(reader)
     if not force:
@@ -75,7 +87,8 @@ def refresh(reader, limits, storage, *, force=False, now=None, log=print):
                          and before.get('board_version') == BOARD_VERSION)
         if source is None or (current_rules and previous and datetime.fromisoformat(source) <= datetime.fromisoformat(previous)):
             log('No changed collection data or rules since the last board; tiers not read or published.')
-            return {'status': 'skipped', 'source_run': source}
+            feed = _eligibility(eligibility_writer,before) if current_rules else 'not_available'
+            return {'status': 'skipped', 'source_run': source, 'eligibility':feed}
     objects, report = build(reader, limits, now=now)
     # Process before publishing anything: a processing failure leaves both tiers and board unchanged.
     with tempfile.TemporaryDirectory(prefix='sentra-wellness-') as folder:
@@ -94,13 +107,14 @@ def refresh(reader, limits, storage, *, force=False, now=None, log=print):
     code, _ = storage.request('POST', BOARD_KEY, data=body, maximum=65_536, upsert=True, content_type='application/json')
     if code not in (200, 201):
         raise SentraError(f'Board upload failed (HTTP {code}); tiers were published, board unchanged.')
+    feed = _eligibility(eligibility_writer,board)
     days = sum(len(p['days']) for p in board['people'])
     log(f'Board published: {len(board["people"])} participants, {days} days, data through {board["data_through"]}.')
-    return {'status': 'published', 'participants': len(board['people']), 'days': days, 'source_run': source}
+    return {'status': 'published', 'participants': len(board['people']), 'days': days, 'source_run': source, 'eligibility':feed}
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description='Sentra daily wellness board refresh (read-only database)')
+    parser = argparse.ArgumentParser(description='Sentra daily wellness board refresh and bounded eligibility metadata')
     parser.add_argument('--force', action='store_true')
     args = parser.parse_args(argv)
     try:
@@ -109,9 +123,12 @@ def main(argv=None):
             with connect_db(credentials) as db, connect_db(credentials) as budget_db:
                 reader = AuditReader(db, limits, budget_db=budget_db)
                 storage = PrivateStorage(collector_storage(), reader.reserve, bucket=TIER_BUCKET)
+                publisher = eligibility.from_config(json.loads(os.environ['SENTRA_COLLECTOR_CONFIG']),folder)
                 try:
-                    print(json.dumps(refresh(reader, limits, storage, force=args.force)), flush=True)
+                    print(json.dumps(refresh(reader, limits, storage, force=args.force,
+                        eligibility_writer=lambda board:eligibility.publish(publisher,board))), flush=True)
                 finally:
+                    publisher.close()
                     storage.session.close()
         return 0
     except SentraError as error:

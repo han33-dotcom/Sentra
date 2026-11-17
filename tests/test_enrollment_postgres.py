@@ -79,7 +79,7 @@ class EnrollmentPostgresTests(unittest.TestCase):
             for filename in ('001_foundation.sql', '002_permissions.sql', '003_numeric_precision.sql',
                     '004_daily_collection.sql', '005_viewer_status.sql', '006_parquet_tiers.sql',
                     '007_organization_access.sql', '008_self_service_enrollment.sql',
-                    '011_fitbit_link_invites.sql'):
+                    '011_fitbit_link_invites.sql','014_assessment_eligibility.sql'):
                 migration = Path('sql', filename).read_text(encoding='utf-8')
                 # Fixture roles are cluster-wide; grants remain scoped to this new database.
                 migration = re.sub(r'create role (sentra_[a-z]+) login[^;]+;',
@@ -438,6 +438,48 @@ class EnrollmentPostgresTests(unittest.TestCase):
         self.assertEqual(self.client.post('/api/choices', json=choice, headers=headers).status_code, 409)
         with self.admin_db() as db:
             self.assertEqual(db.execute('select count(*) from org.consents where participant_id=%s', (status['participant_id'],)).fetchone()[0], 3)
+
+    def test_published_eligibility_is_bounded_current_and_never_inferred_from_connection(self):
+        from datetime import datetime,timedelta,timezone
+        from zoneinfo import ZoneInfo
+        from sentra.eligibility import publish
+        from sentra.processing.board import BOARD_VERSION
+        from sentra.processing.pipeline import ASSESSMENT_VERSION
+        person=self.complete(invite=self.invite)
+        self.assertIsNone(person['assessable'])
+        now=datetime.now(timezone.utc)
+        today=now.astimezone(ZoneInfo('Asia/Beirut')).date().isoformat()
+        board={'built_at':now.isoformat(),'assessment_version':ASSESSMENT_VERSION,'board_version':BOARD_VERSION,
+               'people':[{'id':person['participant_id'],'days':[{'d':today,'lvl':'green'}]}]}
+        with psycopg.connect(**{**self.admin_config,'user':'sentra_collector'},autocommit=True) as db:
+            backend=MagicMock(db=db)
+            self.assertEqual(publish(backend,board),'published')
+            self.assertEqual(publish(backend,board),'published')  # idempotent repair
+            with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+                db.execute('select * from collector_private.assessment_eligibility')
+            status=self.client.get('/api/status').json()
+            self.assertTrue(status['assessable']); self.assertEqual(status['assessment'],'available')
+            with open_store(self.config) as store:
+                self.assertEqual(store.summary(self.org)['assessable'],1)
+            board['built_at']=(now+timedelta(seconds=1)).isoformat()
+            board['people'][0]['days'][0]['a']='partial'
+            publish(backend,board)
+            self.assertFalse(self.client.get('/api/status').json()['assessable'])
+            older={**board,'built_at':(now-timedelta(seconds=1)).isoformat()}
+            with self.assertRaises(psycopg.Error): publish(backend,older)
+            board['built_at']=(now+timedelta(seconds=2)).isoformat(); board['people']=[]
+            publish(backend,board)
+            self.assertIsNone(self.client.get('/api/status').json()['assessable'])
+        with self.admin_db() as db:
+            # Stale publication, old assessment version and future/old day stay unknown.
+            for day,at,version in ((today,now-timedelta(days=4),ASSESSMENT_VERSION),
+                                  (today,now,'old-contract'),
+                                  ((now.date()+timedelta(days=1)).isoformat(),now,ASSESSMENT_VERSION),
+                                  ((now.date()-timedelta(days=4)).isoformat(),now,ASSESSMENT_VERSION)):
+                db.execute('delete from collector_private.assessment_eligibility')
+                db.execute('insert into collector_private.assessment_eligibility values(%s,%s,true)',(person['participant_id'],day))
+                db.execute('update collector_private.assessment_publication set published_at=%s,version=%s',(at,version))
+                self.assertIsNone(self.client.get('/api/status').json()['assessable'])
 
     def test_operator_summary_is_bounded_scoped_and_does_not_treat_unknown_as_assessable(self):
         person = self.complete(invite=self.invite)
