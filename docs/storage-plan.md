@@ -167,11 +167,15 @@ Full backups include `audit.series` once sql/009 is installed. It is verified by
 fingerprint and restored with its ids, so a verified backup also covers readings kept only in
 the compact copy. A restore stops before writing if the target lacks sql/009.
 
+**The private viewer uses the same current-reading rule.** Its dataset catalog, metric
+discovery, filtered measurements and full-record selection include compact-only readings
+when 009 is installed, with per-field corrections taking precedence and the current record
+response required. Without 009 it uses the original per-field queries. Expanded selections
+retain the existing row/byte limits, access checks, snapshot and egress reservations.
+
 Still open before phase 3:
 - The collector still writes per-field rows (phase 1 collector change, coordinated with the
   collection owner, #47).
-- The private viewer's dataset catalog and measurement queries still read
-  `audit.measurements` only.
 - Egress `purpose` attribution is not added yet.
 - Phase 3 deletion stays gated as below.
 
