@@ -216,3 +216,49 @@ Still open before phase 3:
 
 Until phase 3 is done, `activity-level` stays on request and daily collection stays
 paused.
+
+## Bounded phase-3 removal command
+
+`shared-removal-preview` and `shared-removal-apply` use the existing private operator
+configuration. They lock the collector and affected tables; the operator connection
+is needed to lock the admin-only compact-write control without expanding runtime
+roles. Collection must be explicitly paused and compact writes still disabled.
+No command in this flow enables either control.
+
+1. Complete and verify a full encrypted backup, including compact series and all
+   installed private tables, after recording the paused control state. Recover it
+   into an isolated target and verify original objects and table counts. The backup
+   must be less than 24 hours old. Preserve the exact encrypted manifest.
+2. Create a private preview, for example:
+   `sentra shared-removal-preview --participant p01 --provider google_health --dataset minute_steps --limit 20 --output .private/operations/removal-plan.json`.
+   Each plan covers at most 200 original responses, 100,000 rows and 32 MB of row
+   payload. It expires after 24 hours. The preview checks all 22 logical columns
+   against current compact rows and records the paused-control timestamp.
+3. Save private recovery evidence as JSON with `status: restored_and_verified`,
+   `backup_manifest_sha256` (the encrypted manifest's SHA-256),
+   `source_project_url`, `target_project_url`, `isolation_verified: true`, `counts`
+   (the complete offline verification table-count mapping), `originals_verified`
+   (verified object count), and `retention_decision_url` (the recorded Sentra issue
+   or PR decision). These are attestations from the actual recovery run, not a
+   substitute for performing it. Include any additional dated recovery evidence;
+   the complete JSON is bound to the owners' approval.
+4. Both designated owners, `han33-dotcom` and `MohamadNasrallah`, review the actual
+   backup/recovery and retention decision. Each posts a separate comment on the
+   same Sentra PR with this exact line, using the plan SHA-256 and the canonical
+   evidence digest (`sentra.compact_removal.digest(evidence)`):
+   `APPROVE SENTRA PHASE3 <plan-sha256> EVIDENCE <evidence-sha256>`.
+   Agents do not create owner approval comments or substitute their code review.
+5. Apply with `sentra shared-removal-apply --plan .private/operations/removal-plan.json
+   --backup .private/backups/<backup-id>/manifest.enc --evidence .private/operations/recovery.json
+   --approval <first-owner-comment-url> --approval <second-owner-comment-url>`.
+   The command fetches and verifies both actual GitHub comments, authenticates the
+   backup offline, proves every selected current row is in it, then rechecks the
+   paused state, preview fingerprint and lossless compact copy inside one locked
+   transaction. Changed data, missing evidence or any mismatch rolls back.
+
+Only the approved duplicate per-field rows are removed. Records, source originals,
+sparse data and compact arrays remain. Retrying an already applied plan fails
+closed rather than broadening its scope. No `VACUUM` runs automatically: DELETE
+alone does not reduce allocated database size. Measure actual post-removal size;
+any `VACUUM FULL` requires its separately reviewed operator maintenance window.
+Do not publish private plans, backup contents, participant scopes or recovery files.
