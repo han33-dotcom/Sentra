@@ -4,7 +4,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from .errors import SentraError
-from .shared import Limits
+from .shared import Limits, MONTHLY_EGRESS_CEILING
 from .shared_config import validate_credentials
 
 
@@ -47,7 +47,7 @@ def runtime_settings(secrets, folder):
         validate_credentials(credentials,Path(folder))
         limits=Limits(**dict(section['limits']))
         if (limits.database_bytes>400_000_000 or limits.object_bytes>700_000_000
-                or limits.monthly_egress_bytes>3_500_000_000 or limits.reserve_bytes<20_000_000): raise ValueError
+                or limits.monthly_egress_bytes>MONTHLY_EGRESS_CEILING or limits.reserve_bytes<20_000_000): raise ValueError
         auth=dict(secrets['auth'])
         if (auth.get('server_metadata_url')!='https://accounts.google.com/.well-known/openid-configuration'
                 or len(auth.get('cookie_secret',''))<43

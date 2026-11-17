@@ -36,6 +36,7 @@ IDENTITY_TABLES = {'org.memberships':'membership_id','org.consents':'consent_id'
 # inserted rows carry none of the source's dead-row bloat, so a small margin suffices; the running
 # guard during insertion still stops the restore before any limit is crossed.
 RESTORE_FACTOR = 1.05
+BACKUP_MAX_BYTES = 500_000_000  # owner-approved private-root and per-backup ceiling
 
 
 def member(table):
@@ -71,7 +72,7 @@ def row_fingerprint(rows):
 
 
 class BackupWriter:
-    def __init__(self, root, cipher, *, max_bytes=200_000_000, private_root=None):
+    def __init__(self, root, cipher, *, max_bytes=BACKUP_MAX_BYTES, private_root=None):
         self.folder = Path(root) / str(uuid4())
         self.folder.mkdir(parents=True,exist_ok=False)
         self.cipher, self.max_bytes, self.written, self.files = cipher,max_bytes,0,{}
@@ -138,7 +139,7 @@ class BackupReader:
             raise SentraError('Backup member corrupt, missing or unauthenticated; restoration stopped.') from None
 
 
-def make_backup(backend, root, cipher, *, participant=None, provider=None, dataset=None, max_bytes=200_000_000, admin_db=None):
+def make_backup(backend, root, cipher, *, participant=None, provider=None, dataset=None, max_bytes=BACKUP_MAX_BYTES, admin_db=None):
     """admin_db (optional) adds the organization and enrollment tables to full backups."""
     # Serialize local quota writers with collection and exports, as well as cloud writers.
     with FileLock(Path(root).parent / 'collection-io.lock',timeout=10):
@@ -176,7 +177,7 @@ def _export(db, backend, writer, table, filters, params, objects):
     return total, f'{fingerprint:064x}'
 
 
-def _make_backup(backend, root, cipher, *, participant=None, provider=None, dataset=None, max_bytes=200_000_000, admin_db=None):
+def _make_backup(backend, root, cipher, *, participant=None, provider=None, dataset=None, max_bytes=BACKUP_MAX_BYTES, admin_db=None):
     writer = BackupWriter(root,cipher,max_bytes=max_bytes,private_root=Path(root).parent)
     totals, objects, fingerprints, sizes, private, private_fingerprints, absent = {}, {}, {}, {}, {}, {}, []
     optional, optional_fingerprints, optional_absent = {}, {}, []

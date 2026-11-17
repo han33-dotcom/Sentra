@@ -150,7 +150,7 @@ collection. Before distributing real invitations:
    The returned invitation is private. There is no public invitation-creation API.
    A maximum of 500 live sessions and 20 new sessions per ten-minute hashed client
    bucket bound this pilot's state. Database requests reserve 64 KB against the
-   existing 3.5 GB egress budget and stop before the existing 380 MB working ceiling.
+   approved 4.5 GB egress budget and stop before the existing 380 MB working ceiling.
    Missing/stale budgets fail closed. Do not raise budgets or enable paid hosting.
 7. Verify actual signup, returning sign-in, sharing, both providers, failed/cancelled
    authorization, mobile behavior and withdrawal against the hosted origin before

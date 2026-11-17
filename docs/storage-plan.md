@@ -108,7 +108,7 @@ Egress is the allowance closest to its limit: 2.52 GB of the 3.5 GB guard by 11 
   less. Heavy viewer audit queries stay opt-in.
 - **Fewer full backups.** Run full encrypted backups weekly, not per change, and
   `shared-verify --originals` monthly. Both download everything.
-- **Keep current safeguards.** The 3.5 GB stop and the weekly baseline refresh stay
+- **Keep current safeguards.** The approved 4.5 GB stop and the weekly baseline refresh stay
   as they are.
 
 ## Implementation status (#46)
@@ -263,3 +263,37 @@ closed rather than broadening its scope. No `VACUUM` runs automatically: DELETE
 alone does not reduce allocated database size. Measure actual post-removal size;
 any `VACUUM FULL` requires its separately reviewed operator maintenance window.
 Do not publish private plans, backup contents, participant scopes or recovery files.
+
+## November 18 approved backup headroom
+
+The owner authorized raising the internal monthly transfer ceiling from 3.5 GB to
+4.5 GB and the private backup-storage ceiling from 200 MB to 500 MB, followed by
+one encrypted full backup and offline verification. The provider allowance remains
+5 GB on Free, leaving 500 MB outside the internal ceiling. This is not agreement
+to retention periods, collection restart, another wellness refresh or deletion.
+
+The bounded aggregate-only preflight estimated 992,779,032 bytes of reservations;
+private files occupied approximately 251 MB. Under the proposed ceiling the
+estimate left approximately 536 MB of transfer headroom at that instant. Recheck
+before execution because viewer/enrollment reads consume the same ledger. These
+figures are preflight evidence, not a successful backup.
+
+Rollout order:
+
+1. Release the matching collector, backup, viewer and enrollment code.
+2. Apply reviewed migration 015 after 013 and verify that baseline, reserved-byte
+   and purpose totals are unchanged. Preserve the seven-day baseline freshness check.
+3. Set `shared.monthly_egress_bytes` in the private operator config and
+   `viewer.limits.monthly_egress_bytes` in hosted viewer secrets to 4500000000.
+   Update private deployment copies consistently. Deploy the enrollment service,
+   whose bounded reservations now use the same approved ceiling.
+4. Verify collection is paused and check fresh transfer/disk capacity before one
+   full backup. The 500 MB backup guard counts the whole private directory as well
+   as the current backup; existing files are retained on a stop. Disk-free checks,
+   encryption, chunk limits and all remote reservation accounting remain enabled.
+5. Verify every backup member offline and record only aggregate coverage, counts,
+   fingerprints and the outcome on SEN-29. Keep keys and archive contents private.
+
+The 400 MB database ceiling, 20 MB reserve, 700 MB object ceiling, 100 MB viewer
+per-call cap and destructive-storage gates are unchanged. A verified archive still
+needs an isolated recovery rehearsal and the decisions listed in the retention policy.

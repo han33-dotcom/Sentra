@@ -33,7 +33,7 @@ and nothing here deletes data.
 | Enroll participants or deploy the enrollment service | [Before enrolling anyone](participation-permissions.md#before-enrolling-anyone), [prepare a deployment](self-service-enrollment.md#prepare-a-deployment) |
 | Link an existing Fitbit participant to hosted sign-in | [Link an existing Fitbit participant](self-service-enrollment.md#link-an-existing-fitbit-participant) |
 | A participant withdraws or changes their sharing | [Withdrawal](participation-permissions.md#withdrawal); retention after withdrawal: [retention policy](retention-policy.md#withdrawal-proposed) |
-| Give an organization officer or reviewer access | [Roles](participation-permissions.md#roles); never add participants as officers |
+| Give an organization officer or reviewer access | [Roles](participation-permissions.md#roles); participation and authorized officer duties may coexist. Never grant a role merely to use a participant as a test identity. Use designated synthetic fixtures for acceptance. |
 | Set up follow-up recording on the hosted viewer | [Follow-ups: operator setup](follow-ups.md#operator-setup-private) |
 | Take and verify a backup | [Backup and recovery](operating-guide.md#backup-and-recovery), [backups](retention-policy.md#backups) |
 | Rehearse a recovery into a throwaway project | [Recovery rehearsal](recovery-rehearsal.md) |
@@ -60,8 +60,9 @@ the related steps stay closed:
   route ([before enrolling anyone](participation-permissions.md#before-enrolling-anyone), SEN-26).
 - **Collection restart** ([outstanding restart gates](collection-restart-readiness.md#outstanding-restart-gates)).
 - **Retention periods and backup rules** ([decisions needed](retention-policy.md#decisions-needed), SEN-29).
-- **Indicator names and meanings**, then the medical expert's sign-off on thresholds
-  ([indicator contract](indicator-contract.md), SEN-49).
+- **Medical expert sign-off on thresholds** ([indicator contract](indicator-contract.md),
+  SEN-49). The dashboard owner agreed the v0 names/states/meanings on November 14;
+  that agreement does not approve the thresholds.
 - **Hosted verification** of the organization pages after the next release: run the
   [privacy checks](privacy-checks.md) and fill in the hosted column of the
   [evaluation table](evaluation.md).

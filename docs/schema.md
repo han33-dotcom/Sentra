@@ -140,7 +140,7 @@ consent to the existing participant. Issue new links after recovery as needed.
 See [self-service enrollment](self-service-enrollment.md) for configuration,
 deployment, participant behavior and the isolated PostgreSQL verification fixture.
 
-## Follow-ups (`sql/010_follow_ups.sql`, not yet applied)
+## Follow-ups (`sql/010_follow_ups.sql`, applied November 17, 2026)
 
 After 007, `org.follow_ups` and `org.follow_up_events` hold brief follow-up notes, an assignee
 and open/ongoing/resolved history. Both are append-only with forced RLS; `sentra_viewer` can
@@ -156,7 +156,17 @@ budget update. Runtime roles cannot read/write its rows directly; aggregate usag
 includes its current-month breakdown. Historical reservations become `prior_unattributed`;
 baselines, ceilings and seven-day freshness checks remain unchanged. Existing function
 signatures and privileges stay compatible. Viewer calls retain their role check,
-100 MB call cap and 3.5 GB ceiling. Purpose is an accounting label, not authorization.
+100 MB call cap. Migration 015 raises only the permitted monthly ceiling from
+3.5 GB to the owner-approved 4.5 GB; purpose is an accounting label, not authorization.
+
+## Approved backup headroom (sql/015)
+
+After 013, replace the viewer reservation function with the 4.5 GB ceiling approved
+November 18, 2026. Existing two-argument callers delegate to the same function.
+No ledger row is modified: baselines, reservations, purpose totals, freshness,
+role checks and per-call limits remain intact. Deploy matching viewer and
+enrollment code and update the private viewer/operator limits before the backup;
+see [rollout order](storage-plan.md#november-18-approved-backup-headroom).
 
 ## Compact writer control (sql/012)
 
