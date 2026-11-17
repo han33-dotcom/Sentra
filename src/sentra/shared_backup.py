@@ -243,6 +243,13 @@ def inventory(info):
     optional, optional_fingerprints = info.get('optional_tables',{}), info.get('optional_fingerprints',{})
     if set(optional) != set(optional_fingerprints) or not set(optional) <= set(OPTIONAL_TABLES):
         raise SentraError('Backup compact-series inventory incomplete.')
+    if 'optional_tables' in info:
+        absent = info.get('optional_absent', [])
+        included = {qualified(t) for t in optional}
+        if (not isinstance(absent, list) or any(not isinstance(t, str) for t in absent)
+                or len(absent) != len(set(absent)) or included & set(absent)
+                or included | set(absent) != {qualified(t) for t in OPTIONAL_TABLES}):
+            raise SentraError('Backup compact-series inventory incomplete.')
     private, fingerprints = info.get('private_tables',{}), info.get('private_fingerprints',{})
     if set(private) != set(fingerprints) or not set(private) <= set(PRIVATE_TABLES):
         raise SentraError('Backup organization/enrollment inventory incomplete.')

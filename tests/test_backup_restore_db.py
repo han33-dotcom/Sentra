@@ -250,8 +250,9 @@ class BackupRestoreDatabaseTests(unittest.TestCase):
     def allocators(self, db):
         """(last_value, is_called) of every sequence a restore moves: participant numbers and identities."""
         names = ['enrollment_private.participant_number'] + [
-            db.execute('select pg_get_serial_sequence(%s,%s)', (table, column)).fetchone()[0]
-            for table, column in sorted(m.IDENTITY_TABLES.items())]
+            db.execute('select pg_get_serial_sequence(%s,%s)', (m.qualified(table), column)).fetchone()[0]
+            for table, column in sorted(m.IDENTITY_TABLES.items())
+            if db.execute('select to_regclass(%s)', (m.qualified(table),)).fetchone()[0] is not None]
         return {name: db.execute(f'select last_value,is_called from {name}').fetchone() for name in names}
 
     def test_failed_restore_leaves_every_allocator_where_it_was(self):

@@ -149,6 +149,9 @@ class BackupTests(unittest.TestCase):
         self.assertLess(names.index('raw_response_manifest'), names.index('series'))  # restored after its foreign key
         self.assertLess(names.index('series'), len(m.TABLES) + 1)
         for broken in ({**base, 'optional_tables': {'series': 0}, 'optional_fingerprints': {}},
+                       {**base, 'optional_tables': {}, 'optional_fingerprints': {}},
+                       {**with_series, 'optional_absent': ['audit.series']},
+                       {**with_series, 'optional_absent': ['audit.unknown']},
                        {**base, 'optional_tables': {'notes': 0}, 'optional_fingerprints': {'notes': 'x'}}):
             with self.subTest(broken=broken), self.assertRaises(m.SentraError):
                 m.inventory(broken)
