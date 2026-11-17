@@ -199,6 +199,13 @@ the invitation. The participant can then sign in again from the ordinary account
 page. Use an approved participant and a reviewed rollout to verify the live flow.
 Collection remains paused through the existing controls.
 
+Returning Google sign-in from the ordinary account page requests only `openid`
+with account selection. It proves the already-linked identity, discards OAuth tokens,
+and leaves collection credentials and consent unchanged. Unknown identities still
+need an invitation. New enrollment and the signed-in account's explicit reconnect
+continue to request the health scopes and offline access needed for collection;
+operator-managed Fitbit accounts still use the private reconnect workflow.
+
 ## Collection integration
 
 The collector still accepts legacy `participants: {"whoop":"p02"}` configuration.

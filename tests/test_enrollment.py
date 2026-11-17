@@ -125,6 +125,27 @@ class EnrollmentProtocolTests(unittest.TestCase):
             with self.assertRaises(EnrollmentError):
                 login.finish(pending, 'synthetic-code')
 
+    def test_returning_google_signin_requests_identity_and_discards_tokens(self):
+        config = settings()
+        login = ProviderLogin(config)
+        url, pending = login.begin('google_health', identity_only=True)
+        query = parse_qs(urlsplit(url).query)
+        self.assertEqual(query['scope'], ['openid'])
+        self.assertEqual(query['prompt'], ['select_account'])
+        self.assertNotIn('access_type', query)
+        self.assertTrue(pending['identity_only'])
+        response = MagicMock(); response.__enter__.return_value = response
+        response.status_code = 200
+        response.iter_content.return_value = [b'{"sub":"synthetic-sub"}']
+        with patch('sentra.enrollment.PrivateOAuthSession') as session, \
+                patch('sentra.enrollment.requests.get', return_value=response):
+            session.return_value.fetch_token.return_value = {
+                'access_token':'fake-access', 'refresh_token':'fake-refresh',
+                'scope':['openid'], 'token_type':'Bearer'}
+            identity, token = login.finish(pending, 'synthetic-code')
+            self.assertEqual(identity, config.identity('google_health', 'synthetic-sub'))
+            self.assertIsNone(token)
+
     def test_link_cli_explains_invalid_gmail_and_never_echoes_the_address(self):
         from sentra.enrollment import main
         address = 'synthetic.user@example.invalid'
