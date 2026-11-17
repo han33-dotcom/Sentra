@@ -52,6 +52,11 @@ not to the 28-day baseline, because baselines use daily values.
 
 ## Backups
 
+- The owner approved one full backup on November 18 with a 500 MB private-root/
+  per-backup ceiling and 4.5 GB monthly transfer ceiling. See the
+  [rollout and preserved guards](storage-plan.md#november-18-approved-backup-headroom).
+  This capacity authorization does not agree the proposed retention schedule.
+
 - Use the existing `shared-backup` command. It is encrypted with the local key, takes one
   consistent read-only snapshot of the audit tables and includes every original response.
   It contains no OAuth credentials, storage accounts or passwords. Keep the key separate from

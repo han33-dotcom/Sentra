@@ -39,6 +39,18 @@ class BackupTests(unittest.TestCase):
         self.assertEqual(m.row_fingerprint([a,b]),m.row_fingerprint([b,a]))
         self.assertNotEqual(m.row_fingerprint([a,b]),m.row_fingerprint([a,{**b,'value':9}]))
 
+    def test_private_root_quota_counts_existing_files_and_preserves_them(self):
+        m = self.module()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            existing = root / 'existing.enc'
+            existing.write_bytes(b'x' * 900)
+            writer = m.BackupWriter(root / 'backups',Fernet(Fernet.generate_key()),
+                                    private_root=root,max_bytes=1000)
+            with self.assertRaises(m.CapacityStop): writer.write('records',b'new data')
+            self.assertEqual(existing.read_bytes(),b'x' * 900)
+            self.assertFalse((writer.folder / 'records.enc').exists())
+
     def test_offline_verify_checks_counts_fingerprints_and_originals(self):
         import gzip, hashlib, json
         m = self.module(); cipher = Fernet(Fernet.generate_key())

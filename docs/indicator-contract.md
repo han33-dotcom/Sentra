@@ -8,6 +8,10 @@ them. Supporting literature and the open questions for the expert are in
 [`thresholds.json`](../src/sentra/processing/thresholds.json) and are not changed by this
 document; changing them needs the project's expert approval.
 
+The dashboard owner agreed these v0 names, states and plain-English meanings on
+[November 14, 2026](https://github.com/han33-dotcom/Sentra/issues/49#issuecomment-6877213463).
+The expert-review package is prepared; threshold sign-off remains outstanding.
+
 Outputs are wellness / fitness-for-shift observations relative to a person's own recent
 pattern. They are not medical assessments and must never be presented as a diagnosis.
 
@@ -87,8 +91,8 @@ produce green.** Missing values are never filled or treated as zero.
 - `pct_wellness_amber_or_red` counts only assessed days (`green`, `amber`, `red`); an
   `insufficient` day is not a calm day.
 - Each statistic publishes its eligible contributor count as `n_<statistic>` (for example
-  `n_pct_wellness_amber_or_red`), so dashboards and reports show "not available — 3 of 5
-  needed" without recomputing it.
+  `n_pct_wellness_amber_or_red`). Organization dashboards and reports show "Not shown"
+  and "<5" below the threshold; they never disclose exact counts from 1 through 4.
 - `metadata.json` and `GET /api/v1/metadata` carry `assessment_version`, as the board does, so
   every consumer can tell which rules produced the outputs.
 

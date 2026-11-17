@@ -4,7 +4,7 @@ Task: [SEN-32](https://github.com/han33-dotcom/Sentra/issues/32). One consolidat
 from the limitations recorded in each merged PR and the reviewed documents. Each item links its
 source; owners keep their own items current. See also the [evaluation table](evaluation.md).
 
-Last updated: November 17, 2026; see dated implementation/hosted evidence in [evaluation](evaluation.md).
+Last updated: November 18, 2026; see dated implementation/hosted evidence in [evaluation](evaluation.md).
 
 ## Meaning of the results
 
@@ -52,7 +52,7 @@ Last updated: November 17, 2026; see dated implementation/hosted evidence in [ev
 - **Real-phone evidence is partial.** One real Google signup and a sharing update are recorded;
   phone timing, reconnect and withdrawal on real devices, and hosted organization-user acceptance
   are outstanding. (#52, #64)
-- **Eligibility rollout is pending.** #104 provides a bounded dated/versioned feed after board publication. Apply 014 and perform the authorized refresh; absent or stale results remain unknown.
+- **Eligibility is derived, not live.** Migration 014 and the one authorized stored-data refresh completed November 17; version/digest readback passed. Absent or stale results remain unknown.
 - **Free hosting.** The enrollment host can take tens of seconds to wake, and an inactive Free
   database can pause again. (#36, #64)
 - **Provider-side settings are unverified.** Stored token metadata cannot prove provider-side
@@ -70,8 +70,9 @@ Last updated: November 17, 2026; see dated implementation/hosted evidence in [ev
   the retention policy, a verified backup, the recovery rehearsal and both owners' approval. (#59)
 - **Publication is ordered, not atomic across board and tiers.** A board upload failure retains its previous complete version; tier hashes force repair on retry. Monthly immutable objects, legacy slots and obsolete versions count against storage until separately reviewed cleanup. Both writer commands share a database lock. (#57, #80, #106)
 - **Monthly refresh still does server work.** Source fingerprints scan all logical source rows, and processing downloads the complete bounded compact cache. Changed months alone leave the database; new hashes alone upload. Live cost savings remain unmeasured. (#106)
-- **Rollout needs one refresh.** A board published before #79 is rebuilt only when the wellness
-  refresh next runs; while its schedule is off, run it once after deploying. (#79)
+- **Refresh is not scheduled.** The one authorized November 17 refresh published the current
+  board/assessment/monthly contracts. Collection remains paused; another refresh requires
+  its own operational authorization. (#79, #106)
 - **Compact reads depend on records.** Phase 3 must keep `audit.records`, whose response ID proves
   a compact reading is current. The private viewer now reads current compact-only rows (#98). Compact writes default off (012); deletion uses separately gated previews and actual owner approval comments (#105).
 - **Growth forecast pending.** The next-batch recommendation needs enough days of collection;
@@ -88,10 +89,13 @@ Last updated: November 17, 2026; see dated implementation/hosted evidence in [ev
 - **Reports (Markdown and PDF) keep no record of who prepared or downloaded one.** Follow-up
   counts cover the latest 50. The demonstration copy uses only people who agreed, also in group
   figures, pending the team's review. ([reports](reports.md))
-- **Follow-ups need hosted write setup and acceptance.** Migration 010 and restricted-role database checks passed November 17; configure its private hosted credential and verify with separately designated organization accounts. The approved team view was read-only, as intended. (#72)
+- **Hosted follow-up scope is bounded.** Writer configuration and sequential officer/reviewer
+  group-note checks passed November 17 with one designated identity and two empty synthetic
+  organizations. Individual consent/withdrawal and the five-contributor hosted matrix still
+  need an isolated synthetic fixture. Temporary roles were deactivated. (#72, #111)
 
-- **Fresh full backup is blocked by current guards.** November 17 preflight required
-  about 1.013 GB egress with about 0.915 GB remaining; private storage also exceeded
-  its 200 MB backup ceiling. No backup/removal was attempted and no guard was raised.
-  Recovery and destructive rollout remain incomplete until a legitimate capacity/
-  retention route and required decisions are available.
+- **Fresh full backup requires the approved headroom rollout.** The November 18 owner
+  authorization permits a 4.5 GB transfer ceiling, 500 MB private-backup ceiling and one
+  full backup. See [rollout order](storage-plan.md#november-18-approved-backup-headroom).
+  Authorization/preflight alone do not establish backup or recovery success. Retention
+  agreement, isolated recovery and destructive approvals remain separate gates.

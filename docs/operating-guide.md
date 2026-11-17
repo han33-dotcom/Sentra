@@ -127,7 +127,8 @@ and [WHOOP renewal](https://developer.whoop.com/docs/developing/oauth/).
 
 The database ceiling is 400 MB with 20 MB reserved: imports stop before 380 MB
 plus the estimated next batch. Objects use 700 MB with 20 MB reserved. Monthly
-uncached egress is capped internally at 3.5 GB. These are decimal MB/GB. Egress
+uncached egress is capped internally at 4.5 GB (owner-approved November 18, 2026).
+These are decimal MB/GB. Egress
 is a verified baseline plus conservative reservations, not a billing meter;
 reservations are retained after failures. Verify the baseline at least weekly
 and at each new UTC month. Unknown/stale usage stops operations. Read/download

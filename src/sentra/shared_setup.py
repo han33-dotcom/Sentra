@@ -12,6 +12,7 @@ import requests
 from .errors import SentraError
 from .shared_backend import connect_db
 from .shared_config import save_credentials
+from .shared import MONTHLY_EGRESS_CEILING
 
 
 def read_admin(private):
@@ -32,8 +33,8 @@ def read_admin(private):
 
 
 def set_budget(db, baseline):
-    if type(baseline) is not int or not 0 <= baseline < 3_500_000_000:
-        raise SentraError('Verified organization egress baseline must be below 3.5 GB.')
+    if type(baseline) is not int or not 0 <= baseline < MONTHLY_EGRESS_CEILING:
+        raise SentraError('Verified organization egress baseline must be below 4.5 GB.')
     # Never reset already-reserved usage when updating a baseline.
     db.execute('''insert into collector_private.egress_budget(month,baseline_bytes,verified_at)
         values (date_trunc('month',now())::date,%s,now()) on conflict (month)

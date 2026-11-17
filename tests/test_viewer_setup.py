@@ -35,6 +35,11 @@ class ViewerSetupTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             _,limits,_=runtime_settings(value,Path(folder))
             self.assertEqual(limits.database_bytes-limits.reserve_bytes,380_000_000)
+            value['viewer']['limits']['monthly_egress_bytes']=4_500_000_000
+            self.assertEqual(runtime_settings(value,Path(folder))[1].monthly_egress_bytes,4_500_000_000)
+            value['viewer']['limits']['monthly_egress_bytes']=4_500_000_001
+            with self.assertRaises(SentraError): runtime_settings(value,Path(folder))
+            value['viewer']['limits']['monthly_egress_bytes']=4_500_000_000
             value['viewer']['limits']['database_bytes']=400_000_001
             with self.assertRaises(SentraError): runtime_settings(value,Path(folder))
         with self.assertRaises(SentraError):
