@@ -100,6 +100,7 @@ def run_command(args):
             if value is not None: command.extend(['--'+field,str(value)])
         return subprocess.run(command,env=env).returncode
     backend=SharedBackend(credentials,limits)
+    backend.egress_purpose = 'operations'
     try:
         backend.lock()
         # Pausing transfers no health data and must remain possible at a quota stop.

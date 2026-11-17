@@ -12,6 +12,7 @@ import requests
 
 from .datasets import canonical
 from .errors import SentraError
+from .egress import reserve as reserve_egress
 from .shared import CapacityStop, object_key, signature,database_estimate
 from .local_store import compact_record,expanded_record
 
@@ -113,7 +114,7 @@ class SharedBackend:
     def reserve_external(self, amount):
         connection = connect_db(self.credentials)
         try:
-            connection.execute('select collector_private.reserve_egress(%s,%s)',(amount,self.limits.monthly_egress_bytes))
+            reserve_egress(connection,amount,self.limits.monthly_egress_bytes,'backup')
         except psycopg.Error:
             raise CapacityStop('Backup egress allowance exhausted or baseline stale; no further data read.') from None
         finally:
@@ -121,8 +122,7 @@ class SharedBackend:
 
     def reserve(self, amount):
         try:
-            self.db.execute('select collector_private.reserve_egress(%s,%s)',
-                            (amount, self.limits.monthly_egress_bytes))
+            reserve_egress(self.db,amount,self.limits.monthly_egress_bytes,getattr(self,'egress_purpose','collector'))
         except psycopg.Error:
             raise CapacityStop('Egress budget missing, stale or exhausted. Verify organization usage and refresh its baseline; no upload continued.') from None
 

@@ -6,6 +6,7 @@ Opt-in: set SENTRA_TEST_DATABASE_URL to an admin connection on a throwaway Postg
 import os
 from pathlib import Path
 import unittest
+from unittest.mock import Mock
 from uuid import uuid4
 
 URL = os.environ.get('SENTRA_TEST_DATABASE_URL')
@@ -136,6 +137,7 @@ class FollowUpDatabaseTests(unittest.TestCase):
         db.execute('set role sentra_viewer')
         self.addCleanup(db.close)
         budget = Mock()
+        budget.execute.return_value.fetchone.return_value=(False,)
         return ViewerReader({}, Limits(), lambda: 'officer@a.test', db=db, budget_db=budget), budget
 
     def test_reader_scopes_before_the_page_limit_and_reports_the_latest_state(self):
@@ -154,7 +156,7 @@ class FollowUpDatabaseTests(unittest.TestCase):
                          ('resolved', 'Closed after review.', 14))
         trail = [e for e in events if e['follow_up_id'] == mine]
         self.assertEqual((len(trail), trail[-1]['status']), (reader.FOLLOW_UP_HISTORY, 'resolved'))
-        reserved = [c.args[1][0] for c in budget.execute.call_args_list]
+        reserved = [c.args[1][0] for c in budget.execute.call_args_list if not c.args[0].startswith('select to_regprocedure')]
         self.assertGreaterEqual(reserved[1], reader.FOLLOW_UP_PAGE * reader.FOLLOW_UP_HISTORY * 2_000)  # 500 4-byte chars
         self.assertEqual(len(reader.follow_up_rows()[0]), reader.FOLLOW_UP_PAGE)  # team: all, still bounded
 
@@ -191,6 +193,8 @@ class FollowUpDatabaseTests(unittest.TestCase):
         reader, budget = self.reader()
         calls = []
         def reserve(*args):
+            if args[0].startswith('select to_regprocedure'):
+                result=Mock(); result.fetchone.return_value=(False,); return result
             calls.append(args)
             if len(calls) == 2:  # another session commits while the page is being read
                 self.update(fid, 'ongoing', note='Changed meanwhile.')
@@ -219,6 +223,8 @@ class FollowUpDatabaseTests(unittest.TestCase):
 
         def reserve(*args):
             nonlocal calls
+            if args[0].startswith('select to_regprocedure'):
+                result=Mock(); result.fetchone.return_value=(False,); return result
             calls += 1
             if calls == 2:
                 self.db.execute(consent, (membership, True))
