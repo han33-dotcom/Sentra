@@ -1,7 +1,7 @@
 # Task-first Slack notifications
 
 Task: [SEN-66](https://github.com/han33-dotcom/Sentra/issues/66). Owner:
-`han33-dotcom`. Acceptance follows [local delivery](local-delivery.md); code review
+`han33-dotcom`. Acceptance follows [local delivery](local-delivery.md); additional code review
 is optional. This replaces the native Sentra PR/review messages only after the
 verified implementation is released to `main` and the cutover below is verified.
 Until then, native notifications stay on and custom delivery stays off.

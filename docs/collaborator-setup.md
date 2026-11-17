@@ -140,7 +140,7 @@ commands, and two project-specific constraints. Explain what gates automatic mer
 distinguishes Implemented from Done. Flag missing access rather than guessing.
 ```
 
-Expected: PR target `develop`; checks match `AGENTS.md`; reviews are optional,
+Expected: PR target `develop`; checks match `AGENTS.md`; the implementation agent self-reviews and additional reviews are optional,
 passing machine checks permit automatic merge, and agents verify all accessible
 acceptance criteria. Human-only observations need explicit verification steps. Collection stays paused and tests use synthetic data; the assistant must not request participant credentials for this check.
 Self-reported compliance alone does not prove all future behavior; verify actual

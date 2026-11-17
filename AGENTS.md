@@ -1,6 +1,6 @@
 # Sentra agent instructions
 
-Policy version: 3. This is the canonical policy for coding and acceptance agents.
+Policy version: 4. This is the canonical policy for coding and acceptance agents.
 Read [CONTRIBUTING.md](CONTRIBUTING.md) and the linked documents relevant to your task.
 Follow applicable nested instructions if they are added later.
 
@@ -68,17 +68,22 @@ actual PR results; a local success is not a claim that CI passed.
   `[SEN-28, SEN-27] fix: retry joins`. Dependencies stay in prose, not these fields.
   Explain what changed, why, validation and material limitations. For workflow
   maintenance or releases with no implementation task, explain the scope explicitly.
-- Use Related to #NUMBER instead of automatic issue-closing keywords. The local
-  worker closes tasks only after complete acceptance evidence is recorded.
+- Use Related to #NUMBER instead of automatic issue-closing keywords. The implementation
+  agent closes tasks only after complete acceptance evidence is recorded.
 - Record lasting decisions in repository documentation or the linked task; private
   chat memory is not shared project context.
 - Put actionable code-review findings on the PR, tied to files/lines and the reviewed
   commit. Read accepted PR findings directly when fixing them; verify the current head.
-- Code reviews and human approvals are optional for every change. Do not create
-  a mandatory agent review, code-owner approval, or special review gate.
-- Local Codex workers use existing ChatGPT subscriptions. Required CI and current
-  PR acceptance evidence authorize automatic merging. Work PRs squash-merge into
-  `develop`; release and ancestry synchronization PRs use merge commits.
+- The implementation agent owns delivery end to end. Before merging, self-review
+  the current diff against task criteria and project rules, fix demonstrated problems,
+  and record the reviewed commit and outcome on the PR. Additional reviewers and
+  formal GitHub approval are optional; do not wait for a teammate or separate agent.
+- Use the same local coding session and existing subscription for implementation,
+  self-review, fixes, acceptance and merging. There is no background delivery worker
+  or required `local-acceptance` status. Keep branch ownership with the author/agent.
+- Once current required CI and agent-verifiable acceptance pass, squash-merge work
+  PRs into `develop`, then release `develop` to `main` and synchronize main ancestry
+  back into develop through PRs using merge commits. No direct integration pushes.
 - Implementation is complete when required implementation PRs merge into `develop`.
   Agents verify every observable acceptance criterion with recorded evidence.
   All criteria verified means Done and permits automatic issue closure.
@@ -88,13 +93,14 @@ actual PR results; a local success is not a claim that CI passed.
   work. They must not be relabeled as human-only checks or passing outcomes.
 - Keep tasks with human-only criteria open with those specific instructions.
   Their code may merge and release once machine checks and scoped PR acceptance pass.
-- Follow [local delivery](docs/local-delivery.md) for worker ownership, retries,
-  acceptance evidence, automatic releases and pausing. Ready team PRs transfer
-  branch ownership to the worker. Use draft or `automation:hold` while editing.
+- Follow [agent-owned delivery](docs/local-delivery.md) for the complete procedure
+  and machine-readable task evidence. Do not finish at opening a PR: stay with CI,
+  fixes, merges and release until delivered or a concrete external blocker remains.
+  Draft PRs and `automation:hold` mean delivery is intentionally paused.
 - Do not claim Slack notifications, shared AI review or Project status sync occurred
   unless their actual results are available. See the rollout status in the team guide.
 
-## Optional Code Review Rules
+## Self-review and Optional Additional Review
 
 - Flag exposure of participant data/credentials, unintended collection activation,
   removal of bounded-operation guards, and missing authorization checks.
