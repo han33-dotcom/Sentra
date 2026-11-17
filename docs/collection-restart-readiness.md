@@ -138,6 +138,21 @@ silently relink identities, copy credentials between participants,
 or make enrollment enable collection. #28's deployment/provider prerequisites
 remain separate from the synthetic implementation evidence in PR #52.
 
+## November 18 provider-console readback
+
+Using the existing dedicated Sentra Google identity, the original project opened
+successfully after switching away from the personal account that lacks access.
+Audience showed External / Testing and 2 test users out of the 100-user cap.
+Both existing web clients remained enabled: enrollment retained
+`http://localhost:8765/callback` and the hosted `/oauth/google_health/callback`;
+the viewer retained `http://localhost:8501/oauth2callback` and its hosted
+`/oauth2callback`. No client, secret, audience, test-user list or publishing state
+was changed. Publishing was unavailable until Branding configuration is complete.
+This resolves the earlier unavailable Google Audience observation; it does not
+prove token renewal or authorize reconnection, publication or collection. WHOOP
+app-owner verification and the agreed Google Testing reconnection approach remain
+open.
+
 ## Proposed windows, awaiting agreement
 
 1. **Forward collection:** start from the agreed restart date in Asia/Beirut,

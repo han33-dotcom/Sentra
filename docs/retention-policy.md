@@ -59,6 +59,9 @@ not to the 28-day baseline, because baselines use daily values.
   That one backup completed and passed offline verification on November 18
   (Beirut): 16 tables, 220 originals and no unsupported installed inventory gaps.
   See the dated [backup record](storage-plan.md#rollout-and-verified-backup-observed-november-18).
+  The [isolated recovery](recovery-rehearsal.md#record) subsequently verified every
+  supported table and all 220 destination originals. Team agreement, off-machine
+  custody and destructive-operation approval remain separate.
 
 - Use the existing `shared-backup` command. It is encrypted with the local key, takes one
   consistent read-only snapshot of the audit tables and includes every original response.

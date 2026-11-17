@@ -55,17 +55,20 @@ Last updated: November 18, 2026; see dated implementation/hosted evidence in [ev
 - **Eligibility is derived, not live.** Migration 014 and the one authorized stored-data refresh completed November 17; version/digest readback passed. Absent or stale results remain unknown.
 - **Free hosting.** The enrollment host can take tens of seconds to wake, and an inactive Free
   database can pause again. (#36, #64)
-- **Provider-side settings are unverified.** Stored token metadata cannot prove provider-side
-  authorization; the Google Audience page did not load and WHOOP needs sign-in. (#53)
+- **Provider-side authorization remains unverified.** On November 18 the dedicated Sentra
+  Google session showed External / Testing, two test users, and the registered local and
+  hosted enrollment/viewer callbacks. No settings changed. WHOOP still needs its app-owner
+  sign-in; stored token metadata and callback registration do not prove a participant's
+  current authorization. (#53)
 
 ## Storage, backup and recovery
 
 - **Retention periods are proposals.** The team, advisor and IRB decide them; no expiry is
   implemented. (#58, [retention policy](retention-policy.md))
 - **Supabase's own backups remain unverified.** The full encrypted application backup
-  passed offline verification on November 18; the hosted operator rehearsal remains pending. Apply
-  migration 010 to a rehearsal target if the archive contains follow-up tables, and 011 if the
-  live project has it. (#58, #67, #78)
+  and isolated hosted restore passed November 18: all 16 table counts/fingerprints and
+  220 destination-original hashes matched. Derived-output rebuilding, off-machine
+  custody and key-loss recovery were not rehearsed. See the [dated recovery record](recovery-rehearsal.md#record).
 - **Compact storage is extra space for now.** Removing the per-field rows (phase 3) stays gated on
   the retention policy, a verified backup, the recovery rehearsal and both owners' approval. (#59)
 - **Publication is ordered, not atomic across board and tiers.** A board upload failure retains its previous complete version; tier hashes force repair on retry. Monthly immutable objects, legacy slots and obsolete versions count against storage until separately reviewed cleanup. Both writer commands share a database lock. (#57, #80, #106)
@@ -94,8 +97,8 @@ Last updated: November 18, 2026; see dated implementation/hosted evidence in [ev
   organizations. Individual consent/withdrawal and the five-contributor hosted matrix still
   need an isolated synthetic fixture. Temporary roles were deactivated. (#72, #111)
 
-- **Backup verification does not establish recovery or retention agreement.** The November 18
+- **Recovery does not establish retention agreement.** The November 18
   rollout and one full encrypted backup completed within the authorized 4.5 GB transfer
   and 500 MB private-backup ceilings. See the [dated record](storage-plan.md#rollout-and-verified-backup-observed-november-18).
-  The hosted recovery rehearsal still needs its own result. Retention
-  agreement, isolated recovery and destructive approvals remain separate gates.
+  The separate hosted recovery also passed within its bounded scope. Retention
+  agreement and destructive approvals remain separate gates; no deletion ran.

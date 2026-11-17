@@ -36,6 +36,16 @@ continues to manage its developer account.
 4. Record sanitized results in [SEN-70]. The [recovery rehearsal task][SEN-30]
    tracks isolated restore evidence separately.
 
+## November 18 administration readback
+
+On November 18 a new Google Cloud console tab using the existing Sentra Google
+session reached the original project's Audience and both OAuth client pages.
+External / Testing, the two-test-user count and the existing hosted/local callback
+pairs were verified without changing configuration. The personal account's denied
+console access was not treated as a failure of the Sentra owner account. This is
+an administration readback, not a new MFA/recovery challenge or participant token
+renewal. Remaining service and recovery observations stay explicit in SEN-70.
+
 ## Privacy policy and public contact
 
 Notion has been retired. A replacement public Sentra privacy policy URL is
