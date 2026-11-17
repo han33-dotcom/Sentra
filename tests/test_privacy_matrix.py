@@ -8,6 +8,7 @@ only at one widget. Synthetic identities and rows only.
 Pages added by later tasks join `PAGES` when they merge. Trends (#40) covers both views, and
 Follow-ups (#31) checks current and historical note text as well as participant IDs.
 """
+import base64
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -24,7 +25,7 @@ from test_viewer_app import FakeReader
 TEAM = ['team@example.test']
 # 'Page · View' also selects a view inside the page.
 PAGES = ('Daily activity', 'Sleep', 'Workouts', 'Data availability', 'Wellness board',
-         'Organization overview', 'Profiles', 'Trends · One person', 'Trends · Group', 'Follow-ups')
+         'Organization overview', 'Profiles', 'Trends · One person', 'Trends · Group', 'Follow-ups', 'Reports')
 USERS = [{'org_id': 'org-a', 'email': 'officer@a.test', 'role': 'officer', 'active': True},
          {'org_id': 'org-a', 'email': 'reviewer@a.test', 'role': 'reviewer', 'active': True},
          {'org_id': 'org-a', 'email': 'removed@a.test', 'role': 'officer', 'active': False},
@@ -40,15 +41,16 @@ CAN_SEE = {'officer@a.test': {'p91'}, 'reviewer@a.test': {'p91'}, 'officer@b.tes
 # Pages that list permitted individuals: the permitted person must appear there, so an empty page
 # cannot pass the "only permitted participants" check by showing nobody.
 INDIVIDUAL_PAGES = ('Daily activity', 'Sleep', 'Workouts', 'Data availability', 'Wellness board', 'Profiles',
-                    'Trends · One person', 'Follow-ups')
+                    'Trends · One person', 'Follow-ups', 'Reports')  # Reports: every offered person selected
 FOLLOW_UP_NOTES = {pid: f'Individual note marker {i}' for i, pid in enumerate(EVERYONE)}
 FOLLOW_UP_HISTORY = {pid: f'History note marker {i}' for i, pid in enumerate(EVERYONE)}
 GROUP_NOTE = 'Synthetic organization group note.'
 
 
-def consents(overrides=None):
+def consents(overrides=None, demonstration=()):
     rows = dict(CONSENT, **(overrides or {}))
-    return [{'participant_id': pid, 'org_id': org, 'sharing': sharing, 'withdrawn': withdrawn, 'membership_open': True}
+    return [{'participant_id': pid, 'org_id': org, 'sharing': sharing, 'withdrawn': withdrawn, 'membership_open': True,
+             'demonstration': pid in demonstration}
             for pid, (org, sharing, withdrawn) in rows.items()]
 
 
@@ -120,7 +122,38 @@ def rendered(app):
             walk(child)
     walk(app.main)
     walk(app.sidebar)
-    return '\n'.join(out)
+    text = '\n'.join(out)
+    # Downloads travel as base64 data URIs inside an iframe; decode them so their contents are scanned too.
+    files = [file_text(base64.b64decode(m)) for m in re.findall(r'base64,([A-Za-z0-9+/=]+)', text)]
+    return '\n'.join([text, *files])
+
+
+def _pdf_string(raw):
+    """A PDF literal string's bytes with escapes resolved, as WinAnsi text."""
+    return re.sub(rb'\\([0-7]{1,3}|.)', lambda m: bytes([int(m.group(1), 8)]) if m.group(1)[:1].isdigit()
+                  else m.group(1), raw).decode('cp1252', 'replace')
+
+
+def pdf_text(data):
+    """Text drawn in an uncompressed PDF, rebuilt per text object. A generator may split one word into
+    several strings (ReportLab writes '<5' as '(<) Tj (5) Tj'), so searching the raw bytes can miss an ID."""
+    lines = []
+    for block in re.findall(rb'\bBT\b(.*?)\bET\b', data, re.S):
+        parts = [('\n' if t.group(0) == b'T*' else _pdf_string(t.group(1)))
+                 for t in re.finditer(rb'\(((?:\\.|[^\\)])*)\)\s*Tj|T\*', block)]
+        lines.append(''.join(parts))
+    return '\n'.join(lines)
+
+
+def file_text(data):
+    return pdf_text(data) if data.startswith(b'%PDF-') else data.decode('utf-8', 'ignore')
+
+
+def download_files(app):
+    """{file name: bytes} of every download link on the page."""
+    html = ''.join(str(e.proto) for e in app.get('iframe'))
+    found = re.findall(r'download=\\?"([^"\\]+)\\?" href=\\?"data:[^;]+;base64,([A-Za-z0-9+/=]+)', html)
+    return {name: base64.b64decode(data) for name, data in found}
 
 
 def shown_ids(text):
@@ -153,6 +186,9 @@ class PrivacyMatrixTests(unittest.TestCase):
         app.radio(key='explore').set_value(name).run()
         if view:
             app.radio(key='audit_trend_view').set_value(view).run()
+        if name == 'Reports':  # include every person the page offers, so the report names all it may
+            people = app.multiselect(key='audit_report_people')
+            people.set_value(people.options).run()
         self.assertFalse(app.exception, page)
         self.assertEqual([e.value for e in app.error], [], page)
         return rendered(app)
@@ -168,6 +204,12 @@ class PrivacyMatrixTests(unittest.TestCase):
                         for notes in (FOLLOW_UP_NOTES, FOLLOW_UP_HISTORY):
                             self.assertEqual({pid for pid, note in notes.items() if note in text}, allowed)
                         self.assertEqual(GROUP_NOTE in text, email.endswith('@a.test'))
+                    if page == 'Reports':  # reports carry follow-up counts, never note text
+                        for note in [*FOLLOW_UP_NOTES.values(), *FOLLOW_UP_HISTORY.values(), GROUP_NOTE]:
+                            self.assertNotIn(note, text)
+                        # Each downloaded file on its own names exactly the permitted people.
+                        for name, data in download_files(app).items():
+                            self.assertEqual(shown_ids(file_text(data)), allowed, name)
                     if page in INDIVIDUAL_PAGES:
                         self.assertEqual(shown, allowed)
                     else:
@@ -221,6 +263,20 @@ class PrivacyMatrixTests(unittest.TestCase):
             with self.subTest(page=page):
                 self.assertEqual(shown_ids(self.visit(app, page)), set())
 
+    def test_demonstration_copy_names_only_people_who_agreed(self):
+        # p92 (group-only) and p96 (org-b) agreeing must not matter to org-a's individual sections.
+        for agreed, expected in ((('p91', 'p92', 'p96'), {'p91'}), (('p92', 'p96'), set())):
+            with self.subTest(agreed=agreed):
+                app = self.open('officer@a.test', consents(demonstration=agreed))
+                self.visit(app, 'Reports')
+                app.toggle(key='audit_report_demo').set_value(True).run()
+                people = app.multiselect(key='audit_report_people')
+                people.set_value(people.options).run()
+                self.assertFalse(app.exception)
+                self.assertEqual([e.value for e in app.error], [])
+                text = rendered(app)
+                self.assertIn('Demonstration copy', text)
+                self.assertEqual(shown_ids(text), expected)
 
     def test_follow_up_notes_disappear_on_the_same_page_after_consent_changes(self):
         for sharing, withdrawn in (('individual', True), ('group_only', False)):
@@ -252,12 +308,28 @@ class RenderedScanTests(unittest.TestCase):
             st.altair_chart(alt.Chart(frame).mark_point().encode(x='Participant', y='Value'))
         elif where == 'option':
             st.selectbox('Pick', ['p96'])
+        elif where == 'download':
+            from sentra.viewer_data import inline_download
+            st.iframe(inline_download(b'| p96 | 1 |', 'report.md', 'text/markdown'), height=70)
+        elif where == 'pdf':
+            from io import BytesIO
+            from reportlab.pdfgen import canvas
+            from sentra.viewer_data import inline_download
+            buffer = BytesIO()
+            page = canvas.Canvas(buffer, pageCompression=0)
+            text = page.beginText(72, 720)
+            text.textOut('p9')  # one ID split across two strings, as ReportLab may write it
+            text.textOut('6')
+            page.drawText(text)
+            page.save()
+            st.iframe(inline_download(buffer.getvalue(), 'report.pdf', 'application/pdf'), height=70)
         else:
             st.caption('nothing here')
 
-    def test_ids_are_found_in_table_cells_chart_data_and_options(self):
+    def test_ids_are_found_in_table_cells_chart_data_options_and_downloads(self):
         from streamlit.testing.v1 import AppTest
-        for where, expected in (('table', {'p96'}), ('chart', {'p96'}), ('option', {'p96'}), ('none', set())):
+        for where, expected in (('table', {'p96'}), ('chart', {'p96'}), ('option', {'p96'}), ('download', {'p96'}), ('pdf', {'p96'}),
+                                ('none', set())):
             with self.subTest(where=where):
                 app = AppTest.from_function(self.page)
                 app.query_params['where'] = where

@@ -37,7 +37,8 @@ and nothing here deletes data.
 | Set up follow-up recording on the hosted viewer | [Follow-ups: operator setup](follow-ups.md#operator-setup-private) |
 | Take and verify a backup | [Backup and recovery](operating-guide.md#backup-and-recovery), [backups](retention-policy.md#backups) |
 | Rehearse a recovery into a throwaway project | [Recovery rehearsal](recovery-rehearsal.md) |
-| Any step that would delete or compact stored data | [Gates before any destructive storage step](retention-policy.md#gates-before-any-destructive-storage-step-46), [storage plan](storage-plan.md#phases-and-approvals) |
+| Add and verify compact storage (phases 1–2; no deletion) | [Storage plan](storage-plan.md#phases-and-approvals) |
+| Any step that would delete stored data, including removing rows after compaction | [Gates before any destructive storage step](retention-policy.md#gates-before-any-destructive-storage-step-46), [storage plan](storage-plan.md#phases-and-approvals) |
 | Run the hosted access and withdrawal checks | [Privacy checks](privacy-checks.md) |
 | Recover a service account or check the privacy policy link | [Service account handoff](service-account-handoff.md#recovery-and-verification) |
 | Approve or change observation rules | [Observation approval](operating-guide.md#observation-approval-and-documentation), [indicator contract](indicator-contract.md) |

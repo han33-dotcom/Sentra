@@ -1,6 +1,11 @@
 # Sentra technical documentation
 
-Start with [Team workflow](team-workflow.md), [Collaborator setup](collaborator-setup.md) and [Workspace activation](github-workspace-activation.md).
+Start with [AGENTS.md](../AGENTS.md), [Agent-owned delivery](local-delivery.md),
+[Team workflow](team-workflow.md) and [Collaborator setup](collaborator-setup.md).
+These define current code delivery. [Workspace activation](github-workspace-activation.md),
+[Workflow pilot](workflow-pilot.md), stage plans and dated validation records preserve
+historical evidence; their old publication/review gates are superseded. Operational
+authorization and data-protection constraints still apply.
 
 Tasks belong in [GitHub Issues](https://github.com/han33-dotcom/Sentra/issues); general reference and meeting notes belong in the [Wiki](https://github.com/han33-dotcom/Sentra/wiki) after publication.
 
@@ -19,6 +24,7 @@ Tasks belong in [GitHub Issues](https://github.com/han33-dotcom/Sentra/issues); 
 ## Documents
 
 - [architecture](architecture.md)
+- [Agent-owned delivery](local-delivery.md)
 - [collaborator setup](collaborator-setup.md)
 - [collection restart readiness](collection-restart-readiness.md)
 - [data dictionary](data-dictionary.md)
@@ -34,6 +40,7 @@ Tasks belong in [GitHub Issues](https://github.com/han33-dotcom/Sentra/issues); 
 - [participation permissions](participation-permissions.md)
 - [pr policy activation](pr-policy-activation.md)
 - [privacy checks](privacy-checks.md)
+- [reports](reports.md)
 - [processing](processing.md)
 - [read api](read-api.md)
 - [schema](schema.md)

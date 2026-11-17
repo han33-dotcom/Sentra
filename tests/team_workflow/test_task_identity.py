@@ -64,6 +64,9 @@ class Client:
         self.writes.append(("status", int(item_id), option))
         self.statuses[int(item_id)] = option
 
+    def comments(self, number):
+        return []
+
     def reviews(self, number):
         return [{"id": 1, "state": self.review_state,
                  "user": {"login": "MohamadNasrallah", "type": "User"}}]
@@ -256,7 +259,7 @@ class MultiTaskSyncTests(unittest.TestCase):
 
     def test_review_and_draft_states_apply_to_both_tasks(self):
         for draft, review, expected in [(True, "APPROVED", "In progress"),
-                                         (False, "CHANGES_REQUESTED", "Changes requested")]:
+                                         (False, "CHANGES_REQUESTED", "In review")]:
             client = Client()
             client.pulls[0]["draft"] = draft
             client.review_state = review

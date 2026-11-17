@@ -1,5 +1,11 @@
 # Sentra: wearable data pipeline and wellness layer
 
+Coding agents: start with [AGENTS.md](AGENTS.md) and
+[agent-owned delivery](docs/local-delivery.md). The implementation agent takes each
+task through self-review, acceptance, CI, develop and main. See
+[collaborator setup](docs/collaborator-setup.md#shared-policy-discovery-and-refresh)
+for automatic instruction loading and the one-time refresh after policy updates.
+
 Sentra is the wearable-data pipeline for our final-year project. It collects data
 for consenting participants: currently one Fitbit Air account through Google Health
 v4 and one WHOOP account through WHOOP v2. Each response is stored privately and
@@ -196,7 +202,7 @@ Use Python **3.11**. From the repository root in Windows PowerShell:
 python -m venv .venv
 .venv/Scripts/python.exe -m pip install -r requirements-windows.txt
 .venv/Scripts/python.exe -m pip install --no-deps -e ".[dev,viewer]"
-.venv/Scripts/python.exe -m pip install "streamlit[auth]==1.65.0" "Authlib==1.8.0" -r requirements-api.txt httpx pytest pre-commit
+.venv/Scripts/python.exe -m pip install "streamlit[auth]==1.65.0" "Authlib==1.8.0" "reportlab==5.0.1" -r requirements-api.txt httpx pytest pre-commit
 .venv/Scripts/python.exe -m pip check
 .venv/Scripts/pre-commit.exe install
 .venv/Scripts/python.exe -m pytest
@@ -245,7 +251,7 @@ docker compose up -d --build   # API on http://127.0.0.1:8000
 
 Work happens on `feat/*`, `fix/*`, `chore/*`, `ci/*` or `docs/*` branches. Open a PR
 into `develop`; releases go by PR from `develop` to `main`. Both protected branches
-need a PR, a green `guard` and `test` CI and one code-owner approval. Feature
+follow the PR flow with green CI, PR policy and local acceptance checks. Reviews are optional. Feature
 branches are squash-merged. Commits use conventional messages (`feat:`, `fix:`,
 `ci:`, `chore:`, `docs:`). The data guard (`scripts/check_no_data.py`, also a
 pre-commit hook) and gitleaks block health data, exports and secrets. See
@@ -306,4 +312,4 @@ Use the [documentation index](docs/README.md) and [team workflow](docs/team-work
 Software tasks live in GitHub Issues and the project board; technical documents stay
 in this repository. Meeting notes and general references belong in the Wiki after
 publication. See [workspace activation](docs/github-workspace-activation.md) for the
-current rollout status. Shared cloud AI review is optional and deferred.
+current rollout status. [Local delivery](docs/local-delivery.md) automates acceptance, fixes and merges using existing Codex subscriptions.

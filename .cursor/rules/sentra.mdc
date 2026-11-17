@@ -1,0 +1,12 @@
+---
+description: Shared Sentra coding and delivery policy
+alwaysApply: true
+---
+
+Read the repository-root `AGENTS.md`, `CONTRIBUTING.md` and
+`docs/local-delivery.md` before working. They are the canonical project policy;
+this file is a discovery pointer, not a separate workflow.
+
+The implementation agent owns implementation, self-review, acceptance, CI and
+delivery through develop to main. Follow the policy-refresh and human-only
+verification procedures there. Report unavailable tools or permissions honestly.

@@ -1,5 +1,12 @@
 # Stage 4 — once-daily collection
 
+> Historical stage delivery record: commit/publication approval, independent
+> review and stage sequencing below describe the original rollout. Current code
+> delivery follows [AGENTS.md](../AGENTS.md) and [agent-owned delivery](local-delivery.md):
+> implementation-agent self-review, acceptance, CI, develop, then main. Old code
+> publication gates do not apply. Operational, consent, expert and destructive-data
+> approvals remain in force; historical activation never authorizes collection now.
+
 **Stage 4 acceptance passed on 8 October 2026**, including actual manual GitHub
 Actions runs and retries. Commit `9608353` was pushed from `ETL-pipeline` and
 published to `main` through [PR #2](https://github.com/han33-dotcom/Sentra/pull/2)

@@ -163,6 +163,10 @@ when verified per-field dense rows are removed. The opt-in PostgreSQL tests in
 omitted by a newer response, written through the collector's `put_records`. Without `sql/009`, tiers read
 `audit.measurements` as before.
 
+Full backups include `audit.series` once sql/009 is installed. It is verified by row count and
+fingerprint and restored with its ids, so a verified backup also covers readings kept only in
+the compact copy. A restore stops before writing if the target lacks sql/009.
+
 Still open before phase 3:
 - The collector still writes per-field rows (phase 1 collector change, coordinated with the
   collection owner, #47).
@@ -175,10 +179,10 @@ Still open before phase 3:
 
 | Phase | Change | Deletes data? | Approval |
 | --- | --- | --- | --- |
-| 1 | `audit.series` table + collector writes dense datasets there + viewer/tiers read it; egress `purpose` | No | Normal PR review |
-| 2 | Migration builds series from existing dense rows + lossless verification report | No | Normal PR review |
+| 1 | `audit.series` table + collector writes dense datasets there + viewer/tiers read it; egress `purpose` | No | Implementation-agent self-review + CI |
+| 2 | Migration builds series from existing dense rows + lossless verification report | No | Implementation-agent self-review + CI |
 | 3 | Delete verified per-field dense rows + `VACUUM FULL` | **Yes** (originals and series keep the data) | Both owners, recorded in the PR, collection paused |
-| 4 | Monthly partitioned, incremental tiers | No | Normal PR review |
+| 4 | Monthly partitioned, incremental tiers | No | Implementation-agent self-review + CI |
 | 5 | Re-enable daily collection and the daily board | No | Team decision |
 
 Until phase 3 is done, `activity-level` stays on request and daily collection stays

@@ -30,10 +30,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Check out only the immutable base commit
+      # Release policy is already integrated into protected develop. This also lets
+      # policy migrations reach main without retaining obsolete approval gates.
+      - name: Check out immutable integrated policy
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.pull_request.base.ref == 'main' && github.event.pull_request.head.ref == 'develop' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.head.sha || github.event.pull_request.base.sha }}
           path: trusted
           persist-credentials: false
       - name: Validate current PR with base-branch policy

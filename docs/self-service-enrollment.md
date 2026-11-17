@@ -2,7 +2,8 @@
 
 Task [#28](https://github.com/han33-dotcom/Sentra/issues/28), with the hosted
 connection work in [#47](https://github.com/han33-dotcom/Sentra/issues/47).
-Owner: Hassan (`han33-dotcom`); independent reviewer: `MohamadNasrallah`.
+Owner: Hassan (`han33-dotcom`); optional additional reviewer: `MohamadNasrallah`.
+Code delivery follows [agent-owned delivery](local-delivery.md).
 
 ## Participant experience
 
@@ -256,8 +257,9 @@ viewer-only secrets, existing URLs and Google callbacks when deploying.
 Real Google signup and returning-account sharing updates were reported on a phone
 and verified privately. HTTPS, cookies, origin/body-size enforcement, hosted
 database sessions and anonymous mobile OAuth cancellation passed. No participant
-phone timing has been supplied. Reconnect/withdrawal with a real person and final
-human acceptance remain separate from the synthetic checks.
+phone timing has been supplied. Reconnect/withdrawal with a real person remains separate from synthetic checks.
+Task acceptance follows [local delivery](local-delivery.md); only observations
+unavailable to the agent require human verification instructions.
 
 Acceptance corrections in the current work branch:
 
@@ -278,7 +280,8 @@ Acceptance corrections in the current work branch:
 - Private aggregate counts preserve the difference between an unavailable
   assessment result and a verified zero.
 
-These corrections need independent review and release before they are claimed
+These corrections need implementation-agent self-review, acceptance, CI and release
+under [agent-owned delivery](local-delivery.md), plus verified deployment, before they are claimed
 as deployed behavior. Synthetic tests use fake accounts/records and an isolated
 loopback PostgreSQL database; they grant no real person organization access.
 
