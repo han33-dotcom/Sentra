@@ -14,7 +14,7 @@ Two kinds of verification are kept apart:
 [local delivery](local-delivery.md). Agents verify accessible criteria; only inaccessible
 observations need human instructions. This table does not close anything.
 
-Last updated: November 12, 2026, from `develop` at `5b011cd`.
+Last updated: November 17, 2026. Implementation and hosted observations are distinguished below; a later release does not retroactively change a tested deployment.
 
 ## Privacy and access (SEN-27, SEN-26, SEN-32)
 
@@ -38,8 +38,8 @@ Last updated: November 12, 2026, from `develop` at `5b011cd`.
 | Overview and profiles | Participation states counted separately; group statistics per device with k = 5; profiles only within sharing | Implemented as expected | #62; `test_organization*.py` | Yes | Pending (needs release and hosted check) |
 | Observations | What changed, which readings, limitations; wellness vs collection vs medical kept apart; provisional labels | Implemented; stale or future data draws no conclusion | #65; `test_observations.py` | Yes | Pending |
 | Trends | Selectable periods, personal baseline comparison, group exploration with k = 5 per statistic, gaps kept | Implemented; organization users see only devices that reach 5 and no hidden-day counts; department comparisons deferred | #68; `test_trends.py`, `test_organization_pages.py`, `test_privacy_matrix.py` | Yes | Pending |
-| Follow-ups | Assignee, open/ongoing/resolved history, narrow write path, same boundaries | Merged into `develop`. The viewer uses a separate write role. Hosted rollout requires migration 010 and private role configuration | #72; `test_follow_ups_db.py`, `test_privacy_matrix.py` | Yes | Pending |
-| Reports | Permitted summaries, trends, explanations and limitations; same boundaries for downloads | Implemented in review: preview with Markdown and PDF downloads from the same content, rebuilt from the current access decision each load; follow-ups as counts only; demonstration copy limited to people who agreed | SEN-42; `test_reports.py`, `test_report_pages.py`, `test_privacy_matrix.py`; [reports](reports.md) | In PR | Pending |
+| Follow-ups | Assignee, open/ongoing/resolved history, narrow write path, same boundaries | Merged into `develop`. The viewer uses a separate write role. Migration 010 is applied; private hosted write-role configuration and officer acceptance remain | #72; `test_follow_ups_db.py`, `test_privacy_matrix.py` | Yes | Pending |
+| Reports | Permitted summaries, trends, explanations and limitations; same boundaries for downloads | Merged/released in #82/#100: preview with Markdown and PDF downloads from the same content, rebuilt from the current access decision each load; follow-ups as counts only; demonstration copy limited to people who agreed | SEN-42; `test_reports.py`, `test_report_pages.py`, `test_privacy_matrix.py`; [reports](reports.md) | Yes | Reports preview and both download controls rendered November 17; permitted demonstration remains pending |
 
 ## Enrollment and collection (SEN-28, SEN-38, SEN-44, SEN-47)
 
@@ -55,10 +55,10 @@ Last updated: November 12, 2026, from `develop` at `5b011cd`.
 | --- | --- | --- | --- | --- | --- |
 | Incomplete assessments | Missing inputs or short history never read as calm; states consistent everywhere | "Partial" and "Not enough information" states; versioned board. Group statistics in processing and the read API are per device, as in the overview, with matching contributor counts; mixed-device participants enter no device statistic; the API refuses a pooled pre-device snapshot | #56, #79; [indicator contract](indicator-contract.md#consistency-checks); `test_processing.py::GroupStatisticConsistencyTests` | Yes | Pending (board rebuild and one wellness refresh after release) |
 | Indicator definitions | Agreed names, states and meanings; expert package; provisional until reviewed | Contract and evidence documents merged | #56; [medical evidence](medical-evidence.md) | — | Team agreement and expert review pending |
-| Consistent updates | Changed information refreshed efficiently; repeated runs safe; failed processing keeps the previous complete view | When collection data and board rules are unchanged, a normal refresh skips tier reads and publication. It still checks the latest collection watermark and, if a source run exists, fetches the previous board. Both reads reserve egress. Each published tier set and board is complete. An interrupted board upload can leave tiers one run ahead until the next refresh repairs the board. A refresh with new data still rebuilds every tier (incremental partitions pending, #46) | #57, #80; [publication consistency](wellness-board.md#publication-consistency-48) | Yes | Pending |
-| Backup readiness | Policy agreed; fresh verified backup; destructive steps gated | Policy proposed. Full encrypted backups include consent, enrollment and installed follow-up tables, with offline verification | #58, #67, #72; [retention policy](retention-policy.md) | Yes | Fresh verified backup pending (operator) |
+| Consistent updates | Changed information refreshed efficiently; repeated runs safe; failed processing keeps the previous complete view | Each published tier set and board is complete. Monthly publication in #106 detects historical corrections/omissions through source fingerprints and reuses verified unchanged objects; an interrupted board upload retains the old complete board and is repaired on retry. Full compact-cache processing and obsolete-object storage remain limitations | #57, #80, #106; [publication consistency](wellness-board.md#publication-consistency-48) | Yes | Pending |
+| Backup readiness | Policy agreed; fresh verified backup; destructive steps gated | Policy proposed. Full encrypted backups include consent, enrollment, installed follow-up tables and compact series, with offline verification (#85) | #58, #67, #72; [retention policy](retention-policy.md) | Yes | Fresh backup preflight stopped by egress/private-storage guards November 17 |
 | Recovery rehearsal | Restore into an isolated project; counts and fingerprints match | Verified isolated restore with synthetic data, including follow-up history and rollback of allocator changes after failure | #58, #67; `test_backup_restore_db.py`; [recovery rehearsal](recovery-rehearsal.md) | Yes (throwaway PostgreSQL) | Pending (operator) |
-| Lossless storage | Compact without information loss; measured savings | Compact series with re-expansion; about 7× smaller in a local test. Tiers read a compact reading only when its per-field row is gone and its record still names the same response, so removing verified rows cannot change published tiers | #59, #81; [storage plan](storage-plan.md#implementation-status-46); `test_compaction_db.py` | Yes (throwaway PostgreSQL) | Migration 009 not applied |
+| Lossless storage | Compact without information loss; measured savings | Compact series with re-expansion; about 7× smaller in a local test. Tiers read a compact reading only when its per-field row is gone and its record still names the same response, so removing verified rows cannot change published tiers | #59, #81; [storage plan](storage-plan.md#implementation-status-46); `test_compaction_db.py` | Yes (throwaway PostgreSQL) | Live phase-3 deletion remains gated; see November 17 operations evidence |
 | Growth forecast | Measured costs and a recommendation for the next batch | Measurement log implemented | #60; [capacity measurements](capacity-measurements.md) | Yes | Measurements pending collection restart |
 
 ## How the matrix counts a pass
@@ -86,3 +86,54 @@ dependency lands:
 | Reports (SEN-42) | **Done November 12, in its PR:** Reports and its decoded download added to the matrix; removing its individual filters fails 7 checks, ignoring the demonstration choice fails 1 |
 | Backup coverage (#67, SEN-29/30) | **Done November 12:** updated the backup evidence and verified synthetic restore using migration 010 |
 | A release to `main` and hosted deployment | Run the [hosted check procedure](privacy-checks.md) and fill in the Real/hosted column |
+
+
+## November 17 delivery and hosted evidence
+
+Release [#100](https://github.com/han33-dotcom/Sentra/pull/100) put #85, #82, #83,
+#84, #98 and #99 on main at `5136885a89bf30f8ce2294d71c4419a3e87ae72f`.
+Render's manual deployment of that exact commit succeeded (14:28 UTC); health and
+join returned HTTP 200. Free compute, the existing URL and disabled auto-deploys
+were retained. The Streamlit deployment alias was fast-forwarded to the same release;
+entrypoint `viewer/app.py`, Python 3.11 and private hosting audience were retained.
+The approved team account completed Google verification and reached the viewer.
+
+Observed on that release, without storing real-data screenshots:
+
+- Daily activity loaded one bounded historical week. The user saved its readable
+  CSV locally; a second bounded source comparison found **233 rows and every field
+  identical** (14:58 UTC). Only count/equality evidence is published here.
+- Organization overview rendered participation states and suppressed every
+  under-threshold group statistic. Profiles explicitly withheld a current wellness
+  conclusion for stale data. Trends preserved historical data and withheld rule
+  results from the old board contract.
+- Reports rendered its selected-period preview and Markdown/PDF download controls.
+  Follow-ups rendered an empty read-only view for the team role, as designed.
+  This is not an officer-write test, cross-organization account test or approved
+  real-data demonstration. No participation/consent record or note was changed.
+
+Reviewed migrations 010/011 were applied at 14:13 UTC. The new restricted follow-up
+role could execute its narrow function, could not read health tables or directly
+insert notes; the viewer could not insert notes. The credential was saved encrypted
+in the existing private operator location. Hosted writer configuration and a separately
+designated organization identity are still required; participants are not promoted
+for testing. Migrations 012/013/014 and later hosted rollout are separate from these
+observations. Code for compact writes (#102), purpose attribution (#103), eligibility
+metadata (#104), and guarded removal (#105) is merged into develop.
+
+Operational guards remain effective: collection was paused before and after the
+checks. Supabase's November calendar-month uncached usage displayed 0.468 GB; a
+conservative 470,000,000-byte baseline update retained the larger existing baseline
+and all reservations. Fresh full-backup preflight estimated 1,012,590,124 bytes of
+egress against 915,309,961 bytes remaining at that check, while the configured private
+folder used 250,531,219 bytes against its 200,000,000-byte backup guard. **No full
+backup or removal started; no guard or reservation was reset.** Subsequent bounded
+checks further reduce remaining egress. Isolated real recovery, retention agreement,
+both-owner deletion approval, exact restart scope, five active consenting contributors
+and consecutive-day growth observations remain unverified.
+
+Actual branch settings were read November 17: develop and main both require strict
+current `guard`, Linux/Windows Python 3.11 `test`, and `pr-policy` checks, enforce
+admins, and disallow force-push/deletion. Required human review is off under policy 4.
+Native deletion of merged work branches is enabled. No Slack message/cutover or
+Project completion is claimed by this evidence entry.
