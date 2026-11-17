@@ -141,3 +141,21 @@ preflight at 15:22 UTC estimated 47,955,372 bytes of database reservations again
 809,441,501 bytes remaining. The user authorized one refresh of stored data after
 the next release, capped at 100 MB total reservations, with collection paused;
 this entry records authorization/preflight, not successful execution.
+
+## November 17 sequential hosted role checks
+
+On release `9b6e8c048b49f04a89839024cc64e06b3c586506`, one owner-designated Google
+identity was rotated through no role, officer/reviewer in an empty synthetic
+organization, officer in another, and inactive. Hosted group follow-up creation,
+officer and assigned-reviewer updates, open/ongoing/resolved status and history,
+cross-organization exclusion, fresh reviewer sign-in, deactivation denial and
+sign-out cleanup passed. The owner corrected the missing hosted writer secret;
+successful hosted writes verified the resulting configuration. Temporary access
+was disabled and all four synthetic group follow-ups resolved, retaining history.
+Collection stayed paused and no real participant or board was modified.
+
+See [the procedure and scope](privacy-checks.md). One sequential identity removes
+the need for additional Google accounts for these checks, but does not test
+simultaneous identities. Empty organizations do not establish hosted withdrawal,
+individual-data or five-contributor acceptance; those remain separately identified
+in the evaluation and are covered by isolated synthetic tests.
