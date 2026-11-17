@@ -22,6 +22,7 @@ import tempfile
 import psycopg
 
 from .errors import SentraError
+from .egress import reserve as reserve_egress
 from .shared import CapacityStop
 
 TIER_BUCKET = 'sentra-tiers'
@@ -85,9 +86,10 @@ def _pa():
 class AuditReader:
     """Read-only access: refuses any role but sentra_viewer and reserves egress before reading."""
 
-    def __init__(self, db, limits, *, budget_db=None, max_read_bytes=DEFAULT_MAX_READ_BYTES):
+    def __init__(self, db, limits, *, budget_db=None, max_read_bytes=DEFAULT_MAX_READ_BYTES, purpose='tiers'):
         self.db, self.limits, self.max_read_bytes, self.read_bytes = db, limits, max_read_bytes, 0
         self.series = None
+        self.egress_purpose = purpose
         self.budget_db = budget_db if budget_db is not None else db
         try:
             role = db.execute('select session_user').fetchone()[0]
@@ -101,7 +103,7 @@ class AuditReader:
             while amount > 0:
                 chunk = min(amount, RESERVE_CHUNK)
                 # Reservations must persist outside the read-only snapshot, even if the read fails.
-                self.budget_db.execute('select public.sentra_reserve_viewer_egress(%s,%s)', (chunk, self.limits.monthly_egress_bytes))
+                reserve_egress(self.budget_db,chunk,self.limits.monthly_egress_bytes,self.egress_purpose,viewer=True)
                 amount -= chunk
         except psycopg.Error:
             raise CapacityStop('Egress allowance unavailable, stale or exhausted; no tier data read.') from None

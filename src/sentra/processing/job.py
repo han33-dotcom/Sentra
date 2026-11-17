@@ -45,7 +45,7 @@ def once(out):
         credentials, limits = runtime_config(folder)
         db = connect_db(credentials)
         try:
-            storage = PrivateStorage(credentials, AuditReader(db, limits).reserve, bucket=TIER_BUCKET)
+            storage = PrivateStorage(credentials, AuditReader(db, limits, purpose='processing').reserve, bucket=TIER_BUCKET)
             tiers = Path(folder) / 'tiers'
             report = fetch(storage, tiers)
             run(load(tiers), out, devices=devices(tiers))

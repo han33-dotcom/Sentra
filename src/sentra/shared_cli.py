@@ -136,6 +136,9 @@ def run_command(args):
         return 0
     credentials,limits,private = read_shared(args.config,cipher)
     backend = SharedBackend(credentials,limits)
+    backend.egress_purpose = ('backup' if args.command in ('shared-backup','shared-restore') else
+                              'verify' if args.command in ('shared-verify','shared-compact-verify') else
+                              'collector' if args.command == 'shared-sync' else 'operations')
     try:
         if args.command == 'shared-status':
             print(json.dumps(backend.usage(),indent=2))

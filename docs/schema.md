@@ -148,6 +148,16 @@ only read them. Writes go through two security-definer functions, executable onl
 `sentra_followups` role with no table privileges, which re-check the officer, assignee and
 `individual` consent rules. See [follow-ups](follow-ups.md).
 
+## Egress attribution (sql/013)
+
+`collector_private.egress_purposes` stores monthly reserved-byte totals by purpose.
+Only security-definer reservation functions write it, atomically with the existing
+budget update. Runtime roles cannot read/write its rows directly; aggregate usage
+includes its current-month breakdown. Historical reservations become `prior_unattributed`;
+baselines, ceilings and seven-day freshness checks remain unchanged. Existing function
+signatures and privileges stay compatible. Viewer calls retain their role check,
+100 MB call cap and 3.5 GB ceiling. Purpose is an accounting label, not authorization.
+
 ## Compact writer control (sql/012)
 
 `collector_private.compact_control` is a singleton, disabled by default. Only the admin
