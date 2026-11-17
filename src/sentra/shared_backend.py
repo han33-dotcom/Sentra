@@ -14,6 +14,8 @@ from .datasets import canonical
 from .errors import SentraError
 from .shared import CapacityStop, object_key, signature,database_estimate
 from .local_store import compact_record,expanded_record
+from . import compact_writer
+from .tiers import COMPACT_ONLY
 
 BUCKET = 'sentra-originals'
 
@@ -203,17 +205,18 @@ class SharedBackend:
 
     def verify_projections(self, participant, provider):
         self.reserve(65_536)
+        source = self.measurement_source()
         # Compare every expected scalar against the searchable projection, including NULL/time semantics.
         # Materialize context once per record and scalar once per metric. Inlining this
         # expression causes repeated JSON decompression and a quadratic join for wide sessions.
-        mismatches = self.db.execute('''with record_context as materialized (
+        mismatches = self.db.execute(f'''with record_context as materialized (
           select participant_id,provider,dataset,record_key,record->'measurements' metrics,
                  record-'measurements'-'vendor_fields'-'score_state'-'session_type' context
           from audit.records where participant_id=%s and provider=%s), expected as materialized (
           select participant_id,provider,dataset,record_key,context || raw_metric as e
           from record_context cross join lateral jsonb_array_elements(metrics) raw_metric)
           select count(*) from expected r
-          left join audit.measurements m on (m.participant_id,m.provider,m.dataset,m.record_key,m.metric)=
+          left join {source} m on (m.participant_id,m.provider,m.dataset,m.record_key,m.metric)=
             (r.participant_id,r.provider,r.dataset,r.record_key,e->>'metric')
           where (m.metric is null or
           (m.value,m.unit,m.vendor_value,m.vendor_unit,m.value_kind,m.availability,m.measured_at,m.interval_start,m.interval_end,
@@ -237,8 +240,11 @@ class SharedBackend:
     def put_records(self, records):
         if not records:
             return
-        self.guard(database_add=sum(database_estimate(r) for r in records))
         self.reserve(65_536)
+        dense = compact_writer.dense_records(records) if compact_writer.enabled(self.db) else []
+        self.guard(database_add=sum(database_estimate(r) for r in records)
+                   + 2 * compact_writer.replacement_bytes(self.db, dense))
+        compact_keys = {(r['participant_id'],r['provider'],r['dataset'],r['record_key']) for r in dense}
         with self.db.pipeline(), self.db.transaction():
             for r in records:
                 identity = (r['participant_id'],r['provider'],r['dataset'],r['record_key'])
@@ -248,7 +254,7 @@ class SharedBackend:
                   (*identity,signature(r),Jsonb(compact_record(r)),r['source_response_id'],r['collected_at']))
                 self.db.execute('delete from audit.measurements where participant_id=%s and provider=%s and dataset=%s and record_key=%s',identity)
                 self.db.execute('delete from audit.sessions where participant_id=%s and provider=%s and dataset=%s and record_key=%s',identity)
-                for m in r['measurements']:
+                for m in (() if identity in compact_keys else r['measurements']):
                     self.db.execute('insert into audit.measurements values (' + ','.join(['%s']*22) + ')',
                         (*identity,m['metric'],Decimal(str(m['value'])) if m['value'] is not None else None,m['unit'],Jsonb(m['vendor_value']),m['vendor_unit'],m['value_kind'],m['availability'],
                          m['measured_at'],m['interval_start'],m['interval_end'],Jsonb(m['civil_date']),m['timestamp_basis'],Jsonb(m['vendor_time']),
@@ -256,6 +262,15 @@ class SharedBackend:
                 if r['session_type']:
                     self.db.execute('insert into audit.sessions values (%s,%s,%s,%s,%s,%s,%s,%s,%s)',
                         (*identity,r['session_type'],r['interval_start'],r['interval_end'],r['score_state'],r['provisional']))
+            if dense:
+                compact_writer.replace(self.db, dense)
+
+    def measurement_source(self):
+        """Current logical readings for verification and counts, including compact-only data."""
+        present = self.db.execute("select to_regclass('audit.series_rows') is not null").fetchone()[0] is True
+        if not present:
+            return 'audit.measurements'
+        return f'(select * from audit.measurements union all select c.* from audit.series_rows c where {COMPACT_ONLY})'
 
     def save_state(self, participant, provider, jobs, runs):
         self.guard(database_add=len(canonical(jobs + runs).encode()) * 10 + 16_384)
@@ -280,24 +295,32 @@ class SharedBackend:
     def counts(self, participant, provider):
         self.reserve(32_768)
         output = {}
+        measurements = self.measurement_source()
         for table in ('records','measurements','sessions','raw_response_manifest'):
-            output[table] = self.db.execute(f'select count(*) from audit.{table} where participant_id=%s and provider=%s', (participant,provider)).fetchone()[0]
+            source = measurements if table == 'measurements' else f'audit.{table}'
+            output[table] = self.db.execute(f'select count(*) from {source} t where participant_id=%s and provider=%s', (participant,provider)).fetchone()[0]
         return output
 
     def growth_report(self):
         self.reserve(131_072)
-        rows=self.db.execute('''with records as (
+        source = self.measurement_source()
+        storage = 'select participant_id,provider,dataset,pg_column_size(m) bytes from audit.measurements m'
+        if source != 'audit.measurements':
+            storage += ' union all select participant_id,provider,dataset,pg_column_size(s) bytes from audit.series s'
+        rows=self.db.execute(f'''with records as (
             select participant_id,provider,dataset,count(*) records,sum(pg_column_size(record)) record_bytes
             from audit.records group by 1,2,3), metrics as (
-            select participant_id,provider,dataset,count(*) measurements,sum(pg_column_size(m)) measurement_bytes
-            from audit.measurements m group by 1,2,3), coverage as (
+            select participant_id,provider,dataset,count(*) measurements
+            from {source} m group by 1,2,3), physical as (
+            select participant_id,provider,dataset,sum(bytes) measurement_bytes from ({storage}) s group by 1,2,3), coverage as (
             select participant_id,provider,dataset,
               max((requested_range->>'requested_civil_end')::date)-min((requested_range->>'requested_civil_start')::date) requested_days
             from audit.raw_response_manifest group by 1,2,3)
             select c.participant_id,c.provider,c.dataset,c.requested_days,coalesce(r.records,0),coalesce(m.measurements,0),
-                   coalesce(r.record_bytes,0),coalesce(m.measurement_bytes,0)
+                   coalesce(r.record_bytes,0),coalesce(p.measurement_bytes,0)
             from coverage c left join records r using(participant_id,provider,dataset)
-            left join metrics m using(participant_id,provider,dataset) order by 1,2,3''').fetchall()
+            left join metrics m using(participant_id,provider,dataset)
+            left join physical p using(participant_id,provider,dataset) order by 1,2,3''').fetchall()
         usage=self.usage()
         logical=sum(int(r[6])+int(r[7]) for r in rows)
         factor=usage['audit_bytes']/logical if logical else 0

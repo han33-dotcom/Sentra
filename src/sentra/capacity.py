@@ -19,7 +19,7 @@ def snapshot(backend, *, days=14):
     tables = {name: int(size) for name, size in db.execute('''select n.nspname||'.'||c.relname, pg_total_relation_size(c.oid)
         from pg_class c join pg_namespace n on n.oid=c.relnamespace
         where n.nspname in ('audit','org','enrollment_private') and c.relkind='r' order by 1''').fetchall()}
-    rows = db.execute('''select participant_id, provider, dataset, count(*) from audit.measurements
+    rows = db.execute(f'''select participant_id, provider, dataset, count(*) from {backend.measurement_source()} m
         group by 1,2,3 order by 1,2,3''').fetchall()
     runs = db.execute('''select participant_id, provider, status, count(*) from audit.collection_runs
         where started_at >= now() - make_interval(days => %s) group by 1,2,3 order by 1,2,3''', (days,)).fetchall()

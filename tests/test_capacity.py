@@ -11,6 +11,7 @@ class Backend:
     def __init__(self, usage): self._usage, self.reserved = usage, 0
     def reserve(self, amount): self.reserved += amount
     def usage(self): return self._usage
+    def measurement_source(self): return 'audit.measurements'
 
     class db:
         @staticmethod
