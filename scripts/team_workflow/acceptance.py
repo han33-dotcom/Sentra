@@ -1,4 +1,4 @@
-"""Acceptance evidence shared by the local worker and Project reconciliation."""
+"""Acceptance evidence shared by implementation agents and Project reconciliation."""
 import hashlib
 import json
 import re

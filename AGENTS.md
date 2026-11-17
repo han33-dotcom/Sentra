@@ -4,6 +4,12 @@ Policy version: 4. This is the canonical policy for coding and acceptance agents
 Read [CONTRIBUTING.md](CONTRIBUTING.md) and the linked documents relevant to your task.
 Follow applicable nested instructions if they are added later.
 
+For code delivery, this policy and [agent-owned delivery](docs/local-delivery.md)
+supersede historical stage plans, old review assignments and publication-approval
+checklists. Those records remain evidence, not current merge gates. Operational,
+consent, expert and destructive-data approvals still apply. Explicit current user
+instructions and higher-priority environment rules retain their precedence.
+
 ## Project and architecture
 
 Sentra is the final-year wearable-data pipeline, private viewer, wellness processing
@@ -22,6 +28,11 @@ when a task depends on them; summarize code-affecting decisions in reviewed docs
 
 1. Read the current task and its acceptance criteria; identify the task owner.
 2. Check the repository, branch, working-tree changes and current instructions.
+   Fetch `origin/develop` when access is available and compare its `AGENTS.md`,
+   `CONTRIBUTING.md` and `docs/local-delivery.md` with this checkout. Read newer
+   policy before continuing; integrate updates deliberately, preserving local work.
+   Do not reset dirty branches or silently remove personal/managed instructions.
+   If refresh fails, report the limitation instead of claiming current policy.
 3. Work on a focused branch based on `develop`; implementation PRs target `develop`.
    Releases go from `develop` to `main`. Do not push directly to either integration branch.
 4. Preserve other people's changes and keep one writer per work branch.

@@ -1,5 +1,12 @@
 # Stage 2 design and implementation ledger
 
+> Historical stage delivery record: commit/publication approval, independent
+> review and stage sequencing below describe the original rollout. Current code
+> delivery follows [AGENTS.md](../AGENTS.md) and [agent-owned delivery](local-delivery.md):
+> implementation-agent self-review, acceptance, CI, develop, then main. Old code
+> publication gates do not apply. Operational, consent, expert and destructive-data
+> approvals remain in force; historical activation never authorizes collection now.
+
 Authorized by the user's Stage 2 brief and explicit request on 8 October 2026.
 Work stays in the existing `ETL-pipeline` checkout, preserving Stage 1 changes.
 The user's instruction to finish the current stage autonomously takes precedence

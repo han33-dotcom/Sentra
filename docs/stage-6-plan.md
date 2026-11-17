@@ -1,5 +1,12 @@
 # Stage 6 — validation and handover plan
 
+> Historical stage delivery record: commit/publication approval, independent
+> review and stage sequencing below describe the original rollout. Current code
+> delivery follows [AGENTS.md](../AGENTS.md) and [agent-owned delivery](local-delivery.md):
+> implementation-agent self-review, acceptance, CI, develop, then main. Old code
+> publication gates do not apply. Operational, consent, expert and destructive-data
+> approvals remain in force; historical activation never authorizes collection now.
+
 Approved 9 October 2026. Execute inline using executing-plans and
 verification-before-completion. Keep `ETL-pipeline`; Stage 5 acceptance was
 committed/pushed as `ea583b5`. No observation approval was given.
