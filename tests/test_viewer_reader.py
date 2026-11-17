@@ -71,6 +71,7 @@ class ViewerReaderTests(unittest.TestCase):
             self.assertEqual([p['id'] for p in reader.group_board()['people']],['p91','p92'])
         rows=[{'participant_id':p} for p in ('p91','p92','p93')]
         reader._rows=lambda *a,**k:rows
+        reader._series_available=False
         self.assertEqual([r['participant_id'] for r in reader.catalog()],['p91'])
         self.assertEqual([r['participant_id'] for r in reader.group_catalog()],['p91','p92'])
 
