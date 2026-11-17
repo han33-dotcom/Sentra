@@ -1,7 +1,7 @@
 """Synthetic organization access decisions; no participant data or credentials."""
 import unittest
 
-from sentra.access import K_ANONYMITY, publishable, resolve
+from sentra.access import K_ANONYMITY, demonstration_ids, publishable, resolve
 from sentra.errors import SentraError
 
 TEAM = ['Team@Example.test']
@@ -110,6 +110,20 @@ class AccessDecisionTests(unittest.TestCase):
         members = a.group_contributors([f'p96{i}' for i in range(7)])
         self.assertEqual(len(members), 4)
         self.assertFalse(publishable(len(members)))
+
+    def test_demonstration_needs_explicit_agreement_in_the_consent_in_force(self):
+        rows = [dict(consent('p901', 'org-a', 'individual'), demonstration=True),
+                dict(consent('p902', 'org-a'), demonstration=True),            # group-only can agree too
+                dict(consent('p903', 'org-a', 'individual', withdrawn=True), demonstration=True),
+                dict(consent('p904', 'org-a', 'individual', open_=False), demonstration=True),
+                dict(consent('p905', 'org-b', 'individual'), demonstration=True),
+                dict(consent('p906', 'org-a', 'individual'), demonstration='true'),  # not exactly True
+                consent('p907', 'org-a', 'individual')]                         # never asked: no
+        a = resolve('officer@a.test', team_emails=TEAM, org_users=USERS, consents=rows)
+        self.assertEqual(a.demonstrators, {'p901', 'p902'})
+        self.assertEqual(demonstration_ids(rows), {'p901', 'p902', 'p905'})
+        self.assertEqual(demonstration_ids(rows, 'org-b'), {'p905'})
+        self.assertEqual(access('team@example.test').demonstrators, frozenset())
 
     def test_group_statistics_need_k_contributors(self):
         self.assertEqual(K_ANONYMITY, 5)
