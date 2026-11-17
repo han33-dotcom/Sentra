@@ -11,6 +11,7 @@ from .errors import SentraError
 from .shared import CapacityStop, object_key
 from .shared_backend import BUCKET, PrivateStorage, connect_db
 from .viewer_data import MAX_BYTES, MAX_ROWS, Selection
+from .tiers import COMPACT_ONLY
 
 BOARD_KEY = 'board/board.json'
 TIER_BUCKET = 'sentra-tiers'
@@ -66,6 +67,7 @@ class ViewerReader:
     can_view = staticmethod(lambda participant: True)
     # Who may count towards group statistics (individual or group_only consent); aggregate use only.
     can_count = staticmethod(lambda participant: True)
+    _series_available = None
 
     def __init__(self, credentials, limits, principal, *, db=None, budget_db=None, can_view=None, can_count=None):
         self.credentials,self.limits,self.principal = credentials,limits,principal
@@ -101,6 +103,22 @@ class ViewerReader:
         if not self.can_view(selection.participant):
             raise SentraError('This participant is outside your permitted access.')
 
+    def _measurement_source(self):
+        """Current readings, identical to tiers; old schemas retain per-field reads.
+
+        Per-field corrections win. A compact-only reading must still belong to the
+        record's current response, so omitted/replaced readings cannot reappear.
+        This is a SQL relation, not a payload read; callers still bound/reserve results.
+        """
+        self.principal()
+        if self._series_available is None:
+            self.reserve(16_384)
+            self._series_available = self.db.execute(
+                "select to_regclass('audit.series_rows') is not null").fetchone()[0] is True
+        if not self._series_available:
+            return 'audit.measurements'
+        return f'(select * from audit.measurements union all select c.* from audit.series_rows c where {COMPACT_ONLY})'
+
     def _rows(self, query, values=(), *, allowance=262_144):
         self.principal()
         self.reserve(allowance)
@@ -112,7 +130,7 @@ class ViewerReader:
         """Organization users and current consent for access decisions; empty until migration 007 exists."""
         try:
             users=self._rows('select org_id,email,role,active from org.org_users',allowance=65_536)
-            consents=self._rows('''select participant_id,org_id,sharing,withdrawn,membership_open
+            consents=self._rows('''select participant_id,org_id,sharing,withdrawn,membership_open,demonstration
               from org.current_consent''',allowance=65_536)
             return users,consents
         except (psycopg.errors.UndefinedTable,psycopg.errors.InvalidSchemaName):
@@ -196,14 +214,14 @@ class ViewerReader:
           s.last_success_at,count(m.metric) measurement_rows,
           max(m.measured_at) latest_point_time,max(m.interval_end) latest_interval_end,
           max(m.interval_start) latest_interval_start,max(({CIVIL})) latest_civil_day
-          from audit.connection_state s left join audit.measurements m
+          from audit.connection_state s left join {self._measurement_source()} m
           using(participant_id,provider,dataset) group by 1,2,3,4,5 order by 1,2,3''')
 
     @safe_database
     def metrics(self, selection):
         self._permitted(selection)
         # Discover metric names for the dataset; at most 2,000 scalar definitions.
-        rows=self._rows('''select distinct metric,unit,value_kind from audit.measurements
+        rows=self._rows(f'''select distinct metric,unit,value_kind from {self._measurement_source()} m
            where participant_id=%s and provider=%s and dataset=%s order by 1,2,3 limit 2001''',
            (selection.participant,selection.provider,selection.dataset),allowance=2_000_000)
         if len(rows)>2000:
@@ -229,12 +247,13 @@ class ViewerReader:
         with self.db.transaction():
             if new_snapshot:
                 self.db.execute('set transaction isolation level repeatable read')
+            source = self._measurement_source()
             count,size=self.db.execute(f'''select count(*),coalesce(sum(octet_length(to_jsonb(m)::text)+512),0)
-                from audit.measurements m where {where}''',values).fetchone()
+                from {source} m where {where}''',values).fetchone()
             size=int(size)
             check_result_size(count,size)
             return self._rows(f'''select m.*, coalesce((r.record->>'provisional')::boolean,true) provisional,
-                r.record->>'score_state' score_state from audit.measurements m join audit.records r
+                r.record->>'score_state' score_state from {source} m join audit.records r
                 using(participant_id,provider,dataset,record_key) where {where}
                 order by coalesce(m.measured_at,m.interval_start),m.civil_date::text,m.record_key,m.metric''',
                 values,allowance=size*2+65_536)
@@ -244,7 +263,7 @@ class ViewerReader:
         """Full existing context once per record, bounded before payload transfer."""
         self._permitted(selection)
         where,values=selection_where(selection)
-        predicate=f'''exists(select 1 from audit.measurements m where
+        predicate=f'''exists(select 1 from {self._measurement_source()} m where
           (m.participant_id,m.provider,m.dataset,m.record_key)=
           (r.participant_id,r.provider,r.dataset,r.record_key) and {where})'''
         return self._records(predicate,values)

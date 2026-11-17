@@ -97,6 +97,66 @@ class CompactionDatabaseTests(unittest.TestCase):
         backend.db, backend.guard, backend.reserve = self.db, lambda **_: None, lambda amount: None
         return backend
 
+    def viewer(self):
+        from sentra.viewer_reader import ViewerReader
+        from sentra.shared import Limits
+        reader = ViewerReader({}, Limits(), lambda: 'operator@test.invalid', db=self.db)
+        reader.reserve = lambda amount: None  # synthetic local database has no egress service
+        return reader
+
+    def test_viewer_preserves_catalog_metrics_context_and_readings_after_compaction(self):
+        from datetime import date
+        from sentra.viewer_data import Selection
+        from unittest.mock import patch
+        self.rows(RESPONSE, ['12', None, '7.50'], resolution='60.0')
+        self.db.execute('''insert into audit.connection_state values
+            ('p01','google_health','minute_steps','authorized',null,'[]','{}',now())
+            on conflict do nothing''')
+        reader = self.viewer()
+        selection = Selection('p01', 'google_health', 'minute_steps', date(2026,10,1), date(2026,10,2))
+        def snapshot():
+            return (reader.catalog(), reader.metrics(selection), reader.measurements(selection), reader.records(selection))
+        before = snapshot()
+        compaction.compact(self.db, self.guard, 'p01', 'google_health', 'minute_steps')
+        self.assertEqual(snapshot(), before)  # no duplicate when both representations exist
+        self.db.execute('delete from audit.measurements')  # disposable database only
+        self.assertEqual(snapshot(), before)
+        self.assertEqual(len(before[2]), 3)
+        # Both size and row limits apply to expanded compact rows before transfer.
+        with patch('sentra.viewer_reader.MAX_ROWS', 2):
+            with self.assertRaisesRegex(SentraError, 'Narrow'):
+                reader.measurements(selection)
+        with patch('sentra.viewer_reader.MAX_BYTES', 1):
+            with self.assertRaisesRegex(SentraError, 'Narrow'):
+                reader.records(selection)
+
+    def test_viewer_ignores_obsolete_compact_readings_and_prefers_corrections(self):
+        from datetime import date
+        from sentra.viewer_data import Selection
+        self.rows(RESPONSE, ['12', '13'])
+        compaction.compact(self.db, self.guard, 'p01', 'google_health', 'minute_steps')
+        selection = Selection('p01', 'google_health', 'minute_steps', date(2026,10,1), date(2026,10,2))
+        reader = self.viewer()
+        self.db.execute('update audit.measurements set value=14 where record_key=%s', (f'{RESPONSE[:4]}-0001',))
+        self.assertEqual([str(r['value']) for r in reader.measurements(selection)], ['12', '14'])
+        self.collector().put_records([{'participant_id':'p01', 'provider':'google_health', 'dataset':'minute_steps',
+            'record_key':f'{RESPONSE[:4]}-0000', 'source_response_id':'b'*64,
+            'collected_at':'2026-10-02T00:00:00Z', 'measurements':[], 'session_type':None}])
+        self.assertEqual([str(r['value']) for r in reader.measurements(selection)], ['14'])
+        self.assertEqual(len(reader.records(selection)), 1)
+
+    def test_viewer_uses_legacy_schema_without_compact_view(self):
+        from datetime import date
+        from sentra.viewer_data import Selection
+        self.rows(RESPONSE, ['12'])
+        # Roll back the schema change so other cases retain the installed migration.
+        with self.db.transaction(force_rollback=True):
+            self.db.execute('drop view audit.series_rows')
+            reader = self.viewer()
+            selection = Selection('p01', 'google_health', 'minute_steps', date(2026,10,1), date(2026,10,2))
+            self.assertEqual(len(reader.measurements(selection)), 1)
+            self.assertEqual(len(reader.metrics(selection)), 1)
+
     def test_a_reading_omitted_by_a_newer_response_is_not_republished(self):
         self.rows(RESPONSE, ['12', '13'])
         compaction.compact(self.db, self.guard, 'p01', 'google_health', 'minute_steps')

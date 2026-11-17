@@ -1,4 +1,6 @@
-"""Chunked authenticated encrypted health-only backups; no OAuth credentials."""
+"""Chunked, authenticated, encrypted backups of the audit tables and, when installed, the compact
+series (sql/009); with an admin connection, also organization, consent, enrollment and follow-up
+tables. Never provider credentials, keys, browser sessions, rate limits or pending sign-in links."""
 from datetime import datetime, timezone
 import gzip
 import hashlib
@@ -20,13 +22,16 @@ from .shared import CapacityStop
 from .vault import atomic_write
 
 TABLES = ('participants','raw_response_manifest','records','measurements','sessions','collection_runs','connection_state')
+# Audit tables backed up whenever their migration is installed. sql/009's compact series becomes the
+# only database copy of dense readings once verified per-field rows are removed (storage plan phase 3).
+OPTIONAL_TABLES = ('series',)
 # Consent history, organization roles and enrollment identities (sql/007, sql/008), in restore order.
 # Browser sessions and rate limits are short-lived and excluded; so are credentials, as before.
 PRIVATE_TABLES = ('org.organizations','org.org_users','org.memberships','org.consents',
                   'org.follow_ups','org.follow_up_events',
                   'enrollment_private.invites','enrollment_private.identities')
 IDENTITY_TABLES = {'org.memberships':'membership_id','org.consents':'consent_id',
-                   'org.follow_ups':'follow_up_id','org.follow_up_events':'event_id'}
+                   'org.follow_ups':'follow_up_id','org.follow_up_events':'event_id','series':'series_id'}
 # Restored storage relative to the source's measured table size (heap, TOAST and indexes). Freshly
 # inserted rows carry none of the source's dead-row bloat, so a small margin suffices; the running
 # guard during insertion still stops the restore before any limit is crossed.
@@ -41,6 +46,22 @@ def member(table):
 def relation(table, schema='audit'):
     owner, _, name = table.rpartition('.')
     return sql.Identifier(owner or schema, name)
+
+
+def qualified(table):
+    """Schema-qualified name: audit tables are listed by bare name."""
+    return table if '.' in table else 'audit.' + table
+
+
+def _filters(table, participant, provider, dataset):
+    filters, params = [], []
+    if participant:
+        filters.append(sql.SQL('participant_id=%s')); params.append(participant)
+    if provider and table != 'participants':
+        filters.append(sql.SQL('provider=%s')); params.append(provider)
+    if dataset and table not in ('participants','collection_runs'):
+        filters.append(sql.SQL('dataset=%s')); params.append(dataset)
+    return filters, params
 SAFE_NAME = re.compile(r'[a-z0-9_-]{1,100}')
 
 
@@ -158,6 +179,7 @@ def _export(db, backend, writer, table, filters, params, objects):
 def _make_backup(backend, root, cipher, *, participant=None, provider=None, dataset=None, max_bytes=200_000_000, admin_db=None):
     writer = BackupWriter(root,cipher,max_bytes=max_bytes,private_root=Path(root).parent)
     totals, objects, fingerprints, sizes, private, private_fingerprints, absent = {}, {}, {}, {}, {}, {}, []
+    optional, optional_fingerprints, optional_absent = {}, {}, []
     selection = {'participant':participant,'provider':provider,'dataset':dataset} if participant or provider or dataset else None
     backend.lock()
     try:
@@ -166,15 +188,16 @@ def _make_backup(backend, root, cipher, *, participant=None, provider=None, data
         with backend.db.transaction():
             backend.db.execute('set transaction isolation level repeatable read read only')
             for table in TABLES:
-                filters, params = [], []
-                if participant:
-                    filters.append(sql.SQL('participant_id=%s')); params.append(participant)
-                if provider and table != 'participants':
-                    filters.append(sql.SQL('provider=%s')); params.append(provider)
-                if dataset and table not in ('participants','collection_runs'):
-                    filters.append(sql.SQL('dataset=%s')); params.append(dataset)
+                filters, params = _filters(table, participant, provider, dataset)
                 totals[table], fingerprints[table] = _export(backend.db, backend, writer, table, filters, params, objects)
                 sizes[table] = backend.db.execute('select pg_total_relation_size(%s::regclass)', ('audit.'+table,)).fetchone()[0]
+            for table in OPTIONAL_TABLES:
+                if backend.db.execute('select to_regclass(%s)', (qualified(table),)).fetchone()[0] is None:
+                    optional_absent.append(qualified(table))
+                    continue
+                filters, params = _filters(table, participant, provider, dataset)
+                optional[table], optional_fingerprints[table] = _export(backend.db, backend, writer, table, filters, params, objects)
+                sizes[table] = backend.db.execute('select pg_total_relation_size(%s::regclass)', (qualified(table),)).fetchone()[0]
             if admin_db is not None and selection is None:
                 # The same snapshot, read by the admin role: the collector cannot read these schemas.
                 snapshot = backend.db.execute('select pg_export_snapshot()').fetchone()[0]
@@ -200,10 +223,12 @@ def _make_backup(backend, root, cipher, *, participant=None, provider=None, data
             writer.write('raw-' + hashlib.sha256(location.encode()).hexdigest(),content)
         return writer.finish({'tables':totals,'table_fingerprints':fingerprints,'objects':objects,'project_url':backend.credentials['url'],
                               'private_tables':private,'private_fingerprints':private_fingerprints,'private_absent':absent,
+                              'optional_tables':optional,'optional_fingerprints':optional_fingerprints,
+                              'optional_absent':optional_absent,
                               'table_bytes':{k:int(v) for k,v in sizes.items()},
                               'selection':{'participant':participant,'provider':provider,'dataset':dataset},
                               'excludes':'provider credentials, storage accounts, database passwords, OAuth keys, '
-                                         'enrollment browser sessions and rate limits'
+                                         'enrollment browser sessions and rate limits, pending Fitbit sign-in links'
                                          + ('' if private or absent else '; organization and enrollment tables '
                                                                          '(no admin connection, or a partial selection)')})
     finally:
@@ -211,13 +236,25 @@ def _make_backup(backend, root, cipher, *, participant=None, provider=None, data
 
 
 def inventory(info):
-    """[(table, rows, fingerprint)] for every table the manifest declares, audit tables first."""
+    """[(table, rows, fingerprint)] for every table the manifest declares: audit tables, then the
+    installed optional audit tables, then organization and enrollment tables (restore order)."""
     if set(info.get('tables',{})) != set(TABLES) or set(info.get('table_fingerprints',{})) != set(TABLES):
         raise SentraError('Backup table inventory incomplete.')
+    optional, optional_fingerprints = info.get('optional_tables',{}), info.get('optional_fingerprints',{})
+    if set(optional) != set(optional_fingerprints) or not set(optional) <= set(OPTIONAL_TABLES):
+        raise SentraError('Backup compact-series inventory incomplete.')
+    if 'optional_tables' in info:
+        absent = info.get('optional_absent', [])
+        included = {qualified(t) for t in optional}
+        if (not isinstance(absent, list) or any(not isinstance(t, str) for t in absent)
+                or len(absent) != len(set(absent)) or included & set(absent)
+                or included | set(absent) != {qualified(t) for t in OPTIONAL_TABLES}):
+            raise SentraError('Backup compact-series inventory incomplete.')
     private, fingerprints = info.get('private_tables',{}), info.get('private_fingerprints',{})
     if set(private) != set(fingerprints) or not set(private) <= set(PRIVATE_TABLES):
         raise SentraError('Backup organization/enrollment inventory incomplete.')
     return ([(t, info['tables'][t], info['table_fingerprints'][t]) for t in TABLES]
+            + [(t, optional[t], optional_fingerprints[t]) for t in OPTIONAL_TABLES if t in optional]
             + [(t, private[t], fingerprints[t]) for t in PRIVATE_TABLES if t in private])
 
 
@@ -262,9 +299,10 @@ def verify_backup(reader):
     return {'status':'verified','created_at':info.get('created_at'),'selection':info.get('selection'),
             'project_url':info.get('project_url'),'tables':counts,'originals':len(objects),'members':len(info['files']),
             # Tables not installed in the source hold nothing to cover; tables skipped by an audit-only or
-            # partial backup do.
-            'not_covered':[] if info.get('private_tables') or info.get('private_absent') else list(PRIVATE_TABLES),
-            'not_installed':info.get('private_absent',[]),
+            # partial backup do, and so does the compact series in a backup made before it was included.
+            'not_covered':([] if info.get('private_tables') or info.get('private_absent') else list(PRIVATE_TABLES))
+                          + ([] if 'optional_tables' in info else [qualified(t) for t in OPTIONAL_TABLES]),
+            'not_installed':info.get('private_absent',[]) + info.get('optional_absent',[]),
             'restore_estimate_bytes':restore_estimate(info)}
 
 
@@ -338,6 +376,9 @@ def restore_backup(reader, backend, admin_db, *, empty_audit=False):
                 if '.' in table and admin_db.execute('select to_regclass(%s)', (table,)).fetchone()[0] is None:
                     raise SentraError('Apply the organization, enrollment and follow-up migrations (sql/007, 008, 010) '
                                       'to the target before restoring those tables.')
+                if table in OPTIONAL_TABLES and admin_db.execute('select to_regclass(%s)', (qualified(table),)).fetchone()[0] is None:
+                    raise SentraError('Apply the compact series migration (sql/009) to the target before restoring '
+                                      'audit.series.')
             if empty_audit:
                 if any(admin_db.execute(sql.SQL('select exists(select 1 from {})').format(relation(t))).fetchone()[0] for t,_,_ in tables):
                     raise SentraError('All restored tables must be empty for operational restoration; existing data preserved.')
@@ -364,7 +405,7 @@ def restore_backup(reader, backend, admin_db, *, empty_audit=False):
                 if empty_audit and table in IDENTITY_TABLES:
                     column = IDENTITY_TABLES[table]
                     sequence, following = admin_db.execute(sql.SQL('select pg_get_serial_sequence({},{}),coalesce(max({}),0)+1 from {}').format(
-                        sql.Literal(table),sql.Literal(column),sql.Identifier(column),relation(table))).fetchone()
+                        sql.Literal(qualified(table)),sql.Literal(column),sql.Identifier(column),relation(table))).fetchone()
                     restart_sequence(admin_db, sequence, following)
                 if empty_audit and table == 'participants':
                     advance_participant_numbers(admin_db)

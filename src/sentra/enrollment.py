@@ -93,12 +93,16 @@ class EnrollmentSettings:
             raise EnrollmentError('Enrollment is not configured. Contact the Sentra team.', 503) from None
 
 
-def scopes(provider, *, fitbit_link=False):
+def scopes(provider, *, fitbit_link=False, identity_only=False):
     # Identity is required to prevent duplicate signup and account substitution on reconnect.
     if fitbit_link:
         if provider != 'google_health':
             raise EnrollmentError('Use the original Fitbit account for this link.', 403)
         return ['openid', GOOGLE_EMAIL_SCOPE]
+    if identity_only:
+        if provider != 'google_health':
+            raise EnrollmentError('Identity-only sign-in is available for Google accounts only.')
+        return ['openid']
     return [*PROVIDERS[provider].scopes, 'openid' if provider == 'google_health' else 'read:profile']
 
 
@@ -106,14 +110,15 @@ class ProviderLogin:
     def __init__(self, settings):
         self.settings = settings
 
-    def begin(self, provider, *, fitbit_email_hash=None):
+    def begin(self, provider, *, fitbit_email_hash=None, identity_only=False):
         c = self.settings.clients[provider]
         state, verifier = secrets.token_urlsafe(32), secrets.token_urlsafe(64)
-        session = PrivateOAuthSession(c['client_id'], scope=scopes(provider, fitbit_link=fitbit_email_hash is not None),
+        session = PrivateOAuthSession(c['client_id'], scope=scopes(provider, fitbit_link=fitbit_email_hash is not None,
+                                                                 identity_only=identity_only),
             redirect_uri=self.settings.callback(provider), state=state)
         params = {}
         if provider == 'google_health':
-            if fitbit_email_hash is not None:
+            if fitbit_email_hash is not None or identity_only:
                 params['prompt'] = 'select_account'
             else:
                 params.update(access_type='offline', prompt='consent')
@@ -124,13 +129,16 @@ class ProviderLogin:
         pending = {'state': state, 'verifier': verifier, 'provider': provider, 'started': time.time()}
         if fitbit_email_hash is not None:
             pending['fitbit_email_hash'] = fitbit_email_hash
+        if identity_only:
+            pending['identity_only'] = True
         return url, pending
 
     def finish(self, pending, code):
         provider = pending['provider']
         c = self.settings.clients[provider]
         expected_email = pending.get('fitbit_email_hash')
-        required = scopes(provider, fitbit_link=expected_email is not None)
+        identity_only = pending.get('identity_only') is True
+        required = scopes(provider, fitbit_link=expected_email is not None, identity_only=identity_only)
         session = PrivateOAuthSession(c['client_id'], scope=required,
             redirect_uri=self.settings.callback(provider))
         kwargs = {'code_verifier': pending['verifier']} if provider == 'google_health' else {}
@@ -146,7 +154,7 @@ class ProviderLogin:
             if not isinstance(access_token, str) or not access_token:
                 raise ValueError
             saved = None
-            if expected_email is None:
+            if expected_email is None and not identity_only:
                 saved = token_state(token)
                 if provider == 'google_health' and c['publishing_status'] == 'testing':
                     saved['refresh_expires_at'] = time.time() + 7 * 86400

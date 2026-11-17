@@ -39,11 +39,13 @@ DSN = os.environ.get('SENTRA_TEST_ENROLLMENT_DSN')
 class SyntheticLogin(ProviderLogin):
     exchanges = 0
 
-    def begin(self, provider, *, fitbit_email_hash=None):
+    def begin(self, provider, *, fitbit_email_hash=None, identity_only=False):
         state = secrets.token_urlsafe(32)
         pending = {'state': state, 'provider': provider, 'started': time.time()}
         if fitbit_email_hash:
             pending['fitbit_email_hash'] = fitbit_email_hash
+        if identity_only:
+            pending['identity_only'] = True
         return 'https://synthetic.invalid/authorize?state=' + state, pending
 
     def finish(self, pending, code):
@@ -184,6 +186,33 @@ class EnrollmentPostgresTests(unittest.TestCase):
         self.assertEqual(returning['participant_id'], original['participant_id'])
         with self.admin_db() as db:
             self.assertEqual(db.execute('select count(*) from org.consents where participant_id=%s', (original['participant_id'],)).fetchone()[0], before)
+
+    def test_google_identity_signin_preserves_credentials_until_explicit_reconnect(self):
+        original = self.complete(invite=self.invite, provider='google_health')
+        pid = original['participant_id']
+        with self.admin_db() as db:
+            before = TokenRepository(db).read(pid, 'google_health')
+            consent_count = db.execute('select count(*) from org.consents where participant_id=%s', (pid,)).fetchone()[0]
+        browser = self.browser()
+        returning = self.complete(browser, provider='google_health')
+        self.assertEqual(returning['participant_id'], pid)
+        with self.admin_db() as db:
+            self.assertEqual(TokenRepository(db).read(pid, 'google_health'), before)
+            self.assertEqual(db.execute('select count(*) from org.consents where participant_id=%s', (pid,)).fetchone()[0], consent_count)
+        # The signed-in account's Connect action remains a real reconnect.
+        pending = self.pending(browser, returning, 'google_health')
+        response = browser.get('/oauth/google_health/callback', params={'state':pending, 'code':self.code})
+        self.assertEqual(response.headers['location'], '/account')
+        with self.admin_db() as db:
+            self.assertGreater(TokenRepository(db).read(pid, 'google_health')['version'], before['version'])
+
+    def test_unknown_google_identity_cannot_enroll_without_invitation(self):
+        state = self.start()
+        pending = self.pending(self.client, state, 'google_health')
+        response = self.client.get('/oauth/google_health/callback', params={'state':pending, 'code':self.code})
+        self.assertEqual(response.headers['location'], '/join?connection=failed')
+        with self.admin_db() as db:
+            self.assertFalse(db.execute('select 1 from org.memberships where org_id=%s', (self.org,)).fetchone())
 
     def test_fitbit_link_and_returning_sign_in_keep_the_existing_participant(self):
         pid = self.legacy_fitbit()
