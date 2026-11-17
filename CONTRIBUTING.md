@@ -35,10 +35,11 @@ locally per the stage guides and are never committed.
 | `fix/<short-name>` | Bug fix | You |
 | `chore/`, `ci/`, `docs/` | Tooling, pipelines, documentation | You |
 
-`main` and `develop` require PRs, green `guard`, Linux/Windows `test`, `pr-policy`
-and `local-acceptance` checks. Code review and human approval are optional.
-The [local delivery worker](docs/local-delivery.md) runs on a team member's computer
-using their existing ChatGPT-authenticated Codex subscription and merges eligible PRs.
+`main` and `develop` require PRs and green `guard`, Linux/Windows `test`, and
+`pr-policy` checks. The implementation agent self-reviews, verifies acceptance,
+and performs the merges using the same coding session. No teammate approval,
+separate review agent, background worker or `local-acceptance` status is required.
+See [agent-owned delivery](docs/local-delivery.md).
 
 Work branches are squash-merged. GitHub's **Automatically delete head branches**
 setting is enabled: work branches are deleted after their PR merges, including PRs
@@ -57,11 +58,14 @@ and back-merges follow the merge-commit procedure below.
 2. Commit in small steps with conventional messages: `feat: add sedentary-period dataset`,
    `fix: ...`, `ci: ...`, `docs: ...`, `chore: ...`.
 3. `git push -u origin feat/<short-name>` and open a PR **into `develop`**. CI must be green.
-4. The local worker fixes failures, verifies PR scope and squash-merges when checks pass.
-5. The worker verifies integrated task acceptance, records evidence and closes fully
-   accepted tasks. Human-only observations stay open with verification instructions.
-6. The worker opens and merges a `develop` → `main` release when integrated changes
-   are available, then synchronizes release ancestry. Use `--no-release` to pause releases.
+4. The same agent self-reviews the current diff, fixes findings, verifies PR scope,
+   records evidence and squash-merges after current required CI passes.
+5. After all linked implementation PRs merge, the agent verifies every task criterion,
+   publishes structured evidence and closes fully accepted tasks. Inaccessible
+   observations stay open with exact human steps, expected results and evidence.
+6. The agent opens and merges a `develop` to `main` release, then synchronizes main
+   ancestry into develop through a merge-commit PR. Continue until delivery finishes;
+   if the coding session stops, resume it to finish. No background agent takes over.
 
 Merging or deploying code never authorizes restarting collection. The daily
 collector (`.github/workflows/collect.yml`) stays paused until the team agrees and
@@ -72,9 +76,9 @@ both controls described in the [operating guide](docs/operating-guide.md) are se
 Release from `develop` into `main`, using a **merge commit** rather than squash or
 rebase. This preserves the integration ancestry. The `release` exemption accepts
 only this exact same-repository branch pair and a label applied by a configured
-team account, including the author or its local worker.
+team account, including the author or their coding agent.
 
-After a release, the worker brings `main` back into `develop` through a
+After a release, the same agent brings `main` back into `develop` through a
 `codex/release-sync` PR using a **merge commit**. Integration branches are updated
 through PRs with passing checks.
 
@@ -116,7 +120,8 @@ and a simple dashboard date-filter example.
 Link the GitHub issue and acceptance criteria from the PR description. Explain what
 changed, why, validation and limitations. Keep actionable review findings on GitHub;
 the author's assistant reads accepted findings directly and updates the branch.
-Reviews are optional. The worker's acceptance evidence and required CI gate merging.
+Self-review and acceptance belong to the implementation agent. Additional review
+is optional. Required CI still gates merging; no separate acceptance-status job runs.
 
 Record lasting decisions in project documents or the task. Implemented means the
 required implementation PRs merged into `develop`; Done requires verified acceptance

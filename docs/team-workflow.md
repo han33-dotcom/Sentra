@@ -2,11 +2,11 @@
 
 ## Rollout status
 
-Policy version 3 is authorized in [SEN-86](https://github.com/han33-dotcom/Sentra/issues/86).
-Local subscription-authenticated Codex workers perform fixes, acceptance and
-merging. Code reviews and human approvals are optional for every change.
-See [local delivery](local-delivery.md) for installation, ownership, recovery and
-activation evidence. Each machine's actual activation must be recorded separately.
+Policy version 4 in [SEN-90](https://github.com/han33-dotcom/Sentra/issues/90)
+replaces the background worker introduced by SEN-86. The implementation agent
+self-reviews, fixes, verifies, merges and releases its own work in the same coding
+session. Additional reviews and human approval are optional. See
+[agent-owned delivery](local-delivery.md) for ownership and evidence.
 
 Project synchronization and native Slack subscriptions remain configured.
 Collection remains paused. Workspace is `nsquared` and channel is `#fyp-sentra`.
@@ -38,18 +38,19 @@ and repository documentation.
 3. Implement scope and run the project checks. Open a PR into `develop` using
    `Project: Sentra`, one `Task URL:` and any `Additional Task URL:` declarations.
    Titles list every SEN ID in declaration order. Include what/why, tests and limits.
-4. Use Related to references. The acceptance worker owns issue closure.
-5. Keep a PR draft or apply `automation:hold` while editing. Making it ready hands
-   the branch to the local worker, which fixes failures and verifies scoped acceptance.
-6. Passing required CI and current acceptance evidence allow automatic squash merge.
-   Reviews and review requests are optional and never gate the merge.
-7. All implementation PRs merged means Implemented. The worker then verifies every
-   task criterion. Complete evidence means Done and permits automatic closure.
-8. Only inaccessible observations remain for humans. Record reason, exact steps,
-   expected result and required evidence. The issue stays open for these items.
-   Code can merge/release while those observations remain tracked.
-9. Automatic release and ancestry synchronization PRs use merge commits. See
-   [local delivery](local-delivery.md) for release timing and pause controls.
+4. Use Related to references. The implementation agent owns acceptance and issue closure.
+5. The author/agent keeps branch ownership after opening the PR. Self-review the
+   latest diff, fix findings and verify behavior. Record commit-specific results.
+6. Wait for current required CI, fix failures and squash-merge into develop.
+   Additional reviews and approval requests are optional and never gate the merge.
+7. All implementation PRs merged means Implemented. The same agent verifies every
+   task criterion and publishes structured evidence. Complete evidence permits
+   issue closure and the Project reconciler's Done update.
+8. Only inaccessible observations remain for humans, with reason, exact steps,
+   expected result and evidence to record. Those tasks stay open; verified code
+   can merge and release. Missing dependencies and failing checks remain agent work.
+9. Finish the develop-to-main release and ancestry synchronization with merge
+   commits. A stopped coding session must be resumed; there is no polling worker.
 
 ## Consistent task identity and multi-task PRs
 
@@ -87,7 +88,7 @@ its status.
 The trusted default-branch job repairs generated issue prefixes and open team PR
 title prefixes on issue/PR events and daily reconciliation. It preserves the human
 description, reads current metadata before edits, and writes only changed titles
-and Project Status. Manual Done and Blocked states are preserved. The local acceptance worker owns
+and Project Status. Manual Done and Blocked states are preserved. The implementation agent owns
 evidence-based completion and closure. An API edit can still race after the final read; the next
 reconciliation repairs prefixes, while humans restore any overwritten description.
 Title edits made by the job's `GITHUB_TOKEN` do not trigger another Actions run.
