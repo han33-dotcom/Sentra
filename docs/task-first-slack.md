@@ -86,8 +86,9 @@ before creating delivery claims. It cannot send to a channel supplied by PR text
 
 Do all preparation while `TEAM_SLACK_MODE` is absent or `native`:
 
-1. Independently review and merge the implementation into `develop`, then release
-   to `main` through the normal reviewed process. Do not bypass branch protection.
+1. The implementation agent self-reviews, verifies acceptance and merges into
+   `develop`, then releases to `main` using [agent-owned delivery](local-delivery.md).
+   Do not bypass required CI or branch protection.
 2. Install the approved app, add it only to `#fyp-sentra`, and securely configure
    `TEAM_SLACK_BOT_TOKEN`. Keep custom delivery off.
 3. Run `Team project sync` manually with `dry_run=true`. The notification preview

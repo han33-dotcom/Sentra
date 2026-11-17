@@ -1,7 +1,9 @@
 # Synthetic workflow acceptance fixture
 
-This records the historical policy version 2 pilot. Policy version 3 makes reviews
-optional and automates accessible acceptance. See [local delivery](local-delivery.md).
+This records the historical policy version 2 pilot, including its old approval
+exercise. Do not execute those steps as current delivery gates. Policy version 4
+assigns self-review, accessible acceptance and delivery to the implementation agent;
+additional reviews are optional. See [agent-owned delivery](local-delivery.md).
 
 
 This documentation-only fixture exercises the Sentra team workflow in issue #21.

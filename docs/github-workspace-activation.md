@@ -1,11 +1,14 @@
 # Activate the Sentra GitHub workspace
 
-Policy version 3 in [local delivery](local-delivery.md) supersedes the human review
-and acceptance gates recorded below. Historical rollout evidence remains dated.
-Current acceptance permits automatic Done and closure when every criterion is verified.
+This is the historical workspace activation record. Policy version 4 in
+[agent-owned delivery](local-delivery.md) supersedes its human review, separate
+acceptance and background-worker gates. The implementation agent now self-reviews,
+verifies and delivers through main. See [team workflow](team-workflow.md) for current
+status. Dated observations and unfinished historical pilot steps below are not
+current delivery instructions.
 
 
-## Current state
+## Historical rollout state (October 21, 2026)
 
 The reviewed workflow is on `main`. Project synchronization was enabled on
 October 21, 2026 after successful credentialed no-write previews and the owner's

@@ -1,7 +1,9 @@
 # Collection restart readiness
 
 Task: [#44](https://github.com/han33-dotcom/Sentra/issues/44). Owner:
-`han33-dotcom`; human reviewer: `MohamadNasrallah`. This is the current restart
+`han33-dotcom`; optional additional code reviewer: `MohamadNasrallah`.
+Code delivery follows [agent-owned delivery](local-delivery.md); restart
+authorization remains a separate operator decision. This is the current restart
 ledger, separate from October's historical acceptance in the stage guides.
 
 **November 3, 2026 decision: blocked; collection remains paused.** Stored

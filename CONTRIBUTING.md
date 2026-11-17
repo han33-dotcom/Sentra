@@ -113,7 +113,11 @@ data in a test; build synthetic responses in the test or under `tests/fixtures/`
 ## Shared instructions and review handoff
 
 [AGENTS.md](AGENTS.md) is the canonical policy for coding and review agents.
-[CLAUDE.md](CLAUDE.md) imports it for Claude Code. The
+[CLAUDE.md](CLAUDE.md) imports it for Claude Code. Copilot and Cursor entry points
+also direct agents to this shared policy; see
+[discovery and refresh](docs/collaborator-setup.md#shared-policy-discovery-and-refresh).
+Historical stage plans and named reviewer assignments do not add code-publication
+gates. Operational, consent, expert and destructive-data approvals remain applicable. The
 [team workflow](docs/team-workflow.md) gives responsibilities, task status meanings
 and a simple dashboard date-filter example.
 

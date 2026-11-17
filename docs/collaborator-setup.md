@@ -118,6 +118,42 @@ Compare its reported instructions with the file. Check for overriding
 `AGENTS.override.md` files or configuration that prevents discovery, without
 silently removing personal/managed rules. Repeat the smoke check after correction.
 
+### Shared-policy discovery and refresh
+
+The workflow is repository policy, not a prompt each person must repeat per task.
+Each entry point directs agents to the same root `AGENTS.md`, `CONTRIBUTING.md`
+and `docs/local-delivery.md`; keep workflow details there instead of copying them
+into tool-specific files.
+
+| Coding tool | Versioned entry point |
+| --- | --- |
+| Codex | Root `AGENTS.md`, discovered when building session instructions |
+| Claude Code | Root `CLAUDE.md`, importing `@AGENTS.md` |
+| GitHub Copilot | `.github/copilot-instructions.md`, when repository instructions are supported and enabled |
+| Cursor | `.cursor/rules/sentra.mdc` with `alwaysApply: true`, pointing to the shared policy |
+
+After a policy update, refresh once: fetch origin; fast-forward a clean local
+develop with `git pull --ff-only`, or deliberately integrate origin/develop into
+an active feature branch without discarding work. Start a fresh agent session or
+use its documented instruction reload, then run the smoke prompt below. For new
+tasks, AGENTS.md directs the agent to check for newer shared policy itself.
+Ordinary implementation work includes self-review, acceptance, CI and delivery;
+do not stop to request separate commit/merge permission under old stage plans.
+Explicit current user instructions and environment permission rules still apply.
+
+This does not remotely refresh old clones, running sessions, disabled instruction
+loading or personal overrides. Check each teammate's actual client once; no
+per-task reminder should be needed after discovery works. An agent without GitHub
+write access or required tools reports that concrete blocker. Repository policy
+does not grant credentials or bypass client restrictions. Other coding tools need
+their supported project-instruction mechanism pointed at these same files.
+
+Loading behavior: [Codex AGENTS.md](https://developers.openai.com/codex/guides/agents-md),
+[Claude memory/imports](https://code.claude.com/docs/en/memory),
+[Copilot repository instructions](https://docs.github.com/en/copilot/how-tos/copilot-on-github/customize-copilot/add-custom-instructions/add-repository-instructions),
+and [Cursor rules](https://cursor.com/docs/rules). These pointers configure discovery;
+they do not claim that unobserved teammate installations have passed onboarding.
+
 ### Ordinary ChatGPT web/app conversation
 
 This is a **manual context-loading route**, not a claim of automatic file discovery.

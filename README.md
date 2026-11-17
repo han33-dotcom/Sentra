@@ -1,5 +1,11 @@
 # Sentra: wearable data pipeline and wellness layer
 
+Coding agents: start with [AGENTS.md](AGENTS.md) and
+[agent-owned delivery](docs/local-delivery.md). The implementation agent takes each
+task through self-review, acceptance, CI, develop and main. See
+[collaborator setup](docs/collaborator-setup.md#shared-policy-discovery-and-refresh)
+for automatic instruction loading and the one-time refresh after policy updates.
+
 Sentra is the wearable-data pipeline for our final-year project. It collects data
 for consenting participants: currently one Fitbit Air account through Google Health
 v4 and one WHOOP account through WHOOP v2. Each response is stored privately and

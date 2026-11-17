@@ -1,5 +1,12 @@
 # Stage 0: wearable extraction and audit feasibility
 
+> Historical stage delivery record: commit/publication approval, independent
+> review and stage sequencing below describe the original rollout. Current code
+> delivery follows [AGENTS.md](../AGENTS.md) and [agent-owned delivery](local-delivery.md):
+> implementation-agent self-review, acceptance, CI, develop, then main. Old code
+> publication gates do not apply. Operational, consent, expert and destructive-data
+> approvals remain in force; historical activation never authorizes collection now.
+
 Reviewed on **7 October 2026**, using official documentation and direct Cloud Console inspection. Google Health API enablement is confirmed in `sentra-510913`; participant authorization and data access await verification. Subsequent stages await explicit approval. No real-data demonstration by this agent yet.
 
 Stage 0 is complete. The user approved Stage 1 on 7 October 2026; its current
