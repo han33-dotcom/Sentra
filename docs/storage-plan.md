@@ -132,7 +132,8 @@ rows.**
   **exit 1**, so a mismatched copy is never taken as lossless evidence.
 - `sentra shared-compact --repair …` rebuilds those stale responses from their current rows,
   with the same lock, capacity guard and batch verification. A response with no rows left
-  loses its series copy. Measurement rows are never changed.
+  loses its series copy only if no current compact-only reading depends on it. Rebuilds
+  refuse to remove the only current projection. Measurement rows are never changed.
 
 **Measured (3 Nov 2026, local throwaway PostgreSQL 16, not Supabase):** 65 days of one
 participant's real minute step readings were loaded in the collector's exact row shape:
@@ -179,9 +180,27 @@ when 009 is installed, with per-field corrections taking precedence and the curr
 response required. Without 009 it uses the original per-field queries. Expanded selections
 retain the existing row/byte limits, access checks, snapshot and egress reservations.
 
+**Compact collector writes are opt-in (sql/012).** Apply after 008 and 009. The migration
+creates `collector_private.compact_control` with `enabled=false`; collector/viewer/enrollment
+roles cannot change the switch. With it disabled or absent, the existing write path remains.
+With it enabled, each bounded dense input batch writes exact parallel arrays. Retries,
+corrections and omissions replace only those record keys transactionally; sparse datasets
+keep per-field rows. All `audit.records` and original responses remain. Counts, growth,
+capacity snapshots, projection verification and enrollment recency read current logical
+measurements. The enrollment role still receives only its bounded metadata summary.
+
+Roll out while collection is paused: finish the additive copy/verification first, retain
+its evidence, deploy compatible readers/writers, and apply 012. Enable the switch only as
+part of the coordinated storage rollout; it does not authorize restarting collection or
+bulk phase-3 deletion. After compact writes begin, use `shared-verify` for record/projection
+checks. Additive `shared-compact`/`--repair` refuses while the switch is enabled, and refuses
+rebuilding any response with current compact-only readings even after disabling it. Turning
+the switch off restores per-field writes for future corrections; it does not erase arrays.
+Full backups cover compact data; operational controls remain separately configured on
+recovery, with 012 defaulting off. Synthetic PostgreSQL tests compare all 22 columns and
+exercise role permissions, retries, correction/omission, rollback and capacity rejection.
+
 Still open before phase 3:
-- The collector still writes per-field rows (phase 1 collector change, coordinated with the
-  collection owner, #47).
 - Egress purpose attribution is implemented by sql/013 and compatible clients; apply the migration to begin the breakdown.
 - Phase 3 deletion stays gated as below.
 
