@@ -302,8 +302,10 @@ Existing deployed acceptance corrections:
   older session response.
 - Reconnect-required accounts are described as needing reconnect, rather than
   described as connected while waiting for data.
-- Private aggregate counts preserve the difference between an unavailable
-  assessment result and a verified zero.
+- The account page displays published assessment eligibility independently of
+  device connection and recent data. Insufficient usable history requires a
+  current eligibility result. Private aggregate counts distinguish unavailable
+  eligibility from a verified zero.
 
 Further changes require implementation-agent self-review, acceptance, CI and release
 under [agent-owned delivery](local-delivery.md), plus verified deployment. Synthetic tests use fake accounts/records and an isolated
