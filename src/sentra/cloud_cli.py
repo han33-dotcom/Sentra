@@ -27,6 +27,7 @@ def add_commands(sub):
     p=sub.add_parser('cloud-run-local',help='Launch the same isolated environment-based collector used by Actions')
     p.add_argument('--mode',choices=('daily','initial','recovery'),default='daily')
     p.add_argument('--provider',choices=('all','google_health','whoop'),default='all')
+    p.add_argument('--participant',help='Limit collection to one pseudonymous participant')
     p.add_argument('--start',type=date.fromisoformat); p.add_argument('--end',type=date.fromisoformat)
     p.add_argument('--dataset')
     p=sub.add_parser('cloud-window',help='Approved ongoing daily collection, bounded legacy window, or pause')
@@ -95,7 +96,7 @@ def run_command(args):
     if args.command=='cloud-run-local':
         env=dict(os.environ,SENTRA_COLLECTOR_CONFIG=json.dumps(setup['config']),SENTRA_TOKEN_KEY=setup['token_key'])
         command=[sys.executable,'-m','sentra.cloud_run','--mode',args.mode,'--provider',args.provider]
-        for field in ('start','end','dataset'):
+        for field in ('participant','start','end','dataset'):
             value=getattr(args,field)
             if value is not None: command.extend(['--'+field,str(value)])
         return subprocess.run(command,env=env).returncode

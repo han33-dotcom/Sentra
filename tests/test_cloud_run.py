@@ -34,3 +34,26 @@ class CloudRunTests(unittest.TestCase):
         jobs,_=jobs_for('google_health','recovery',date(2026,10,8),{},date(2026,10,7),date(2026,10,8))
         self.assertFalse(any(j.dataset=='original_heart-rate' for j in jobs))
         with self.assertRaises(SentraError): jobs_for('whoop','recovery',date(2026,10,8),{},date(2026,10,7),date(2026,10,8),'typo')
+
+    def test_local_recovery_targets_one_participant_with_shared_provider(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        from unittest.mock import patch
+        from sentra import cli, cloud_cli, cloud_run
+
+        def run_collector(command, *, env):
+            self.assertEqual(command[1:3], ['-m', 'sentra.cloud_run'])
+            return type('Run', (), {'returncode': cloud_run.main(command[3:])})()
+
+        with patch.object(cloud_cli, 'local_cipher'), patch.object(cloud_cli, 'read_shared', return_value=({}, None, None)), \
+             patch.object(cloud_cli, 'read_setup', return_value={'config': {}, 'token_key': 'synthetic'}), \
+             patch.object(cloud_cli.subprocess, 'run', side_effect=run_collector), \
+             patch.object(cloud_run, 'runtime_config', return_value=({}, None, {'google_health': ['p01', 'p02']}, None)), \
+             patch.object(cloud_run, 'run_provider', return_value={'status': 'succeeded'}) as run_provider, \
+             redirect_stdout(StringIO()):
+            result = cli.main(['cloud-run-local', '--mode', 'recovery', '--provider', 'google_health',
+                               '--participant', 'p02', '--start', '2026-10-07', '--end', '2026-10-08',
+                               '--dataset', 'daily_steps'])
+        self.assertEqual(result, 0)
+        run_provider.assert_called_once()
+        self.assertEqual(run_provider.call_args.args[2:4], ('p02', 'google_health'))

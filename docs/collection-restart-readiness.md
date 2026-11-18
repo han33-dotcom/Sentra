@@ -150,8 +150,12 @@ the viewer retained `http://localhost:8501/oauth2callback` and its hosted
 `/oauth2callback`. No client, secret, audience, test-user list or publishing state
 was changed. Publishing was unavailable until Branding configuration is complete.
 This resolves the earlier unavailable Google Audience observation; it does not
-prove token renewal or authorize reconnection, publication or collection. The agreed
-Google Testing reconnection approach remains open.
+prove token renewal or authorize reconnection, publication or collection.
+The owner subsequently [agreed to keep Google OAuth in Testing][testing-decision]
+for the pilot. Fitbit participants reconnect themselves from the Sentra account
+page when authorization expires. Check test-user eligibility before enrollment
+and record authorization gaps as interruptions until reconnection. Keep the
+current publishing status and default consent boundaries.
 
 A later signed-in readback at **21:03 Beirut** showed Google Health API enabled
 in the Sentra project. Quotas & System Limits listed 86,400,000 requests per day,
@@ -181,19 +185,20 @@ notice, signed-out publication verification and saved Google and WHOOP links.
 | Check | Verified | Still needed |
 | --- | --- | --- |
 | Paused controls and capacity | The [14:48 Beirut inspection][readiness] saw SQL `paused`, `SENTRA_COLLECTION_ENABLED=false`, 311.65 MB database, 7.18 MB private objects and a 3.967 GB egress ledger balance against the 4.5 GB internal ceiling. | Refresh the measurements and estimate the exact proposed batch before operating. About 533 MB remained at inspection; the ledger is not a billing meter. |
-| Provider authorization | The same bounded inspection found one expired refresh authorization and one connection needing refresh. It returned `blocked` and made zero provider requests. | The signed-in project quotas and configured scopes are verified above. Agree the Google Testing renewal approach and verify the affected authorization within the approved consent and run scope. WHOOP remains disabled on hosted enrollment. |
+| Provider authorization | The same bounded inspection found one expired refresh authorization and one connection needing refresh. It returned `blocked` and made zero provider requests. | The signed-in project quotas and configured scopes are verified above. The reconnection approach is agreed. Verify the affected authorization within the approved consent and run scope. WHOOP remains disabled on hosted enrollment. |
 | Participation and privacy | The [team-approved terms and provider privacy links][participation] are verified. The advisor outcome was removed from sprint scope. | Verify current consent and withdrawal for the selected connection. |
-| Storage and recovery | [Interim retention][retention] and [isolated full-archive recovery][recovery] passed. [SEN-46 removal review][removal] records the bounded duplicate preview. | The storage plan keeps daily collection paused through phase 3. Complete its separate owner approval and current-backup gates. Elapsed growth observations remain on [SEN-50][growth]. |
+| Storage and recovery | [Interim retention][retention] and [isolated full-archive recovery][recovery] passed. Both owners approved the exact preview. The [bounded removal and post-commit checks][storage-verified] confirmed all 774 logical readings and the original source were preserved. | Refresh the batch estimate before operating. Elapsed growth observations remain on [SEN-50][growth]. |
 | Hosted enrollment | [SEN-28 acceptance][enrollment] verifies phone signup and access to the account controls for an existing manual connection after linking. | Confirm the selected connection is usable. Signup and account access do not prove ongoing collection; that is measured under [SEN-47][collection]. |
 
 [readiness]: https://github.com/han33-dotcom/Sentra/issues/44#issuecomment-6979112960
 [participation]: https://github.com/han33-dotcom/Sentra/issues/26#issuecomment-6976478124
 [retention]: https://github.com/han33-dotcom/Sentra/issues/29#issuecomment-6976478640
 [recovery]: https://github.com/han33-dotcom/Sentra/issues/30#issuecomment-6975754889
-[removal]: https://github.com/han33-dotcom/Sentra/pull/138#issuecomment-6979181224
 [growth]: https://github.com/han33-dotcom/Sentra/issues/50
 [enrollment]: https://github.com/han33-dotcom/Sentra/issues/28#issuecomment-6985960934
 [collection]: https://github.com/han33-dotcom/Sentra/issues/47
+[testing-decision]: https://github.com/han33-dotcom/Sentra/issues/44#issuecomment-6992808159
+[storage-verified]: https://github.com/han33-dotcom/Sentra/issues/46#issuecomment-6992737541
 
 ## Proposed windows, awaiting agreement
 
@@ -203,11 +208,11 @@ notice, signed-out publication verification and saved Google and WHOOP links.
    prove uninterrupted measurements. Keep `activity-level` on explicit request
    and original-resolution heart rate out of the daily plan.
 2. **First verification:** one existing supported connection and one complete
-   past Beirut day, starting with the smallest supported dataset (Google
-   `daily_steps`, or an explicitly selected WHOOP dataset). As of this inspection,
-   the candidate interval is November 2 inclusive through November 3 exclusive.
-   Recalculate the candidate day if approval occurs later. Select the exact
-   participant privately, estimate the next batch and check budget first.
+   past Beirut day of Fitbit `daily_steps`. Record the approved inclusive start
+   and exclusive end, select the exact participant privately, estimate the batch
+   and check budget first. Use the [local launcher with the participant filter](operating-guide.md#manual-runs-and-reconnect).
+   A one-day verification requires its own approval and does not enable the
+   daily schedule.
 3. **Catch-up:** do not automatically request the whole paused interval. Agree
    exact participant/provider/dataset dates and estimated storage/transfer cost;
    begin with at most one past day per bounded verification batch, inspect the
@@ -235,10 +240,11 @@ in this proposal have been approved or executed by this readiness work.
 - [x] Interim retention, full encrypted backup and isolated recovery verified.
 - [x] Google Health API enabled, project quotas and configured read-only health
   scopes verified in the signed-in project. This does not verify a participant grant.
-- [ ] Agree the Google Testing reconnection approach and verify the affected
-  authorization with participant consent and private evidence. Check current
-  consent and withdrawal before use.
-- [ ] Complete the [storage plan's phase 3 gate](storage-plan.md#phases-and-approvals).
+- [x] Keep Google OAuth in Testing for the pilot, with participant-led Fitbit
+  reconnection when authorization expires.
+- [ ] Verify the affected authorization with current participant consent and
+  private evidence. Check withdrawal before use.
+- [x] Bounded [phase 3 removal and preservation checks][storage-verified] complete.
   Keep capacity reservations and bound the next batch. Elapsed growth evidence
   belongs to SEN-50; do not infer growth from the readiness snapshot.
 - [ ] Record the exact forward window, bounded catch-up dates, first provider and

@@ -73,11 +73,15 @@ unlike the viewer's included end date. Manual windows cover 1–30 past Beirut d
 with end no later than today. `initial` uses the bounded initial scope; do not
 repeat a whole-history import merely to fix one dataset.
 
-Equivalent fresh-process local recheck of an already imported day:
+For a one-participant verification, prefer the local launcher and pass the privately
+selected participant ID explicitly. The example below uses a placeholder; without
+this filter, the runtime can select multiple connections. Agree the dates, current
+consent and exact scope before any run. The collector still applies its existing
+capacity, token and date checks. Store the output privately.
 
 ```powershell
-.venv/Scripts/sentra.exe cloud-run-local --mode recovery --provider google_health --start 2026-10-07 --end 2026-10-08 --dataset daily_steps
-.venv/Scripts/sentra.exe cloud-run-local --mode recovery --provider whoop --start 2026-10-07 --end 2026-10-08 --dataset sleep
+.venv/Scripts/sentra.exe cloud-run-local --mode recovery --provider google_health --participant YOUR_PRIVATE_ID --start 2026-10-07 --end 2026-10-08 --dataset daily_steps
+.venv/Scripts/sentra.exe cloud-run-local --mode recovery --provider whoop --participant YOUR_PRIVATE_ID --start 2026-10-07 --end 2026-10-08 --dataset sleep
 .venv/Scripts/sentra.exe shared-status
 ```
 
