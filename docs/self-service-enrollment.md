@@ -269,11 +269,13 @@ unavailable; it is not a verified zero eligible participants.
 
 ## Current deployment and remaining acceptance
 
-The participant page is https://sentra-enrollment.onrender.com/join, on Render Free in Frankfurt,
+The participant page is https://sentra-enrollment.onrender.com/join, on Render in Frankfurt,
 with manual deployments from `main`. The existing private viewer remains
 https://sentra-wearable-audit.streamlit.app, using its retained `ETL-pipeline`
-deployment reference. Both hosts were verified on release `bea825f` on November 18;
-later release commits do not automatically establish the enrollment deployment.
+deployment reference. Both hosts were verified on release `bea825f` on November 18.
+The subsequent Render deployment list shows `049ddff` live, triggered by a compute
+plan update; preserve the configured plan. Later release commits do not automatically
+establish the enrollment deployment.
 Record the exact deployed commit when rolling out migration 016 and manual-account
 self-service reconnect. Preserve the private audience,
 viewer-only secrets, existing URLs and Google callbacks when deploying.
