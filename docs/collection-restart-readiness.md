@@ -153,6 +153,15 @@ This resolves the earlier unavailable Google Audience observation; it does not
 prove token renewal or authorize reconnection, publication or collection. The agreed
 Google Testing reconnection approach remains open.
 
+A later signed-in readback at **21:03 Beirut** showed Google Health API enabled
+in the Sentra project. Quotas & System Limits listed 86,400,000 requests per day,
+120,000 per minute for the project and 300 per minute per user. The Auth Platform
+Data Access page listed all three read-only Google Health scope groups requested
+by the application: activity and fitness, health metrics and measurements, and
+sleep. These are console settings, not tested live throughput or participant
+permissions. Keep the Testing limits, bounded request pacing and retries.
+No setting was edited and no token or data request ran.
+
 The existing WHOOP app owner subsequently signed in. The Sentra app showed Sandbox,
 1 of 10 connected members, 100 requests/minute and 10,000/day. All six existing
 read-only scopes, including `read:profile`, were present; no webhooks were configured.
@@ -172,7 +181,7 @@ notice, signed-out publication verification and saved Google and WHOOP links.
 | Check | Verified | Still needed |
 | --- | --- | --- |
 | Paused controls and capacity | The [14:48 Beirut inspection][readiness] saw SQL `paused`, `SENTRA_COLLECTION_ENABLED=false`, 311.65 MB database, 7.18 MB private objects and a 3.967 GB egress ledger balance against the 4.5 GB internal ceiling. | Refresh the measurements and estimate the exact proposed batch before operating. About 533 MB remained at inspection; the ledger is not a billing meter. |
-| Provider authorization | The same bounded inspection found one expired refresh authorization and one connection needing refresh. It returned `blocked` and made zero provider requests. | Agree the Google Testing renewal approach. Verify actual Google project quota and required scopes, and renew or reconnect the affected consenting connection within the approved scope. WHOOP remains disabled on hosted enrollment. |
+| Provider authorization | The same bounded inspection found one expired refresh authorization and one connection needing refresh. It returned `blocked` and made zero provider requests. | The signed-in project quotas and configured scopes are verified above. Agree the Google Testing renewal approach and verify the affected authorization within the approved consent and run scope. WHOOP remains disabled on hosted enrollment. |
 | Participation and privacy | The [team-approved terms and provider privacy links][participation] are verified. The advisor outcome was removed from sprint scope. | Verify current consent and withdrawal for the selected connection. |
 | Storage and recovery | [Interim retention][retention] and [isolated full-archive recovery][recovery] passed. [SEN-46 removal review][removal] records the bounded duplicate preview. | The storage plan keeps daily collection paused through phase 3. Complete its separate owner approval and current-backup gates. Elapsed growth observations remain on [SEN-50][growth]. |
 | Hosted enrollment | [SEN-28 acceptance][enrollment] verifies phone signup and access to the account controls for an existing manual connection after linking. | Confirm the selected connection is usable. Signup and account access do not prove ongoing collection; that is measured under [SEN-47][collection]. |
@@ -224,9 +233,11 @@ in this proposal have been approved or executed by this readiness work.
 - [x] Team participation policy, public notice and provider privacy links
   verified. Each participant still supplies their own consent.
 - [x] Interim retention, full encrypted backup and isolated recovery verified.
-- [ ] Verify actual Google project quota and required scopes, agree the Testing
-  reconnection approach, and verify the affected authorization with participant
-  consent and private evidence. Check current consent and withdrawal before use.
+- [x] Google Health API enabled, project quotas and configured read-only health
+  scopes verified in the signed-in project. This does not verify a participant grant.
+- [ ] Agree the Google Testing reconnection approach and verify the affected
+  authorization with participant consent and private evidence. Check current
+  consent and withdrawal before use.
 - [ ] Complete the [storage plan's phase 3 gate](storage-plan.md#phases-and-approvals).
   Keep capacity reservations and bound the next batch. Elapsed growth evidence
   belongs to SEN-50; do not infer growth from the readiness snapshot.
