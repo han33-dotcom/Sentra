@@ -5,6 +5,7 @@ import os
 import unittest
 from contextlib import redirect_stdout
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 from scripts.team_workflow.slack_notify import (
     CHANNEL, EVENT_TYPE, LEDGER_ACTOR, REPO, WORKSPACE,
@@ -100,6 +101,29 @@ def run(github, slack, **kwargs):
 
 
 class SlackNotificationTests(unittest.TestCase):
+    def test_claim_failure_reports_stage_and_status_without_remote_content_or_post(self):
+        github = GitHub(); slack = Slack(github.events)
+        def forbidden(*args):
+            raise HTTPError("https://private.invalid/credential", 403,
+                            "synthetic-private-message", {"private": "header"},
+                            io.BytesIO(b"synthetic-private-response"))
+        github.create_comment = forbidden
+        result = run(github, slack)[0]
+        self.assertEqual(result["stage"], "create-claim")
+        self.assertEqual(result["category"], "http")
+        self.assertEqual(result["http_status"], 403)
+        self.assertNotIn("private", json.dumps(result))
+        self.assertEqual(slack.count("chat.postMessage"), 0)
+
+    def test_uncertain_send_diagnostic_retains_claim_and_recovers_without_duplicate(self):
+        github = GitHub(); slack = Slack(github.events)
+        slack.accept_then_timeout = True
+        result = run(github, slack)[0]
+        self.assertEqual((result["stage"], result["category"]), ("post-card", "timeout"))
+        self.assertNotIn("http_status", result)
+        self.assertEqual(run(github, slack)[0]["action"], "unchanged")
+        self.assertEqual(slack.count("chat.postMessage"), 1)
+
     def test_failed_pr_does_not_block_another_card_or_repost_uncertain_delivery(self):
         for failure in ["pending", "invalid", "rejected", "post-timeout", "claim-timeout", "save-timeout", "recovery-window"]:
             with self.subTest(failure=failure):

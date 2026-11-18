@@ -32,7 +32,7 @@ reviews stay on GitHub. A merged PR does not imply complete task acceptance.
 The default-branch `Team project sync` workflow owns the sole delivery writer,
 under its existing repository-wide concurrency group. It never checks out or
 executes PR code with tokens. The notification job uses a repository token with
-contents/read, pull-requests/read and issues/write (delivery-state comments only).
+contents/read, issues/read and pull-requests/write (PR delivery-state comments only).
 It receives no collection or Project secret and adds no schedule.
 
 Before the initial Slack send, one bot-authored GitHub PR comment records a
@@ -49,7 +49,10 @@ three times. Ambiguous service errors remain pending. A crash while updating an
 existing card can safely repeat the update. Multiple ledgers/cards and incomplete
 API pagination fail closed.
 
-Per-PR failures produce a sanitized error result with the PR number. Other PRs
+Per-PR failures produce a sanitized error result with the PR number. Delivery
+request failures include a fixed operation label, bounded category and numeric
+HTTP status when available; response bodies, URLs, headers and exception messages
+are never logged. Other PRs
 still reconcile independently; after processing them, the job exits nonzero if
 any PR failed. Fix or reconcile the affected PR before rerunning. A replay keeps
 successful cards and pending claims, so it cannot use the partial failure as
@@ -171,11 +174,20 @@ with no subscribed features. That timestamp is the recorded cutoff. The existing
 `TEAM_SYNC_ENABLED=true` was preserved and `TEAM_SLACK_MODE` changed from `native`
 to `task-first` only after this confirmation.
 
-Initial custom-card delivery, no-op replay and subsequent same-card updates are
-being verified on the documentation PR recording this cutover. Do not interpret
-the configuration change alone as completed live acceptance. Rollback remains:
-set native mode first, wait for the serialized writer, then restore only `pulls`
-and `reviews`; comments were not enabled before this cutover.
+[The initial live run](https://github.com/han33-dotcom/Sentra/actions/runs/44293000185)
+failed for PR #128 without creating a delivery ledger. The bot workspace/channel
+preflight succeeded, and a read-only local trace reached claim creation, but the
+original sanitized error did not identify the failing request or HTTP status.
+No custom card was verified. After setting `TEAM_SLACK_MODE=native` and allowing
+the serialized writer to finish, `pulls` and `reviews` were restored. The live
+list at **2026-11-18T11:21:28Z** confirmed exactly those two subscriptions.
+
+PR #128 aligns the notifier's GitHub permission with its PR-comment writes
+(`pull-requests: write`, `issues: read`) and adds safe operation/status diagnostics.
+The original failure is not claimed conclusively diagnosed until live verification.
+The replacement must be released before repeating the authorized cutover, with a
+fresh disable timestamp and actual card, replay and same-card update evidence.
+Comments stay off. Configuration changes alone are not acceptance evidence.
 
 ```text
 python -m unittest tests.team_workflow.test_slack_notify -v
