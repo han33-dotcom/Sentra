@@ -8,7 +8,9 @@ self-reviews, fixes, verifies, merges and releases its own work in the same codi
 session. Additional reviews and human approval are optional. See
 [agent-owned delivery](local-delivery.md) for ownership and evidence.
 
-Project synchronization and native Slack subscriptions remain configured.
+Project synchronization and task-first Slack cards are enabled. Native Sentra
+pulls/reviews subscriptions and comments are off after the verified November 18
+cutover; see [delivery evidence and rollback](task-first-slack.md).
 Collection remains paused. Workspace is `nsquared` and channel is `#fyp-sentra`.
 Implementation PRs target `develop`; releases go `develop` → `main`.
 
@@ -57,11 +59,10 @@ and repository documentation.
 The issue number is the authoritative task identity: `SEN-41` always means issue
 #41. Issue titles use `[SEN-41] description`, which is also the board card title.
 PR titles start with the same task identity; GitHub still assigns the PR its own
-number. The native Slack app still prepends its own PR number before that title.
-The [task-first Slack replacement](task-first-slack.md) puts the task ID first
-and the PR link underneath, using one updated card per PR. It stays disabled until
-the approved app setup and verified native-subscription cutover; do not run both
-senders. Old Slack messages remain historical and are not reposted in bulk.
+number. The active [task-first Slack delivery](task-first-slack.md) puts the task
+ID first and the PR link underneath, using one updated card per PR. Native
+PR/review delivery is disabled; do not run both senders. Old Slack messages remain
+historical and are not reposted in bulk.
 
 Declare only actual implementation scope:
 
@@ -102,9 +103,10 @@ If `pr-policy` already failed before an automatic title repair, rerun that check
 against the current head/base (or have the author save the corrected title) before
 merging. A repaired title is not itself a claim that checks passed.
 
-SEN-66 introduced task identity and multi-task reconciliation. Task-first Slack
-still requires the separate credential and subscription cutover in its guide.
-Local delivery does not change that notification setup.
+SEN-66 introduced task identity and multi-task reconciliation. The owner-authorized
+task-first Slack cutover is verified in its guide, including initial delivery,
+unchanged replay and updates at the original message timestamp. Local delivery
+does not authorize credential changes or another subscription cutover.
 
 ## Status meanings
 
