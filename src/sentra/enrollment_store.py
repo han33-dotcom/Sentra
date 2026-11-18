@@ -10,7 +10,7 @@ import time
 import psycopg
 
 from .cloud_tokens import TokenRepository
-from .enrollment import EnrollmentError, digest
+from .enrollment import EnrollmentError, ParticipationSetupRequired, digest
 from .processing.pipeline import ASSESSMENT_VERSION
 from .shared import MONTHLY_EGRESS_CEILING
 
@@ -184,13 +184,15 @@ class EnrollmentStore:
                 where provider=%s and identity_hash=any(%s)''', (provider, identity_keys)).fetchone()
             expected = pending.get('expected_pid')
             identity_only = pending.get('identity_only') is True
+            if identity_only and provider == 'google_health' and not row and not expected and not value.get('invite_hash'):
+                raise ParticipationSetupRequired('Open your account setup invitation.', 403)
             if identity_only and (provider != 'google_health' or not row or expected or value.get('invite_hash')):
                 raise EnrollmentError('Use your invitation to join, or sign in to an existing participation.', 403)
             if expected and row and row[0] != expected:
                 raise EnrollmentError('That wearable belongs to a different participation. Sign out and try again.', 409)
             pid = row[0] if row else expected
             if not pid and not value.get('invite_hash'):
-                raise EnrollmentError('No participation found. Please use your invitation link.', 403)
+                raise ParticipationSetupRequired('Open your account setup invitation.', 403)
             invite_org = seats = None
             fitbit_link = value.get('fitbit_email_hash') is not None
             if fitbit_link:
@@ -248,14 +250,24 @@ class EnrollmentStore:
                 stored_identity = FITBIT_LINK_IDENTITY_PREFIX + identity_hash if fitbit_link else identity_hash
                 self.db.execute('''insert into enrollment_private.identities
                     (provider,identity_hash,participant_id) values(%s,%s,%s)''', (provider, stored_identity, pid))
-            # Linking and later sign-ins prove the hosted identity, not the source of the legacy token.
-            operator_managed = fitbit_link or (row is not None and row[1].startswith(FITBIT_LINK_IDENTITY_PREFIX))
+            linked_fitbit = row is not None and row[1].startswith(FITBIT_LINK_IDENTITY_PREFIX)
             # A login to a withdrawn account can view that state, but cannot restart it.
-            if not identity_only and not operator_managed and consent['open'] and not consent['withdrawn']:
+            if not identity_only and not fitbit_link and consent['open'] and not consent['withdrawn']:
+                if linked_fitbit and expected != pid and not value.get('invite_hash'):
+                    raise EnrollmentError('Sign in first, then reconnect your wearable.', 403)
+                if token is None:
+                    raise EnrollmentError('Reconnect authorization is incomplete. Please try again.', 400)
                 repo = TokenRepository(self.db)
                 with repo.lock(pid, provider):
                     previous = repo.read(pid, provider, required=False)
                     body = login.envelope(provider, pid, token)
+                    if linked_fitbit:
+                        # Only explicit reconnect (or accepted re-enrollment) with
+                        # this same provider identity replaces the old credential.
+                        # Promotion and credential CAS share this transaction,
+                        # including rollback.
+                        self.db.execute('select enrollment_private.enable_fitbit_self_service(%s,%s)',
+                                        (pid, identity_hash))
                     if previous:
                         # CAS without touching unrelated collection-state tables.
                         result = self.db.execute('''update collector_private.provider_credentials set encrypted_token_bundle=%s,

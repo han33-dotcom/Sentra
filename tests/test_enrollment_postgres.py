@@ -79,7 +79,8 @@ class EnrollmentPostgresTests(unittest.TestCase):
             for filename in ('001_foundation.sql', '002_permissions.sql', '003_numeric_precision.sql',
                     '004_daily_collection.sql', '005_viewer_status.sql', '006_parquet_tiers.sql',
                     '007_organization_access.sql', '008_self_service_enrollment.sql',
-                    '011_fitbit_link_invites.sql','014_assessment_eligibility.sql'):
+                    '011_fitbit_link_invites.sql','014_assessment_eligibility.sql',
+                    '016_fitbit_self_service.sql'):
                 migration = Path('sql', filename).read_text(encoding='utf-8')
                 # Fixture roles are cluster-wide; grants remain scoped to this new database.
                 migration = re.sub(r'create role (sentra_[a-z]+) login[^;]+;',
@@ -229,7 +230,7 @@ class EnrollmentPostgresTests(unittest.TestCase):
         state = self.start()
         pending = self.pending(self.client, state, 'google_health')
         response = self.client.get('/oauth/google_health/callback', params={'state':pending, 'code':self.code})
-        self.assertEqual(response.headers['location'], '/join?connection=failed')
+        self.assertEqual(response.headers['location'], '/join?connection=setup-required')
         with self.admin_db() as db:
             self.assertFalse(db.execute('select 1 from org.memberships where org_id=%s', (self.org,)).fetchone())
 
@@ -259,14 +260,10 @@ class EnrollmentPostgresTests(unittest.TestCase):
         self.assertEqual(status['participant_id'], pid)
         self.assertTrue(status['collection_paused'])
         self.assertTrue(status['fitbit_operator_managed'])
-        self.assertNotIn('google_health', status['providers_available'])
+        self.assertIn('google_health', status['providers_available'])
         self.assertIn('whoop', status['providers_available'])
         with self.admin_db() as db:
             self.assertEqual(TokenRepository(db).read(pid, 'google_health'), credential_before)
-        reconnect = self.client.post('/api/connect', json={'provider': 'google_health'},
-                                     headers={**self.headers, 'X-CSRF-Token': status['csrf']})
-        self.assertEqual(reconnect.status_code, 409)
-        self.assertIn('Contact the Sentra team', reconnect.json()['message'])
         replay = stale_browser.get('/oauth/google_health/callback',
                                    params={'state': stale_pending, 'code': 'different-subject'})
         self.assertEqual(replay.headers['location'], '/join?connection=failed')
@@ -314,6 +311,122 @@ class EnrollmentPostgresTests(unittest.TestCase):
             after = TokenRepository(db).read(pid, 'google_health')
             self.assertEqual(after['encrypted_token_bundle'], renewed)
             self.assertEqual(after['refresh_status'], 'withdrawn')
+
+    def test_linked_fitbit_explicit_reconnect_has_the_same_self_service_capabilities(self):
+        pid = self.legacy_fitbit()
+        status = self.complete(invite=self.fitbit_link(pid), provider='google_health')
+        with self.admin_db() as db:
+            before = TokenRepository(db).read(pid, 'google_health')
+        self.assertIn('google_health', status['providers_available'])
+        pending = self.pending(self.client, status, 'google_health')
+        result = self.client.get('/oauth/google_health/callback', params={'state':pending, 'code':self.code})
+        self.assertEqual(result.headers['location'], '/account')
+        status = self.client.get('/api/status').json()
+        self.assertEqual(status['participant_id'], pid)
+        self.assertNotIn('fitbit_operator_managed', status)
+        with self.admin_db() as db:
+            after = TokenRepository(db).read(pid, 'google_health')
+            self.assertGreater(after['version'], before['version'])
+            self.assertNotEqual(after['encrypted_token_bundle'], before['encrypted_token_bundle'])
+            self.assertEqual(db.execute('select identity_hash from enrollment_private.identities where participant_id=%s',
+                                       (pid,)).fetchone()[0], self.config.identity('google_health', self.code))
+            self.assertEqual(db.execute('select count(*) from org.consents where participant_id=%s', (pid,)).fetchone()[0], 1)
+            self.assertEqual(db.execute('select count(*) from org.memberships where participant_id=%s', (pid,)).fetchone()[0], 1)
+        returning = self.complete(self.browser(), provider='google_health')
+        self.assertEqual(returning['participant_id'], pid)
+        with self.admin_db() as db:
+            self.assertEqual(TokenRepository(db).read(pid, 'google_health'), after)
+        changed = self.client.post('/api/choices', json={'accepted':True, 'sharing':'individual', 'demonstration':False},
+                                   headers={**self.headers, 'X-CSRF-Token':status['csrf']})
+        self.assertEqual(changed.status_code, 200)
+        self.assertEqual(self.client.get('/api/status').json()['sharing'], 'individual')
+        self.assertEqual(self.client.post('/api/withdraw', json={},
+                          headers={**self.headers, 'X-CSRF-Token':status['csrf']}).status_code, 200)
+        with self.admin_db() as db:
+            self.assertEqual(TokenRepository(db).read(pid, 'google_health')['refresh_status'], 'withdrawn')
+
+    def test_linked_fitbit_reconnect_rejects_another_account_and_preserves_the_old_connection(self):
+        pid = self.legacy_fitbit()
+        status = self.complete(invite=self.fitbit_link(pid), provider='google_health')
+        with self.admin_db() as db:
+            before = TokenRepository(db).read(pid, 'google_health')
+        pending = self.pending(self.client, status, 'google_health')
+        result = self.client.get('/oauth/google_health/callback', params={'state':pending, 'code':'other-google-account'})
+        self.assertEqual(result.headers['location'], '/join?connection=failed')
+        with self.admin_db() as db:
+            self.assertEqual(TokenRepository(db).read(pid, 'google_health'), before)
+            self.assertTrue(db.execute('select identity_hash from enrollment_private.identities where participant_id=%s',
+                                      (pid,)).fetchone()[0].startswith('fitbit-link:'))
+
+    def test_linked_fitbit_promotion_rolls_back_if_credential_save_fails(self):
+        pid = self.legacy_fitbit()
+        status = self.complete(invite=self.fitbit_link(pid), provider='google_health')
+        with self.admin_db() as db:
+            before = TokenRepository(db).read(pid, 'google_health')
+            db.execute('''create function enrollment_private.stop_test_reconnect() returns trigger language plpgsql as $$
+                begin raise exception 'synthetic credential save failure'; end $$;
+                create trigger stop_test_reconnect before update of encrypted_token_bundle
+                on collector_private.provider_credentials for each row execute function enrollment_private.stop_test_reconnect();''')
+        try:
+            pending = self.pending(self.client, status, 'google_health')
+            result = self.client.get('/oauth/google_health/callback', params={'state':pending, 'code':self.code})
+            self.assertEqual(result.headers['location'], '/join?connection=failed')
+            with self.admin_db() as db:
+                self.assertEqual(TokenRepository(db).read(pid, 'google_health'), before)
+                self.assertTrue(db.execute('select identity_hash from enrollment_private.identities where participant_id=%s',
+                                          (pid,)).fetchone()[0].startswith('fitbit-link:'))
+        finally:
+            with self.admin_db() as db:
+                db.execute('drop trigger stop_test_reconnect on collector_private.provider_credentials; '
+                           'drop function enrollment_private.stop_test_reconnect()')
+
+    def test_linked_fitbit_withdrawal_during_reconnect_cannot_promote_or_restart(self):
+        pid = self.legacy_fitbit()
+        status = self.complete(invite=self.fitbit_link(pid), provider='google_health')
+        with self.admin_db() as db:
+            before = TokenRepository(db).read(pid, 'google_health')['encrypted_token_bundle']
+        pending = self.pending(self.client, status, 'google_health')
+        self.assertEqual(self.client.post('/api/withdraw', json={},
+                         headers={**self.headers, 'X-CSRF-Token':status['csrf']}).status_code, 200)
+        result = self.client.get('/oauth/google_health/callback', params={'state':pending, 'code':self.code})
+        self.assertEqual(result.headers['location'], '/account')
+        self.assertFalse(self.client.get('/api/status').json()['enrolled'])
+        with self.admin_db() as db:
+            stored = TokenRepository(db).read(pid, 'google_health')
+            self.assertEqual(stored['encrypted_token_bundle'], before)
+            self.assertEqual(stored['refresh_status'], 'withdrawn')
+            self.assertTrue(db.execute('select identity_hash from enrollment_private.identities where participant_id=%s',
+                                      (pid,)).fetchone()[0].startswith('fitbit-link:'))
+
+    def test_linked_fitbit_rejoins_only_with_a_fresh_invitation_and_choices(self):
+        pid = self.legacy_fitbit()
+        status = self.complete(invite=self.fitbit_link(pid), provider='google_health')
+        self.client.post('/api/withdraw', json={}, headers={**self.headers, 'X-CSRF-Token':status['csrf']})
+        returning = self.complete(self.browser(), provider='google_health')
+        self.assertFalse(returning['enrolled'])
+        rejoined = self.complete(self.browser(), invite=self.new_invite(self.org), provider='google_health')
+        self.assertEqual(rejoined['participant_id'], pid)
+        self.assertTrue(rejoined['enrolled'])
+        self.assertTrue(rejoined['connected'])
+        self.assertNotIn('fitbit_operator_managed', rejoined)
+        with self.admin_db() as db:
+            self.assertEqual(db.execute('select count(*) from org.memberships where participant_id=%s', (pid,)).fetchone()[0], 2)
+
+    def test_fitbit_promotion_is_narrow_and_not_available_to_viewer_or_collector(self):
+        pid = self.legacy_fitbit()
+        self.complete(invite=self.fitbit_link(pid), provider='google_health')
+        identity = self.config.identity('google_health', self.code)
+        with self.admin_db() as db:
+            for role in ('sentra_viewer', 'sentra_collector', 'anon', 'authenticated'):
+                db.execute(sql.SQL('set role {}').format(sql.Identifier(role)))
+                with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+                    db.execute('select enrollment_private.enable_fitbit_self_service(%s,%s)', (pid, identity))
+                db.execute('reset role')
+            db.execute('set role sentra_enrollment')
+            with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+                db.execute('select enrollment_private.enable_fitbit_self_service(%s,%s)', (pid, 'a'*64))
+            self.assertTrue(db.execute('select identity_hash from enrollment_private.identities where participant_id=%s',
+                                      (pid,)).fetchone()[0].startswith('fitbit-link:'))
 
     def test_fitbit_link_rejects_an_already_linked_google_identity_without_consuming(self):
         original = self.complete(invite=self.invite, provider='google_health')
@@ -408,7 +521,7 @@ class EnrollmentPostgresTests(unittest.TestCase):
         client = self.browser(); state = self.start(client, invite); pending = self.pending(client, state)
         self.assertEqual(client.get('/oauth/whoop/callback', params={'state': pending, 'code': self.code}).headers['location'], '/join?connection=failed')
         unknown = self.browser(); state = self.start(unknown); pending = self.pending(unknown, state)
-        self.assertEqual(unknown.get('/oauth/whoop/callback', params={'state': pending, 'code': self.code + 'unknown'}).headers['location'], '/join?connection=failed')
+        self.assertEqual(unknown.get('/oauth/whoop/callback', params={'state': pending, 'code': self.code + 'unknown'}).headers['location'], '/join?connection=setup-required')
         self.assertEqual(self.client.get('/api/status').json()['participant_id'], initial['participant_id'])
 
     def test_invitation_seat_race_does_not_leave_partial_enrollment(self):

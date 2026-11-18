@@ -67,18 +67,14 @@
       el("demonstration").checked = state.demonstration;
       el("accepted").checked = false;
       el("heading").textContent = "Your data. Your decision.";
-      el("subtitle").textContent = state.fitbit_operator_managed
-        ? "Manage your sharing or stop participating. Contact the Sentra team if you need to reconnect your Fitbit."
-        : "Manage your sharing, reconnect a wearable, or stop participating at any time.";
+      el("subtitle").textContent = "Manage your sharing, reconnect a wearable, or stop participating at any time.";
       el("participation").textContent = state.enrolled ? "Enrolled" : "Withdrawn";
       el("connection").textContent = !state.enrolled ? "Stopped" : state.connected ? "Connected" : "Reconnect required";
       el("data-status").textContent = !state.enrolled ? "Not contributing" : state.recently_contributing ? "Contributing" : state.latest_received_at ? "No recent readings" : "Waiting for first data";
       el("data-detail").textContent = !state.enrolled
         ? "Your sharing and collection have stopped. Stored data follows the retention policy. A new invitation is needed to join again."
         : !state.connected
-          ? state.fitbit_operator_managed && state.providers?.google_health !== "connected"
-            ? "Contact the Sentra team to reconnect your Fitbit."
-            : "Reconnect your wearable to resume its connection. Previous readings do not establish current collection or a ready assessment."
+          ? "Reconnect your wearable to resume its connection. Previous readings do not establish current collection or a ready assessment."
         : state.latest_received_at
           ? "A successful connection and received data do not guarantee recent usable coverage or a ready assessment."
           : state.collection_paused ? "Your account is connected. Data will appear after collection is enabled by the team. You don’t need to stay on this page."
@@ -127,6 +123,7 @@
       render();
       if (outcome === "cancelled") message("Connection cancelled. No changes were made by this attempt. You can try again.");
       if (outcome === "failed") message("Connection could not be completed. Please try again or ask the Sentra team for help.", true);
+      if (outcome === "setup-required") message("Sign-in succeeded. Open your Sentra invitation to finish account setup. If the team connected your wearable before, ask for a one-time setup link that keeps your existing data.", true);
     } catch (error) { el("loading").hidden = true; message(error.message, true); el("retry").hidden = false; }
   }
   function initialize() {

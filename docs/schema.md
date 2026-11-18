@@ -137,6 +137,16 @@ Pending Fitbit link invitations are short-lived and can be reissued after recove
 Redemption removes the link in the transaction that adds hosted membership and
 consent to the existing participant. Issue new links after recovery as needed.
 
+Migration [016](../sql/016_fitbit_self_service.sql), after 011, adds an enrollment-only
+function to promote an exact tagged Google identity after a verified same-account
+reconnect or accepted re-enrollment. It requires current active participation and
+an existing credential. The service calls it in the credential replacement
+transaction, so failed writes roll back the promotion too. Ordinary sign-in never
+calls it. The 011 guard still protects unpromoted credentials, including service
+rollback; promoted accounts behave like ordinary web-enrolled accounts. No table
+or archive column changes. Apply 016 before deploying the self-service reconnect
+code, including on a recovery target that will run that code.
+
 See [self-service enrollment](self-service-enrollment.md) for configuration,
 deployment, participant behavior and the isolated PostgreSQL verification fixture.
 
