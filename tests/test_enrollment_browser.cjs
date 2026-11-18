@@ -10,7 +10,7 @@ const status = extra => ({csrf:'synthetic-csrf', joining:true, signed_in:false,
   providers_available:['google_health'], consent_version:'1.0', organization:'Synthetic pilot', ...extra});
 const response = value => ({ok:true, status:200, json:async()=>value});
 
-function browser(fetch, {hash='#invite=synthetic-private-invitation', shortTimeout=false, prepare=()=>{}}={}) {
+function browser(fetch, {hash='#invite=synthetic-private-invitation', search='', shortTimeout=false, prepare=()=>{}}={}) {
   const nodes = new Map();
   const node = id => {
     if (!nodes.has(id)) nodes.set(id, {hidden:['retry','error','notice'].includes(id), textContent:'',
@@ -23,7 +23,7 @@ function browser(fetch, {hash='#invite=synthetic-private-invitation', shortTimeo
   const individual = node('individual'); individual.value='individual';
   const google = node('google'); google.dataset.provider='google_health';
   const whoop = node('whoop'); whoop.dataset.provider='whoop';
-  const location = {hash, search:'', pathname:'/join', assign(){}};
+  const location = {hash, search, pathname:'/join', assign(){}};
   const calls=[];
   const events={};
   const document = {getElementById:node, createTextNode:()=>({}), createElement:()=>({}),
@@ -103,6 +103,23 @@ test('an expired connection is not described as connected while waiting for data
   assert.equal(b.node('connection').textContent,'Reconnect required');
   assert.match(b.node('data-detail').textContent,/reconnect/i);
   assert.doesNotMatch(b.node('data-detail').textContent,/account is connected/);
+});
+
+test('a linked manual account has the ordinary reconnect, sharing and withdrawal controls', async()=>{
+  const b=browser(async()=>response(status({joining:false,signed_in:true,enrolled:true,
+    fitbit_operator_managed:true,connected:false,sharing:'group_only',demonstration:false})),{hash:''});
+  await flush();
+  for (const id of ['google','providers','save','withdraw','choice-fields']) assert.equal(b.node(id).hidden,false);
+  assert.match(b.node('subtitle').textContent,/reconnect/);
+  assert.doesNotMatch(b.node('subtitle').textContent,/operator|contact the team/i);
+});
+
+test('an unlinked sign-in explains one-time setup without exposing an account identifier', async()=>{
+  const b=browser(async()=>response(status({joining:false})),{hash:'',search:'?connection=setup-required'});
+  await flush();
+  assert.match(b.node('error').textContent,/one-time setup link.*existing data/);
+  assert.equal(b.node('error').hidden,false);
+  assert.equal(b.location.search,'');
 });
 
 test('a load that fails outside its error handling does not block later loads', async()=>{

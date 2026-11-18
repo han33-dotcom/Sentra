@@ -30,6 +30,10 @@ class EnrollmentError(SentraError):
         self.status = status
 
 
+class ParticipationSetupRequired(EnrollmentError):
+    """Provider sign-in succeeded but has no verified participant binding yet."""
+
+
 def digest(value):
     return hashlib.sha256(value.encode()).hexdigest()
 
