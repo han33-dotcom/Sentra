@@ -153,6 +153,30 @@ another post. Independent PRs continue, while the job still reports failure.
 
 ## Validation
 
+### November 18 authorized cutover
+
+The owner explicitly authorized the scoped live cutover and verification. The
+existing Sentra Task Updates app was already installed in nsquared with exactly
+`chat:write` and `channels:history`, was present in `#fyp-sentra`, and its repository
+Actions secret existed. No credential was displayed, copied or rotated.
+
+[Dry run 44292155740](https://github.com/han33-dotcom/Sentra/actions/runs/44292155740)
+successfully previewed PR #127 with both SEN-27 and SEN-32, secondary PR/head links
+and disabled unfurls. No Slack write or delivery claim occurred in that preview.
+
+The live `/github subscribe list features` response showed only Sentra `pulls`
+and `reviews`; comments were already off. The authorized unsubscribe removed only
+those two features. A second list at **2026-11-18T11:13:35Z** showed the repository
+with no subscribed features. That timestamp is the recorded cutoff. The existing
+`TEAM_SYNC_ENABLED=true` was preserved and `TEAM_SLACK_MODE` changed from `native`
+to `task-first` only after this confirmation.
+
+Initial custom-card delivery, no-op replay and subsequent same-card updates are
+being verified on the documentation PR recording this cutover. Do not interpret
+the configuration change alone as completed live acceptance. Rollback remains:
+set native mode first, wait for the serialized writer, then restore only `pulls`
+and `reviews`; comments were not enabled before this cutover.
+
 ```text
 python -m unittest tests.team_workflow.test_slack_notify -v
 python -m pytest -ra
