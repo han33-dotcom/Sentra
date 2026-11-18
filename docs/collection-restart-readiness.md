@@ -6,10 +6,11 @@ Code delivery follows [agent-owned delivery](local-delivery.md); restart
 authorization remains a separate operator decision. This is the current restart
 ledger, separate from October's historical acceptance in the stage guides.
 
-**November 3, 2026 decision: blocked; collection remains paused.** Stored
-authorization needs attention, provider-dashboard and dependent team evidence
-are incomplete, and forward/catch-up windows have not been agreed.
-Neither this document nor a successful inspection authorizes collection.
+**November 18, 2026 checkpoint: blocked; collection remains paused.**
+The provider console and participation-policy checks have progressed. Stored
+authorization still needs attention, and the proposed windows and restart have
+not been authorized. See the current evidence and gates below. Neither this
+document nor a successful inspection authorizes collection.
 
 ## Repeatable inspection
 
@@ -162,9 +163,28 @@ detail page showed both redirects. Existing scopes, credentials, owner, contacts
 tier and limits were preserved. No token renewal, provider-data request or participant
 authorization was exercised. The host remains Google-only and collection paused.
 
-The WHOOP privacy-policy field still points to retired Notion content. Its replacement
-requires the participation-policy decision and signed-out publication verification
-under SEN-26 before updating the field. This console check does not resolve that gate.
+At this console check, the WHOOP privacy-policy field still pointed to retired
+Notion content. The later [SEN-26 acceptance][participation] records the approved
+notice, signed-out publication verification and saved Google and WHOOP links.
+
+## November 18 restart evidence
+
+| Check | Verified | Still needed |
+| --- | --- | --- |
+| Paused controls and capacity | The [14:48 Beirut inspection][readiness] saw SQL `paused`, `SENTRA_COLLECTION_ENABLED=false`, 311.65 MB database, 7.18 MB private objects and a 3.967 GB egress ledger balance against the 4.5 GB internal ceiling. | Refresh the measurements and estimate the exact proposed batch before operating. About 533 MB remained at inspection; the ledger is not a billing meter. |
+| Provider authorization | The same bounded inspection found one expired refresh authorization and one connection needing refresh. It returned `blocked` and made zero provider requests. | Agree the Google Testing renewal approach. Verify actual Google project quota and required scopes, and renew or reconnect the affected consenting connection within the approved scope. WHOOP remains disabled on hosted enrollment. |
+| Participation and privacy | The [team-approved terms and provider privacy links][participation] are verified. The advisor outcome was removed from sprint scope. | Verify current consent and withdrawal for the selected connection. |
+| Storage and recovery | [Interim retention][retention] and [isolated full-archive recovery][recovery] passed. [SEN-46 removal review][removal] records the bounded duplicate preview. | The storage plan keeps daily collection paused through phase 3. Complete its separate owner approval and current-backup gates. Elapsed growth observations remain on [SEN-50][growth]. |
+| Hosted enrollment | [SEN-28 acceptance][enrollment] verifies phone signup and access to the account controls for an existing manual connection after linking. | Confirm the selected connection is usable. Signup and account access do not prove ongoing collection; that is measured under [SEN-47][collection]. |
+
+[readiness]: https://github.com/han33-dotcom/Sentra/issues/44#issuecomment-6979112960
+[participation]: https://github.com/han33-dotcom/Sentra/issues/26#issuecomment-6976478124
+[retention]: https://github.com/han33-dotcom/Sentra/issues/29#issuecomment-6976478640
+[recovery]: https://github.com/han33-dotcom/Sentra/issues/30#issuecomment-6975754889
+[removal]: https://github.com/han33-dotcom/Sentra/pull/138#issuecomment-6979181224
+[growth]: https://github.com/han33-dotcom/Sentra/issues/50
+[enrollment]: https://github.com/han33-dotcom/Sentra/issues/28#issuecomment-6985960934
+[collection]: https://github.com/han33-dotcom/Sentra/issues/47
 
 ## Proposed windows, awaiting agreement
 
@@ -196,27 +216,27 @@ in this proposal have been approved or executed by this readiness work.
 
 ## Outstanding restart gates
 
-- [x] Fresh signed-in Supabase Free/organization database, objects and uncached
-  egress check; current bounded budget reservations permitted. Reverify at least
-  weekly, each new UTC month and before operation if stale. Preserve reservations,
-  thresholds and next-batch estimates; reconcile dashboard accounting under #50.
-- [x] Fresh account-wide GitHub Free/Actions allowance and **$0 budget / Usage
-  blocked** check. A repository variable alone was not used as this evidence.
-- [ ] Actual provider dashboard quotas, test-user/tier availability, scope and
-  callback settings checked; affected authorization reconnected/renewed with
-  consent and private evidence. Agree the Google Testing reconnection approach.
-- [ ] Participation readiness from Abolhoda (#26/#27); current consent and
-  withdrawal respected, and provider/public-policy setup complete. Team approval
-  was reported November 18. The owner removed the advisor-review outcome from
-  sprint scope; it is not a restart gate. A local `agreed` flag does not replace
-  each participant's consent.
-- [ ] Nasrallah's capacity and verified retention/backup/recovery/storage evidence
-  (#29/#30/#46/#50), including the storage plan's restart gate.
-- [ ] Reviewed deployment/configuration and #28/#47 prerequisites verified;
-  synthetic CI results do not prove hosted or real-device operation.
-- [ ] Team/operator records exact forward/catch-up scope, allowed first batch and
-  explicit restart authorization. Keep both controls paused until this is satisfied.
-- [ ] MohamadNasrallah verifies #44 acceptance. Keep the issue open until then.
+- [x] Signed-in Supabase Free, organization usage and budget controls verified.
+  Preserve reservations and limits. Reverify at least weekly, at each new UTC
+  month and before operating if stale. Estimate the next batch before operating.
+- [x] Signed-in GitHub Actions allowance and **$0 budget / Usage blocked**
+  verified. A repository variable alone was not used as evidence.
+- [x] Team participation policy, public notice and provider privacy links
+  verified. Each participant still supplies their own consent.
+- [x] Interim retention, full encrypted backup and isolated recovery verified.
+- [ ] Verify actual Google project quota and required scopes, agree the Testing
+  reconnection approach, and verify the affected authorization with participant
+  consent and private evidence. Check current consent and withdrawal before use.
+- [ ] Complete the [storage plan's phase 3 gate](storage-plan.md#phases-and-approvals).
+  Keep capacity reservations and bound the next batch. Elapsed growth evidence
+  belongs to SEN-50; do not infer growth from the readiness snapshot.
+- [ ] Record the exact forward window, bounded catch-up dates, first provider and
+  dataset, reviewed deployment/configuration, and explicit team/operator
+  authorization. Keep both collection controls paused until all restart gates pass.
+- [ ] Record criterion-by-criterion SEN-44 acceptance under
+  [policy version 4](local-delivery.md). Any supplemental teammate code review
+  is optional; participant consent, storage approvals and team/operator restart
+  authorization remain required.
 
 Record any future enabling time and first successful approved run separately in
 #47's private evidence. Never mark #44 Done based solely on this report or its PR.
