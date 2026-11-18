@@ -22,7 +22,7 @@ Secrets, custodian details and recovery locations stay in the restricted operato
 | Processing | `sentra.processing` | Inside the refresh, or the operator's Compose `processing` container | `sentra_viewer` | v0 daily wellness features, flags against each person's own baseline, and k-anonymous group statistics per device; mixed-device participants enter no device statistic ([processing](processing.md), [indicator contract](indicator-contract.md)) |
 | Private viewer | `viewer/app.py`, `sentra.viewer_app` | Streamlit Community Cloud, private app | `sentra_viewer` (read-only) | Team pages (daily activity, sleep, workouts, availability, board) and organization pages: overview, profiles, trends, follow-ups and reports ([reports](reports.md)); hosted acceptance remains separate |
 | Follow-up writes | `sentra.follow_up_store`, `sql/010` | Called by the viewer | `sentra_followups` (two functions only) | The only write path from the viewer; every rule rechecked in the database ([follow-ups](follow-ups.md)) |
-| Read API | `sentra.api` | Operator's Docker Compose, `127.0.0.1` | none (reads processed files) | Read-only team-operator API over processed outputs; one shared key, no organization scope ([read API](read-api.md)) |
+| Read API | `sentra.api` | Operator's Docker Compose, `127.0.0.1` | optional `sentra_viewer` for current organization policy | Team key or individual organization bearer credential; processed outputs read-only, organization scope resolved on every request through `sentra.access` ([read API](read-api.md)) |
 | Backups and recovery | `sentra.shared_backup`, `sentra.recovery` | Operator's machine | admin, run by the operator | Encrypted full backups of required audit tables, installed compact series, and organization, consent, enrollment and follow-up tables; offline verification and isolated restore. Provider credentials, keys, pending Fitbit links, browser sessions and rate limits are excluded ([retention policy](retention-policy.md), [recovery rehearsal](recovery-rehearsal.md)) |
 | Project website | `website/`, `.github/workflows/website.yml` | GitHub Pages, from `main` | none | Public project website; no data |
 | Team workflow | `.github/workflows/ci.yml`, `pr-policy.yml`, `team-*.yml` | GitHub Actions | none | Tests on Linux and Windows, data guard, PR policy, project board and Slack signals ([team workflow](team-workflow.md)) |
@@ -40,7 +40,7 @@ Private viewer (Streamlit, read-only):
   team pages      <- audit.*, board/board.json
   org pages       <- board/board.json, org.* consent, follow-ups   (access decided per page load)
   follow-up write -> sentra_followups functions only
-Processed files -> read API (operator, 127.0.0.1) -> team tools
+Processed files + current organization policy -> read API (127.0.0.1) -> authenticated team/organization tools
 ```
 
 ## Database identities

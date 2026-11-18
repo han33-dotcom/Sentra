@@ -1,0 +1,14 @@
+# Optional organization API access. Prepare private config/credentials first;
+# no role grants, credential generation, collection or public exposure occurs here.
+services:
+  api:
+    environment:
+      SENTRA_API_ORG_CONFIG: ${SENTRA_API_ORG_CONFIG:?viewer-only organization policy config}
+      SENTRA_API_ORG_CREDENTIALS_FILE: /run/sentra-api/credentials.json
+    volumes:
+      - type: bind
+        source: ./.private/api
+        target: /run/sentra-api
+        read_only: true
+        bind:
+          create_host_path: false

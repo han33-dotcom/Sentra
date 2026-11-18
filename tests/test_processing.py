@@ -163,6 +163,9 @@ class PipelineTests(unittest.TestCase):
             out = Path(folder) / 'processed'
             _, d, c, _ = pipeline.run(load(folder), out, log=lambda *_: None, devices=devices(folder))
             self.assertTrue((out / 'daily_features.parquet').is_file())
+            saved = pd.read_parquet(out / 'daily_features.parquet')
+            self.assertEqual(set(saved[saved.subject_id == 'p01'].device), {'Fitbit'})
+            self.assertEqual(set(saved[saved.subject_id == 'p02'].device), {'WHOOP'})
             meta = json.loads((out / 'metadata.json').read_text(encoding='utf-8'))
             self.assertIn('pending medical expert sign-off', meta['notice'])
             self.assertEqual(meta['assessment_version'], pipeline.ASSESSMENT_VERSION)
@@ -241,6 +244,7 @@ class GroupStatisticConsistencyTests(unittest.TestCase):
             mapping = devices(folder)
             _, d, c, _ = pipeline.run(load(folder), Path(folder) / 'out', log=lambda *_: None, devices=mapping)
         self.assertNotIn('p01', mapping)
+        self.assertTrue(d[d.subject_id == 'p01'].device.isna().all())
         self.assertEqual(c.device.tolist(), ['Fitbit'])  # no WHOOP row from p01's WHOOP sleep either
         self.assertEqual((c.workers.iloc[0], c.n_median_sleep_h.iloc[0]), (5, 5))
         self.assertAlmostEqual(c.median_sleep_h.iloc[0], 390 / 60)  # p02-p06 Fitbit sleep only
