@@ -1,8 +1,14 @@
 # Interim retention and backup policy
 
-Status: **proposal for team agreement (#29)**. Nothing in this document deletes data or
-enables an expiry. Every period below is a proposal, and the faculty advisor and the AUB IRB
-have the final say on it. Sources are in [retention-evidence.md](retention-evidence.md)
+Status: **interim policy agreed by the team (#29)**. On November 18, 2026,
+the project owner reported "Team agreed this proposal": 30 days of readily available
+detailed readings, the latest three verified backups for at most 90 days, and
+withdrawal deletion within 30 days only after a reviewed preview. No changes were
+requested. The owner also removed the advisor-review outcome from sprint scope on
+November 18; it is not an acceptance or restart gate. Nothing in this document
+deletes data or enables an expiry. Project-close policy and custody are outside
+this sprint; a post-project backup custodian has not been named in this decision.
+Sources are in [retention-evidence.md](retention-evidence.md)
 (numbers in brackets refer to its reference list). The storage design it relies on is in
 [storage-plan.md](storage-plan.md).
 
@@ -17,13 +23,13 @@ have the final say on it. Sources are in [retention-evidence.md](retention-evide
 4. **Withdrawal stops collection immediately.** What happens to collected data is stated in
    the consent form [12, 14, 15].
 
-## Retention schedule (proposed)
+## Interim retention schedule (team agreed)
 
 | Data class | Where | Readily available | Archive | Then | Reason |
 | --- | --- | --- | --- | --- | --- |
 | Consent history (append-only, incl. withdrawals) | `org.consents`, signed forms with the PI | whole project | — | keep ≥ 3 years after the project ends | AUB IRB manual §6.8 [12]; US Common Rule floor [10] |
 | Daily features and sparse daily/session data (sleep, resting HR, HRV, coverage, rule version) | Postgres `audit.records/measurements`, tier `measurements.parquet`, processed outputs | through FYP evaluation (Demo Day, May 2027) | — | IRB decision at project close: delete, or keep de-identified aggregates | needed for baselines and evaluation; a few KB per person-day |
-| Detailed series (minute rollups, original-resolution HR) | Postgres | **short window, proposed 30 days** (matches the 30-day `hr_raw` hot tier and covers the 3-day correction rechecks) | compressed Parquet tiers (~100 KB per person-day) | delete at project close | most identifying data class [20, 21]; dominant storage cost |
+| Detailed series (minute rollups, original-resolution HR) | Postgres | **short window, 30 days** (matches the 30-day `hr_raw` hot tier and covers the 3-day correction rechecks) | compressed Parquet tiers (~100 KB per person-day) | delete at project close, subject to advisor/IRB decision | most identifying data class [20, 21]; dominant storage cost |
 | Original API responses (compressed, hash-verified) | private bucket `sentra-originals` | whole project | — | delete at project close | the lossless source that lets everything else be rebuilt |
 | Encrypted backups | offline, in a private location held by the custodian, plus a second separate copy | latest 3 verified backups, at most **90 days** each | — | expire | 3-2-1 rule [19]; deletions reach backups within a known window [16] |
 | Authorized downloads / exports | the recipient's private location | as needed | — | the recipient deletes them within 30 days | downloads cannot be recalled |
@@ -34,7 +40,7 @@ The 30-day detail window and the 90-day backup life are set again after the comp
 measurements in #46 and #50. The window is sized to the correction and reprocessing window,
 not to the 28-day baseline, because baselines use daily values.
 
-## Withdrawal (proposed)
+## Withdrawal (interim team agreement)
 
 - **Immediately:** collection stops and the person is hidden from the dashboard, the API and
   group statistics (already implemented, #33 and #52).
@@ -55,13 +61,14 @@ not to the 28-day baseline, because baselines use daily values.
 - The owner approved one full backup on November 18 with a 500 MB private-root/
   per-backup ceiling and 4.5 GB monthly transfer ceiling. See the
   [rollout and preserved guards](storage-plan.md#november-18-approved-backup-headroom).
-  This capacity authorization does not agree the proposed retention schedule.
+  That capacity authorization was separate from the subsequent team retention
+  agreement recorded above.
   That one backup completed and passed offline verification on November 18
   (Beirut): 16 tables, 220 originals and no unsupported installed inventory gaps.
   See the dated [backup record](storage-plan.md#rollout-and-verified-backup-observed-november-18).
   The [isolated recovery](recovery-rehearsal.md#record) subsequently verified every
-  supported table and all 220 destination originals. Team agreement, off-machine
-  custody and destructive-operation approval remain separate.
+  supported table and all 220 destination originals. Off-machine custody and
+  destructive-operation approval remain separate from the team agreement.
 
 - Use the existing `shared-backup` command. It is encrypted with the local key, takes one
   consistent read-only snapshot of the audit tables and includes every original response.
@@ -108,10 +115,11 @@ All of the following, recorded in the task:
    reviewed.
 5. Both code owners approved, during a paused window.
 
-## Decisions needed
+## Later policy review (outside this sprint)
 
-1. Approve or change the detail window (30 days), the backup life (90 days) and the
-   withdrawal handling above.
+1. Revisit the agreed detail window (30 days), backup life (90 days) and withdrawal
+   handling if advisor requirements or measured capacity require a change; record
+   any revised team decision before applying it.
 2. Ask the advisor or IRB for the data-retention period at project close, and whether
    Lebanese Law 81/2018's health-data licence or its exemption for educational institutions
    applies [7–9].

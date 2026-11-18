@@ -1,11 +1,11 @@
 # Participation permissions and approval readiness
 
-Status: **draft for team and advisor review** (task
-[#26](https://github.com/han33-dotcom/Sentra/issues/26)). No new participant is
-enrolled under this document until the team agrees it and the outcome of the
-applicable review route is recorded: approval obtained, or an exemption or
-"no review needed" confirmed in writing. Existing participants `p01` and `p02` keep their current
-agreement until they confirm this version.
+Status: **team approved**, reported by the project owner on November 18, 2026
+(task [#26](https://github.com/han33-dotcom/Sentra/issues/26)). On the same date,
+the owner removed the advisor-review outcome from the sprint scope. It is not an
+acceptance, enrollment or collection-restart gate. Existing participants retain
+their current agreement until they confirm this version; each new participant
+must make their own consent and sharing choices.
 
 This document defines what a participant agrees to, who may see what, and what must
 be in place before enrollment. Signed forms, names, contact details and the
@@ -92,9 +92,7 @@ A participant can withdraw at any time, without giving a reason:
 
 | Check | Owner | Status |
 | --- | --- | --- |
-| Team agrees this document | All | Pending |
-| Advisor confirms the review route (institutional review board or exemption) and any required consent wording | Aboulhoda with the advisor | Pending |
-| Review outcome recorded: required approval obtained, or exemption / no-review-needed confirmed in writing | Aboulhoda | Pending |
+| Team agrees this document | All | Approved, as reported by the owner November 18 |
 | Consent form produced from this document and kept privately | Aboulhoda | Pending |
 | Participant added as a Google OAuth test user (Fitbit) | Collection owner | Per participant |
 | WHOOP member count stays within the development limit | Collection owner | Per participant |
@@ -114,11 +112,17 @@ decides between weekly assisted reconnects and pursuing publication. Sources:
 [Google Health API setup](https://developers.google.com/health/setup),
 [WHOOP app approval](https://developer.whoop.com/docs/developing/app-approval).
 
-## Questions for the advisor
+## November 18 sprint scope correction
 
-1. Does this pilot need institutional review board approval or an exemption, given
-   that it involves employees, health-related wearable data and an employer-side
-   viewer?
-2. Is the consent wording sufficient for organization users to view individual
-   details at the `individual` level?
-3. Which retention period should apply after the project ends?
+The review-route requirement originated in the initial document in
+[PR #33](https://github.com/han33-dotcom/Sentra/pull/33), merged November 3.
+The owner's November 18 instruction supersedes that sprint requirement. Historical
+issue comments and PR descriptions retain their original context. Team agreement,
+participant-specific consent, access boundaries, provider setup, public-policy
+publication and explicit operational authorization continue to govern their own steps.
+
+Provider-console observations on November 18 confirmed Google External / Testing
+with 2 of 100 test users and WHOOP Sandbox with 1 of 10 members. WHOOP's registered
+redirects now include localhost and the owner-authorized hosted callback, with the
+existing read-only scopes preserved. Actual rates are 100 requests/minute and
+10,000/day. See [readiness evidence](collection-restart-readiness.md#november-18-provider-console-readback).
