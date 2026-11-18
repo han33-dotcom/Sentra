@@ -46,7 +46,7 @@ class CompactionDatabaseTests(unittest.TestCase):
                 lambda m: f"do $role$ begin if not exists(select 1 from pg_roles where rolname='{m[1]}') then {m[0]} end if; end $role$;",migration)
             cls.db.execute(migration)
         cls.db.execute("insert into audit.participants values ('p01')")
-        for response in (RESPONSE, 'b' * 64):
+        for response in ('0' * 64, RESPONSE, 'b' * 64):
             cls.db.execute('''insert into audit.raw_response_manifest values (%s,'p01','google_health','minute_steps',
                 'e','{}','minute',now(),'x',%s,1,'{}')''', (response, 'c' * 64))
 
@@ -470,6 +470,17 @@ class CompactionDatabaseTests(unittest.TestCase):
         with self.assertRaisesRegex(SentraError,'paused'):
             m.preview(b,'p01','google_health','minute_steps')
         self.db.execute("update collector_private.observation_control set settings='{\"enabled\":false}'")
+
+    def test_removal_preview_selects_only_responses_with_both_copies(self):
+        removal, backend, *_ = self.removal_fixture()
+        self.rows('0' * 64, ['9'])  # Sorts before the compacted responses.
+        self.db.execute('delete from audit.measurements where source_response_id=%s', (RESPONSE,))
+
+        preview = removal.preview(backend, 'p01', 'google_health', 'minute_steps', limit=1)
+
+        self.assertEqual(preview['responses'], ['b' * 64])
+        self.assertEqual(preview['rows'], 1)
+        self.assertEqual(self.db.execute('select count(*) from audit.measurements').fetchone()[0], 2)
 
 
 class DenseDatasetTests(unittest.TestCase):
