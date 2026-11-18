@@ -233,8 +233,9 @@ No command in this flow enables either control.
 2. Create a private preview, for example:
    `sentra shared-removal-preview --participant p01 --provider google_health --dataset minute_steps --limit 20 --output .private/operations/removal-plan.json`.
    Each plan covers at most 200 original responses, 100,000 rows and 32 MB of row
-   payload. It expires after 24 hours. The preview checks all 22 logical columns
-   against current compact rows and records the paused-control timestamp.
+   payload. It expires after 24 hours. The preview selects responses that have
+   both copies, checks all 22 logical columns against the current compact rows,
+   and records the paused-control timestamp.
 3. Save private recovery evidence as JSON with `status: restored_and_verified`,
    `backup_manifest_sha256` (the encrypted manifest's SHA-256),
    `source_project_url`, `target_project_url`, `isolation_verified: true`, `counts`

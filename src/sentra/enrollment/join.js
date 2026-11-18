@@ -44,6 +44,12 @@
     return {sharing: document.querySelector('input[name="sharing"]:checked').value,
       demonstration: el("demonstration").checked, accepted: el("accepted").checked};
   }
+  function assessmentLabel(account) {
+    if (!account.enrolled) return "Not available";
+    if (account.assessment === "available") return "Eligible for assessment";
+    if (account.assessment === "insufficient") return "Insufficient usable history";
+    return "Not yet available";
+  }
   function render() {
     const account = state.signed_in;
     document.title = account ? "Your participation · Sentra" : "Join Sentra";
@@ -71,6 +77,7 @@
       el("participation").textContent = state.enrolled ? "Enrolled" : "Withdrawn";
       el("connection").textContent = !state.enrolled ? "Stopped" : state.connected ? "Connected" : "Reconnect required";
       el("data-status").textContent = !state.enrolled ? "Not contributing" : state.recently_contributing ? "Contributing" : state.latest_received_at ? "No recent readings" : "Waiting for first data";
+      el("assessment-status").textContent = assessmentLabel(state);
       el("data-detail").textContent = !state.enrolled
         ? "Your sharing and collection have stopped. Stored data follows the retention policy. A new invitation is needed to join again."
         : !state.connected
