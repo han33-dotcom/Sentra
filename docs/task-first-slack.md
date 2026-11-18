@@ -2,9 +2,10 @@
 
 Task: [SEN-66](https://github.com/han33-dotcom/Sentra/issues/66). Owner:
 `han33-dotcom`. Acceptance follows [local delivery](local-delivery.md); additional code review
-is optional. This replaces the native Sentra PR/review messages only after the
-verified implementation is released to `main` and the cutover below is verified.
-Until then, native notifications stay on and custom delivery stays off.
+is optional. Task-first delivery replaced native Sentra PR/review messages on
+November 18 after the reviewed implementation was released to `main` and the
+cutover below was verified. Native pulls/reviews and comments are off. Use the
+rollback procedure before restoring native events; never run both senders.
 
 ## Message and delivery contract
 
@@ -156,7 +157,7 @@ another post. Independent PRs continue, while the job still reports failure.
 
 ## Validation
 
-### November 18 authorized cutover
+### November 18 first attempt and rollback
 
 The owner explicitly authorized the scoped live cutover and verification. The
 existing Sentra Task Updates app was already installed in nsquared with exactly
@@ -184,10 +185,40 @@ list at **2026-11-18T11:21:28Z** confirmed exactly those two subscriptions.
 
 PR #128 aligns the notifier's GitHub permission with its PR-comment writes
 (`pull-requests: write`, `issues: read`) and adds safe operation/status diagnostics.
-The original failure is not claimed conclusively diagnosed until live verification.
-The replacement must be released before repeating the authorized cutover, with a
-fresh disable timestamp and actual card, replay and same-card update evidence.
-Comments stay off. Configuration changes alone are not acceptance evidence.
+The original response did not expose a conclusive HTTP diagnosis. The replacement
+required a release before repeating the authorized cutover, with a fresh disable
+timestamp and actual card, replay and same-card update evidence. That verification
+is recorded below; configuration changes alone are not acceptance evidence.
+
+### Verified replacement after release
+
+[Release #129](https://github.com/han33-dotcom/Sentra/pull/129) deployed the
+notification workflow to default-branch commit `54b5001`. Its
+[dry run](https://github.com/han33-dotcom/Sentra/actions/runs/44296383407) passed.
+The second cutover removed only `pulls` and `reviews`; the live subscription list
+at **2026-11-18T11:39:42Z** showed no Sentra features, with comments still off.
+That fresh time replaced `TEAM_SLACK_NATIVE_DISABLED_AT` before enabling
+`TEAM_SLACK_MODE=task-first`. Existing app scopes, credentials, other subscriptions
+and `TEAM_SYNC_ENABLED=true` were preserved.
+
+- [Initial delivery](https://github.com/han33-dotcom/Sentra/actions/runs/44296847718)
+  created one [SEN-66 card](https://nsquared-corp.slack.com/archives/C0C92DZ9TN0/p1795002049935599)
+  for ancestry PR #130. The visible heading starts with SEN-66; PR #130 is a
+  secondary implementation link, without a native duplicate or link unfurl.
+- [Replay](https://github.com/han33-dotcom/Sentra/actions/runs/44297024402)
+  reported `unchanged`. The one bot ledger remained comment `6977508720`, unchanged
+  at `2026-11-18T11:40:50Z`; its send-attempt count remained one.
+- [Title update](https://github.com/han33-dotcom/Sentra/actions/runs/44297158834)
+  reported `updated`, retaining Slack timestamp `1795002049.935599` and the same
+  ledger. No additional card or claim was created.
+- [Merge update](https://github.com/han33-dotcom/Sentra/actions/runs/44297930311)
+  again reported `updated` at that original timestamp. Live channel readback showed
+  **SEN-66 · Merged** on the same single card, with send-attempt count still one.
+
+The repaired PR-comment permission successfully created and updated the live
+ledger. Synthetic timeout/crash/rejection tests cover the failure paths without
+deliberately causing uncertain live sends. No collection or participant data was
+used for notification verification.
 
 ```text
 python -m unittest tests.team_workflow.test_slack_notify -v

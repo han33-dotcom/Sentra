@@ -131,7 +131,7 @@ Record lasting decisions in project documents or the task. Implemented means the
 required implementation PRs merged into `develop`; Done requires verified acceptance
 criteria. Agents perform every accessible check. Only inaccessible observations
 remain for human verification, with steps and expected evidence on the issue.
-Native Slack PR/review notifications and Project status synchronization are enabled;
+Task-first Slack cards and Project status synchronization are enabled;
 see the current [team workflow](docs/team-workflow.md) for scope and limitations.
 Use the issue number as the stable task ID: `[SEN-41] description` on tasks and
 PRs. A PR implementing several tasks declares one `Task URL:` plus one
