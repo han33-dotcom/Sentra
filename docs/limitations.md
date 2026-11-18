@@ -34,14 +34,18 @@ Last updated: November 18, 2026; see dated implementation/hosted evidence in [ev
 - **Officers and reviewers share the organization’s read scope.** Follow-up writes also
   depend on the active officer or assignee role. The operator can read closed history after
   sharing ends. (#51, #55, #72)
-- **The read API is a team operator credential** with no organization users. (#55)
+- **Organization API access is opt-in.** Individual expiring bearer credentials use
+  current database roles/consent through the shared access module. Operator keys retain
+  full operator scope and must never be shared with organization users. The API stays
+  loopback-only; no live organization credential or public deployment was provisioned.
+  Old processed files need an authorized rebuild before organization cohort requests.
 - **Data already delivered cannot be recalled.** Permission changes and withdrawals apply on the
   next render, but earlier downloads and exports stay with their recipient. (#64)
 - **Real organization users need hosting setup:** migration 007 applied, an `org.org_users` row,
   and the Streamlit app's private sharing list. (#55)
 - **Participation policy is team approved**, as reported November 18. The owner removed the
-  advisor-review outcome from sprint scope; participant consent and public-policy publication
-  remain separate steps. (#33)
+  advisor-review outcome from sprint scope. The public notice and Google/WHOOP links
+  were verified November 18 under SEN-26; participant-specific consent remains required.
 
 ## Enrollment and collection
 
@@ -49,8 +53,8 @@ Last updated: November 18, 2026; see dated implementation/hosted evidence in [ev
   authorization and readiness evidence. (#53)
 - **Provider limits.** Google Testing mode means weekly Fitbit reconnects. WHOOP Sandbox showed
   1 of 10 members on November 18. The hosted callback is now registered, but the host remains
-  Google-only; approved policy publication, hosted enablement and live authorization remain
-  separate. (#33, #64)
+  Google-only; hosted enablement and live authorization remain separate. The approved
+  privacy notice and provider links are now published and verified. (#33, #64)
 - **Real-phone evidence is partial.** One real Google signup and a sharing update are recorded;
   phone timing, reconnect and withdrawal on real devices, and hosted organization-user acceptance
   are outstanding. (#52, #64)

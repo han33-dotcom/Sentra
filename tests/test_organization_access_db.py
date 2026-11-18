@@ -120,6 +120,28 @@ class OrganizationAccessDatabaseTests(unittest.TestCase):
             with self.subTest(role=role):
                 self.assertTrue(self.rejected(f'set local role {role}; select * from org.consents'))
 
+    def test_api_uses_current_database_policy_with_viewer_role(self):
+        from sentra.api_access import read_policy
+        from sentra.errors import SentraError
+        self.db.execute("insert into audit.participants values ('p905')")
+        self.db.execute("insert into org.org_users(org_id,email,role) values ('org-a','api@example.test','reviewer')")
+        membership = self.join('p905', 'org-a')
+        self.consent(membership, 'p905', 'org-a', 'individual')
+
+        def read():
+            self.db.execute('set role sentra_viewer')
+            try:
+                return read_policy(self.db, 'api@example.test')
+            finally:
+                self.db.execute('reset role')
+
+        self.assertEqual(read().individuals, frozenset({'p905'}))
+        self.consent(membership, 'p905', 'org-a', withdrawn=True, at='2026-11-02')
+        self.assertEqual(read().contributors, frozenset())
+        self.db.execute("update org.org_users set active=false where email='api@example.test'")
+        with self.assertRaises(SentraError):
+            read()
+
 
 if __name__ == '__main__':
     unittest.main()

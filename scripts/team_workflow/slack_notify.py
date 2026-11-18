@@ -11,6 +11,7 @@ import re
 import sys
 import time
 from datetime import datetime
+from urllib.error import HTTPError
 from urllib.request import Request, build_opener
 
 from .check_pr import NoRedirect
@@ -30,6 +31,27 @@ DEFINITE_REJECTIONS = {"invalid_auth", "account_inactive", "token_revoked", "mis
 
 class SlackRejected(ValueError):
     """Slack explicitly rejected a request, as opposed to an uncertain send."""
+
+
+class DeliveryFailure(Exception):
+    """A fixed operation label and bounded error category, never remote content."""
+
+    def __init__(self, stage, error):
+        self.stage = stage
+        self.category = "http" if isinstance(error, HTTPError) else (
+            "timeout" if isinstance(error, TimeoutError) else "request-failed")
+        self.status = error.code if (isinstance(error, HTTPError)
+                                    and type(error.code) is int and 100 <= error.code <= 599) else None
+        super().__init__("Delivery operation failed.")
+
+
+def delivery_step(stage, operation, *args):
+    try:
+        return operation(*args)
+    except SlackRejected:
+        raise  # Keep the explicit-rejection state transition in the caller.
+    except Exception as error:
+        raise DeliveryFailure(stage, error) from None
 
 
 class SlackClient:
@@ -176,11 +198,15 @@ def notify(github, slack, mode="native", cutover=None, dry_run=True, now=None):
     for pull in github.list_pulls():
         try:
             result = _notify_pull(github, slack, pull, cutoff, dry_run, now)
-        except Exception:
+        except Exception as error:
             # Preserve this PR's ledger and never retry a possibly accepted POST.
             # Do not expose raw exceptions, HTTP bodies or channel history.
             result = {"pr": pull["number"], "action": "error",
                       "errors": ["Card reconciliation failed; inspect this PR's metadata, delivery ledger and access."]}
+            if isinstance(error, DeliveryFailure):
+                result.update(stage=error.stage, category=error.category)
+                if error.status is not None:
+                    result["http_status"] = error.status
         if result is not None:
             output.append(result)
     return output
@@ -203,13 +229,14 @@ def _notify_pull(github, slack, pull, cutoff, dry_run, now):
     payload, fingerprint, key = card(pull, numbers, reviews)
     if dry_run:
         return {"pr": pull["number"], "action": "preview", "payload": payload}
-    comment_id, state = read_ledger(github.comments(pull["number"]), pull["number"])
+    comments = delivery_step("read-ledger", github.comments, pull["number"])
+    comment_id, state = read_ledger(comments, pull["number"])
     if state and state["phase"] == "pending":
-        timestamp = slack.recover(key, state["attempted_at"])
+        timestamp = delivery_step("recover-card", slack.recover, key, state["attempted_at"])
         if timestamp is None:
             raise ValueError("Prior Slack delivery is uncertain; refusing to send another copy.")
         state.update(phase="sent", ts=timestamp)
-        github.update_comment(comment_id, ledger_body(state))
+        delivery_step("save-recovered-ledger", github.update_comment, comment_id, ledger_body(state))
     if state and state["phase"] == "sent":
         if state["fingerprint"] == fingerprint:
             return {"pr": pull["number"], "action": "unchanged"}
@@ -217,9 +244,9 @@ def _notify_pull(github, slack, pull, cutoff, dry_run, now):
         update = dict(payload, ts=state["ts"])
         update.pop("unfurl_links")
         update.pop("unfurl_media")
-        slack.call("chat.update", update)
+        delivery_step("update-card", slack.call, "chat.update", update)
         state["fingerprint"] = fingerprint
-        github.update_comment(comment_id, ledger_body(state))
+        delivery_step("save-updated-ledger", github.update_comment, comment_id, ledger_body(state))
         return {"pr": pull["number"], "action": "updated"}
     if state and state.get("attempts", 1) >= 3:
         raise ValueError("Slack delivery was repeatedly rejected; manual reconciliation required.")
@@ -228,20 +255,20 @@ def _notify_pull(github, slack, pull, cutoff, dry_run, now):
              "fingerprint": fingerprint, "attempted_at": (now or time.time)(), "attempts": attempts + 1}
     if comment_id is None:
         # A timed-out claim creates no Slack POST. A replay finds the claim.
-        comment_id = github.create_comment(pull["number"], ledger_body(state))["id"]
+        comment_id = delivery_step("create-claim", github.create_comment, pull["number"], ledger_body(state))["id"]
     else:
-        github.update_comment(comment_id, ledger_body(state))
+        delivery_step("renew-claim", github.update_comment, comment_id, ledger_body(state))
     try:
-        result = slack.call("chat.postMessage", payload)
+        result = delivery_step("post-card", slack.call, "chat.postMessage", payload)
     except SlackRejected:
         state["phase"] = "rejected"  # An explicit ok:false did not create a message.
-        github.update_comment(comment_id, ledger_body(state))
+        delivery_step("save-rejection", github.update_comment, comment_id, ledger_body(state))
         raise
     # Missing/invalid timestamp is uncertain too: preserve the pending claim.
     if result.get("channel") != CHANNEL or not re.fullmatch(r"[0-9]+\.[0-9]+", result.get("ts", "")):
         raise ValueError("Slack delivery acknowledgement is incomplete; preserve the pending claim.")
     state.update(phase="sent", ts=result["ts"])
-    github.update_comment(comment_id, ledger_body(state))
+    delivery_step("save-sent-ledger", github.update_comment, comment_id, ledger_body(state))
     return {"pr": pull["number"], "action": "created"}
 
 
