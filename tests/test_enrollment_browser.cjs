@@ -105,6 +105,22 @@ test('an expired connection is not described as connected while waiting for data
   assert.doesNotMatch(b.node('data-detail').textContent,/account is connected/);
 });
 
+test('assessment status uses published eligibility independently of connection and recent data', async()=>{
+  for (const [enrolled, assessment, expected] of [
+    [true, 'available', 'Eligible for assessment'],
+    [true, 'insufficient', 'Insufficient usable history'],
+    [true, 'not_available', 'Not yet available'],
+    [true, undefined, 'Not yet available'],
+    [false, 'available', 'Not available'],
+  ]) {
+    const b = browser(async()=>response(status({joining:false,signed_in:true,enrolled,
+      connected:true,recently_contributing:true,sharing:'group_only',demonstration:false,
+      assessment})),{hash:''});
+    await flush();
+    assert.equal(b.node('assessment-status').textContent, expected);
+  }
+});
+
 test('a linked manual account has the ordinary reconnect, sharing and withdrawal controls', async()=>{
   const b=browser(async()=>response(status({joining:false,signed_in:true,enrolled:true,
     fitbit_operator_managed:true,connected:false,sharing:'group_only',demonstration:false})),{hash:''});
