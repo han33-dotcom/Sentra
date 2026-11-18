@@ -27,7 +27,7 @@ Last updated: November 18, 2026. Implementation and hosted observations are dist
 | Withdrawal | Takes effect immediately in views; no automatic deletion | Hidden on the next render, including the follow-up note and history. A withdrawal before the follow-up read snapshot also filters out both | #35, #64, #72; `test_privacy_matrix.py`, `test_follow_ups_db.py`, `test_organization_access_db.py` | Yes | Pending |
 | Sharing reduced to group-only | Individual details disappear immediately | Hidden on the next render, including follow-up notes and history | `test_privacy_matrix.py` | Yes | Pending |
 | Excluded fields | No names, contact details, provider account IDs or location in published outputs | The board carries only `id`, `name` (= pseudonym), `device`, `days`; extra source columns never reach it | `test_privacy_matrix.py::ExcludedFieldsTests`; [participation permissions](participation-permissions.md) | Yes | Pending |
-| One shared access check | Viewer, API, downloads and notes use one module | Viewer pages and Follow-ups use `sentra.access`. Follow-ups also enforce organization and current consent in the database. Downloads, audit tools and the read API are team-only | #51, #55, #72; [read API](read-api.md) | Yes (viewer) | Pending |
+| One shared access check | Viewer, API, downloads and notes use one module | Viewer and organization API resolve current scope through `sentra.access`; API JSON downloads use that decision and organization cohorts are recomputed in scope. Follow-ups also enforce organization/current consent in the database. Team credentials retain operator scope | #51, #55, #72; [read API](read-api.md), `test_api_organization.py` | Yes | Sequential hosted viewer scope below; no live organization API credential provisioned |
 | Participation document | Data categories, recipients, sharing and withdrawal defined; team agreement; provider prerequisites checked | Document merged; owner reported team approval November 18 and removed advisor-review outcome from sprint scope | #33; [participation permissions](participation-permissions.md) | — | Team approval and provider-console evidence recorded; public-policy publication and participant-specific consent remain separate |
 
 ## Organization application (SEN-34, SEN-39, SEN-40, SEN-41, SEN-31, SEN-42)
@@ -189,6 +189,9 @@ remain required.
 WHOOP app-owner administration was also verified November 18: Sandbox, 1 of 10
 members, 100 requests/minute and 10,000/day. The explicitly authorized hosted
 callback was saved alongside localhost, preserving existing scopes and credentials.
-The retired Notion policy link remains a SEN-26 prerequisite; the host stays
-Google-only and collection paused. This does not establish live token renewal or
-participant sign-in.
+The approved notice was subsequently published by release #124 at
+`https://han33-dotcom.github.io/Sentra/privacy.html` (Website run 44289061165).
+The public page was viewed and Google Branding/WHOOP saved fields were read back to
+that exact URL; Google's separately authorized domain was also saved. SEN-26 has
+complete acceptance and its Project reconciliation set Done. The host stays
+Google-only and collection paused; this does not establish participant token renewal.

@@ -310,6 +310,9 @@ def run(obs: pd.DataFrame, out_dir: Path, ages=None, log=print, devices=None):
     d = baselines(d)
     log(f'4 baselines  rhr baseline available on {int(d.rhr_base.notna().sum()) if "rhr_base" in d else 0:,} days')
     d = flags(d)
+    # Persist the same single-provider provenance used by board/cohort consumers.
+    # Unknown/mixed providers remain missing; an organization API must never guess.
+    d['device'] = d.subject_id.map(lambda pid: DEVICES.get((devices or {}).get(pid)))
     log(f'5 flags      wellness levels on usable days: {d[d.usable_day].wellness_level.value_counts().to_dict()}')
     c = cohort(d, devices)
     log(f'6 cohort     {len(c)} date-device rows, {int(c.suppressed.sum())} suppressed (<{TH["cohort_k_anonymity"]} people)')
