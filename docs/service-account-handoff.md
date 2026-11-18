@@ -48,17 +48,20 @@ renewal. Remaining service and recovery observations stay explicit in SEN-70.
 
 ## Privacy policy and public contact
 
-Notion has been retired. A replacement public Sentra privacy policy URL is
-pending. Use [SEN-26] to agree the policy, public contact and publishing location
-before giving a new URL to participants or updating a provider dashboard. Verify
-the published page from a signed-out browser and check any dashboard or material
-that still points to the retired link. Coordinate WHOOP changes with its app owner.
+Notion has been retired. On November 18, the owner approved the prepared public
+privacy notice, `sentra.teamhub@gmail.com` as its contact, and publication at
+`https://han33-dotcom.github.io/Sentra/privacy.html`. The owner also authorized
+updating Google and WHOOP privacy-policy fields to this URL after publication.
+The source is `website/privacy.html`; the existing Pages workflow publishes it
+when this change reaches main. Verify the published page without application
+authentication before saving provider links. Record actual deployment and provider
+readback on [SEN-26]; approval alone is not a claim that those steps have completed.
 
 On November 18 the existing WHOOP owner opened the Sentra app. Its privacy-policy
 field still pointed to the retired Notion page; this was recorded without restoring
 Notion as a project service. The separately authorized hosted callback was added,
 while the existing app owner, contact, credentials and scopes were preserved.
-Policy replacement and publication remain with SEN-26.
+The subsequent approved replacement and its verification are tracked on SEN-26.
 
 [SEN-26]: https://github.com/han33-dotcom/Sentra/issues/26
 [SEN-30]: https://github.com/han33-dotcom/Sentra/issues/30
