@@ -22,8 +22,10 @@ Sessions last 30 minutes; the same provider login works in another browser.
 Participants are recorded in memberships and consent history. Do **not** add a
 participant to `org.org_users`, the viewer's team-operator allowlist, or the
 private viewer's hosting invitations just to let them enroll. Those grant a
-different kind of access. Organization officers/reviewers need a separately
-designated organization identity. A participant owning the WHOOP developer app
+different kind of access. An officer or reviewer can also be a participant, using
+the same email if explicitly authorized for that organization role. Participation
+does not itself grant that role; synthetic role checks use designated test access.
+A participant owning the WHOOP developer app
 does not make them a Sentra officer.
 
 An invitation carries its secret in a URL **fragment**, which is not sent in HTTP
@@ -168,7 +170,10 @@ operator cannot verify the original account or the participant withdrew, stop.
 
 Apply [migration 011](../sql/011_fitbit_link_invites.sql) after 008 using the
 reviewed deployment procedure. If the release includes Follow-ups, apply 010
-before 011. Then deploy the updated enrollment service.
+before 011. Apply [migration 016](../sql/016_fitbit_self_service.sql) after 011,
+then deploy the updated enrollment service. It grants only the enrollment service
+the narrow transition needed for a verified same-account reconnect; it does not
+change any existing identity, credential or consent when applied.
 Verify that the Google OAuth client can request the Google Account email scope
 before issuing a live link. With the same private enrollment configuration used
 by the service, run this from a private terminal:
@@ -190,9 +195,13 @@ and [Gmail's address guidance](https://support.google.com/mail/answer/10313).
 The callback records one membership and consent on the original participant ID.
 Linking and subsequent hosted sign-ins leave the encrypted Fitbit credential
 and history intact. Returning sign-in recognizes the stored Google subject.
-If a legacy Fitbit needs a new collection credential, the Sentra operator
-verifies the original account and uses the [private reconnect workflow](operating-guide.md#manual-runs-and-reconnect).
-Participants can still manage sharing and withdraw on the hosted page.
+The participant has the same sharing, withdrawal, provider-connection and reconnect
+controls as someone who originally enrolled on the web. An explicit reconnect
+requests health access from the same Google account, replaces the old encrypted
+credential, and moves it to web self-service in one transaction. A wrong account
+or failed save leaves the original connection intact. Reconnect neither creates
+a second participant nor starts collection. After withdrawal, a fresh invitation
+and accepted choices are required to rejoin, just as for web-created accounts.
 An incorrect account, expired or used link, or a participant whose eligibility
 changed fails without committing enrollment changes. A successful link consumes
 the invitation. The participant can then sign in again from the ordinary account
@@ -204,7 +213,10 @@ with account selection. It proves the already-linked identity, discards OAuth to
 and leaves collection credentials and consent unchanged. Unknown identities still
 need an invitation. New enrollment and the signed-in account's explicit reconnect
 continue to request the health scopes and offline access needed for collection;
-operator-managed Fitbit accounts still use the private reconnect workflow.
+this includes linked, formerly operator-managed Fitbit accounts. An unlinked
+sign-in explains the one-time setup step. This identity-binding step is necessary
+because the original manual connection did not store a verified web-login subject;
+it is not a permanent restriction on the participant's capabilities.
 
 ## Collection integration
 
@@ -257,11 +269,13 @@ unavailable; it is not a verified zero eligible participants.
 
 ## Current deployment and remaining acceptance
 
-The November 3 release, PR #54 (`7419856`), is published on `main`. The participant
-page is https://sentra-enrollment.onrender.com/join, on Render Free in Frankfurt,
+The participant page is https://sentra-enrollment.onrender.com/join, on Render Free in Frankfurt,
 with manual deployments from `main`. The existing private viewer remains
 https://sentra-wearable-audit.streamlit.app, using its retained `ETL-pipeline`
-deployment reference at the released commit. Preserve the private audience,
+deployment reference. Both hosts were verified on release `bea825f` on November 18;
+later release commits do not automatically establish the enrollment deployment.
+Record the exact deployed commit when rolling out migration 016 and manual-account
+self-service reconnect. Preserve the private audience,
 viewer-only secrets, existing URLs and Google callbacks when deploying.
 
 Real Google signup and returning-account sharing updates were reported on a phone
@@ -271,7 +285,7 @@ phone timing has been supplied. Reconnect/withdrawal with a real person remains 
 Task acceptance follows [local delivery](local-delivery.md); only observations
 unavailable to the agent require human verification instructions.
 
-Acceptance corrections in the current work branch:
+Existing deployed acceptance corrections:
 
 - The viewer rechecks organization permissions at the start of every render, so
   sharing/withdrawal changes and removed roles apply on the next page render.
@@ -290,9 +304,8 @@ Acceptance corrections in the current work branch:
 - Private aggregate counts preserve the difference between an unavailable
   assessment result and a verified zero.
 
-These corrections need implementation-agent self-review, acceptance, CI and release
-under [agent-owned delivery](local-delivery.md), plus verified deployment, before they are claimed
-as deployed behavior. Synthetic tests use fake accounts/records and an isolated
+Further changes require implementation-agent self-review, acceptance, CI and release
+under [agent-owned delivery](local-delivery.md), plus verified deployment. Synthetic tests use fake accounts/records and an isolated
 loopback PostgreSQL database; they grant no real person organization access.
 
 Operational prerequisites still open:
@@ -302,14 +315,14 @@ Operational prerequisites still open:
   `https://sentra-enrollment.onrender.com/oauth/whoop/callback`; the saved app now
   lists it alongside localhost, preserving existing read-only scopes including
   `read:profile`. Sandbox showed 1 of 10 members and limits of 100 requests/minute
-  and 10,000/day. The retired Notion policy link still needs the approved replacement
-  under SEN-26. Hosted enablement and participant authorization remain separate;
+  and 10,000/day. The approved public privacy notice was subsequently saved in the
+  provider settings under SEN-26. Hosted enablement and participant authorization remain separate;
   no live sign-in or provider-data request was performed. WHOOP
   requires membership for developer access, so a free account alone is not an
   alternative. See [WHOOP requirements](https://developer.whoop.com/docs/developing/overview/)
   and [redirect/team configuration](https://developer.whoop.com/docs/developing/getting-started/).
-- **Assessment:** the assessment contract in PR #56 is now on `develop`, but a
-  bounded enrollment-facing eligibility feed from #45/#49 is still needed.
+- **Assessment:** migration 014 and the bounded enrollment-facing eligibility feed
+  from #45/#49 are deployed. Missing or stale publications still mean unknown.
   Do not infer insufficient history, readiness or a wellness result from signup,
   credential presence, last fetch time or arbitrary readings.
 - **Availability:** Render Free sleeps after inactivity. A November 3 return
