@@ -54,6 +54,12 @@ before giving a new URL to participants or updating a provider dashboard. Verify
 the published page from a signed-out browser and check any dashboard or material
 that still points to the retired link. Coordinate WHOOP changes with its app owner.
 
+On November 18 the existing WHOOP owner opened the Sentra app. Its privacy-policy
+field still pointed to the retired Notion page; this was recorded without restoring
+Notion as a project service. The separately authorized hosted callback was added,
+while the existing app owner, contact, credentials and scopes were preserved.
+Policy replacement and publication remain with SEN-26.
+
 [SEN-26]: https://github.com/han33-dotcom/Sentra/issues/26
 [SEN-30]: https://github.com/han33-dotcom/Sentra/issues/30
 [SEN-70]: https://github.com/han33-dotcom/Sentra/issues/70

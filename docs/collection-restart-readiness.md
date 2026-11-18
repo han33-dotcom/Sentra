@@ -149,9 +149,22 @@ the viewer retained `http://localhost:8501/oauth2callback` and its hosted
 `/oauth2callback`. No client, secret, audience, test-user list or publishing state
 was changed. Publishing was unavailable until Branding configuration is complete.
 This resolves the earlier unavailable Google Audience observation; it does not
-prove token renewal or authorize reconnection, publication or collection. WHOOP
-app-owner verification and the agreed Google Testing reconnection approach remain
-open.
+prove token renewal or authorize reconnection, publication or collection. The agreed
+Google Testing reconnection approach remains open.
+
+The existing WHOOP app owner subsequently signed in. The Sentra app showed Sandbox,
+1 of 10 connected members, 100 requests/minute and 10,000/day. All six existing
+read-only scopes, including `read:profile`, were present; no webhooks were configured.
+Initially only `http://localhost:8765/callback` was registered. With the owner's
+explicit authorization, the hosted callback
+`https://sentra-enrollment.onrender.com/oauth/whoop/callback` was added and the saved
+detail page showed both redirects. Existing scopes, credentials, owner, contacts,
+tier and limits were preserved. No token renewal, provider-data request or participant
+authorization was exercised. The host remains Google-only and collection paused.
+
+The WHOOP privacy-policy field still points to retired Notion content. Its replacement
+requires the participation-policy decision and signed-out publication verification
+under SEN-26 before updating the field. This console check does not resolve that gate.
 
 ## Proposed windows, awaiting agreement
 
