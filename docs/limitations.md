@@ -39,8 +39,9 @@ Last updated: November 18, 2026; see dated implementation/hosted evidence in [ev
   next render, but earlier downloads and exports stay with their recipient. (#64)
 - **Real organization users need hosting setup:** migration 007 applied, an `org.org_users` row,
   and the Streamlit app's private sharing list. (#55)
-- **Participation document is a draft** until the team agrees it and the advisor confirms the
-  review route. (#33)
+- **Participation policy is team approved**, as reported November 18. The owner removed the
+  advisor-review outcome from sprint scope; participant consent and public-policy publication
+  remain separate steps. (#33)
 
 ## Enrollment and collection
 
@@ -66,7 +67,8 @@ Last updated: November 18, 2026; see dated implementation/hosted evidence in [ev
 ## Storage, backup and recovery
 
 - **Interim retention has team agreement.** The owner reported agreement on November 18.
-  Advisor/IRB decisions and post-project custody remain open; no expiry is implemented.
+  Post-project custody is outside the sprint; no expiry is implemented. The advisor-review
+  outcome was removed from sprint scope by the owner.
   (#58, [retention policy](retention-policy.md))
 - **Supabase's own backups remain unverified.** The full encrypted application backup
   and isolated hosted restore passed November 18: all 16 table counts/fingerprints and

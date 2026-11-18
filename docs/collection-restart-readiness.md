@@ -205,8 +205,11 @@ in this proposal have been approved or executed by this readiness work.
 - [ ] Actual provider dashboard quotas, test-user/tier availability, scope and
   callback settings checked; affected authorization reconnected/renewed with
   consent and private evidence. Agree the Google Testing reconnection approach.
-- [ ] Participation/approval readiness from Abolhoda (#26/#27); current consent
-  and withdrawal respected. A local `agreed` flag is not new sprint approval.
+- [ ] Participation readiness from Abolhoda (#26/#27); current consent and
+  withdrawal respected, and provider/public-policy setup complete. Team approval
+  was reported November 18. The owner removed the advisor-review outcome from
+  sprint scope; it is not a restart gate. A local `agreed` flag does not replace
+  each participant's consent.
 - [ ] Nasrallah's capacity and verified retention/backup/recovery/storage evidence
   (#29/#30/#46/#50), including the storage plan's restart gate.
 - [ ] Reviewed deployment/configuration and #28/#47 prerequisites verified;
