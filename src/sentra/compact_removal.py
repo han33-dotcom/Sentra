@@ -67,8 +67,18 @@ def preview(backend,participant,provider,dataset,*,limit=20,now=None):
     try:
         with backend.db.transaction():
             _lock_tables(backend.db); paused=_paused(backend.db)
-            responses=[r[0] for r in backend.db.execute(f'''select distinct source_response_id
-                from audit.measurements where {compaction.SCOPE} order by 1 limit %s''',(*scope,limit)).fetchall()]
+            responses = [row[0] for row in backend.db.execute('''
+                select distinct s.source_response_id
+                from audit.series s
+                where s.participant_id=%s and s.provider=%s and s.dataset=%s
+                  and exists (
+                      select 1 from audit.measurements m
+                      where (m.participant_id,m.provider,m.dataset,m.source_response_id) =
+                            (s.participant_id,s.provider,s.dataset,s.source_response_id)
+                  )
+                order by s.source_response_id limit %s''', (*scope, limit)).fetchall()]
+            if not responses:
+                raise SentraError('No responses have both compact and per-field rows in this scope.')
             state=_snapshot(backend.db,scope,responses)
             plan={'format':1,'project_url':backend.credentials['url'],'scope':list(scope),'responses':responses,
                   'created_at':now.isoformat(),'expires_at':(now+timedelta(days=1)).isoformat(),
