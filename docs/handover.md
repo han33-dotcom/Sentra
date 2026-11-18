@@ -53,13 +53,16 @@ and nothing here deletes data.
 
 ## Open decisions and gates
 
-These decisions belong to the team, the advisor or the medical expert. Until they are recorded,
+These decisions belong to the team or the medical expert. Until they are recorded,
 the related steps stay closed:
 
-- **Team agreement on the participation document**, and the advisor's confirmation of the review
-  route ([before enrolling anyone](participation-permissions.md#before-enrolling-anyone), SEN-26).
+- **Participation setup:** team approval was reported November 18 and the owner removed
+  the advisor-review outcome from sprint scope. Participant-specific consent and public-policy
+  publication still apply ([before enrolling anyone](participation-permissions.md#before-enrolling-anyone), SEN-26).
 - **Collection restart** ([outstanding restart gates](collection-restart-readiness.md#outstanding-restart-gates)).
-- **Retention periods and backup rules** ([decisions needed](retention-policy.md#decisions-needed), SEN-29).
+- **Live destructive-operation approval:** the interim retention policy is team agreed and
+  backup/recovery verified (SEN-29/SEN-30); exact previews and owner approvals still apply.
+  Post-project custody is outside this sprint ([retention policy](retention-policy.md)).
 - **Medical expert sign-off on thresholds** ([indicator contract](indicator-contract.md),
   SEN-49). The dashboard owner agreed the v0 names/states/meanings on November 14;
   that agreement does not approve the thresholds.

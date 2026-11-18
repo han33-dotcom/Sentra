@@ -4,10 +4,10 @@ Status: **interim policy agreed by the team (#29)**. On November 18, 2026,
 the project owner reported "Team agreed this proposal": 30 days of readily available
 detailed readings, the latest three verified backups for at most 90 days, and
 withdrawal deletion within 30 days only after a reviewed preview. No changes were
-requested. This is the owner's report of team agreement, not an advisor/IRB decision.
-Nothing in this document deletes data or enables an expiry. The faculty advisor and
-the AUB IRB retain the final decision on institutional requirements and project-close
-retention; a post-project backup custodian has not been named in this decision.
+requested. The owner also removed the advisor-review outcome from sprint scope on
+November 18; it is not an acceptance or restart gate. Nothing in this document
+deletes data or enables an expiry. Project-close policy and custody are outside
+this sprint; a post-project backup custodian has not been named in this decision.
 Sources are in [retention-evidence.md](retention-evidence.md)
 (numbers in brackets refer to its reference list). The storage design it relies on is in
 [storage-plan.md](storage-plan.md).
@@ -115,7 +115,7 @@ All of the following, recorded in the task:
    reviewed.
 5. Both code owners approved, during a paused window.
 
-## Decisions needed
+## Later policy review (outside this sprint)
 
 1. Revisit the agreed detail window (30 days), backup life (90 days) and withdrawal
    handling if advisor requirements or measured capacity require a change; record
