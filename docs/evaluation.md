@@ -56,7 +56,7 @@ Last updated: November 18, 2026. Implementation and hosted observations are dist
 | Incomplete assessments | Missing inputs or short history never read as calm; states consistent everywhere | "Partial" and "Not enough information" states; versioned board. Group statistics in processing and the read API are per device, as in the overview, with matching contributor counts; mixed-device participants enter no device statistic; the API refuses a pooled pre-device snapshot | #56, #79; [indicator contract](indicator-contract.md#consistency-checks); `test_processing.py::GroupStatisticConsistencyTests` | Yes | November 17 authorized stored-data refresh and compatible board/assessment readback passed; no collection restarted |
 | Indicator definitions | Agreed names, states and meanings; expert package; provisional until reviewed | Contract and evidence documents merged | #56; [medical evidence](medical-evidence.md) | — | Dashboard owner agreed v0 names/states/meanings November 14; expert threshold sign-off remains pending |
 | Consistent updates | Changed information refreshed efficiently; repeated runs safe; failed processing keeps the previous complete view | Each published tier set and board is complete. Monthly publication in #106 detects historical corrections/omissions through source fingerprints and reuses verified unchanged objects; an interrupted board upload retains the old complete board and is repaired on retry. Full compact-cache processing and obsolete-object storage remain limitations | #57, #80, #106; [publication consistency](wellness-board.md#publication-consistency-48) | Yes | Pending |
-| Backup readiness | Policy agreed; fresh verified backup; destructive steps gated | Policy proposed. Full encrypted backup and offline verification completed November 18: 16 tables, 220 originals, no inventory gaps | #58, #67, #72, #114; [backup record](storage-plan.md#rollout-and-verified-backup-observed-november-18) | Yes | Backup and isolated recovery verified; retention agreement remains separate |
+| Backup readiness | Policy agreed; fresh verified backup; destructive steps gated | Owner reported team agreement November 18. Full encrypted backup and offline verification completed: 16 tables, 220 originals, no inventory gaps | #58, #67, #72, #114; [backup record](storage-plan.md#rollout-and-verified-backup-observed-november-18); [retention decision](retention-policy.md) | Yes | Interim policy, backup and isolated recovery verified; advisor/IRB and post-project custody decisions remain separate |
 | Recovery rehearsal | Restore into an isolated project; counts and fingerprints match | Full hosted restore verified all 16 tables / 251,971 rows and 220 destination originals; compact projection and access/allocator post-checks passed | #58, #67, #117; `test_backup_restore_db.py`; [recovery record](recovery-rehearsal.md#record) | Yes (throwaway PostgreSQL) | Passed November 18 in a separate Free project; derived rebuild, key-loss and independent custody scenarios unverified |
 | Lossless storage | Compact without information loss; measured savings | Compact series with re-expansion; about 7× smaller in a local test. Tiers read a compact reading only when its per-field row is gone and its record still names the same response, so removing verified rows cannot change published tiers | #59, #81; [storage plan](storage-plan.md#implementation-status-46); `test_compaction_db.py` | Yes (throwaway PostgreSQL) | Live phase-3 deletion remains gated; see November 17 operations evidence |
 | Growth forecast | Measured costs and a recommendation for the next batch | Measurement log implemented | #60; [capacity measurements](capacity-measurements.md) | Yes | Measurements pending collection restart |
@@ -177,5 +177,16 @@ released `07678e6af5cdf300374e6e09e77e1f806c1525bc`: all supported table counts 
 fingerprints, 220 destination-original hashes and the compact projection matched.
 It took 891.16 seconds and reserved 897,486,250 bytes within its 1.1 GB run cap;
 98,304 bytes of bounded progress inspection and 65,536 bytes of post-checks were
-also recorded. The retention proposal still needs agreement. No collection,
-derived refresh or deletion was performed by the recovery run.
+also recorded. No collection, derived refresh or deletion was performed by the
+recovery run. Subsequently, the owner reported team agreement to the interim
+retention proposal and explicitly authorized cleanup of the isolated recovery
+project and listed temporary files. Cleanup completed with the source archive's
+manifest hash unchanged and verification evidence preserved. Advisor/IRB decisions,
+post-project custody and live destructive-operation approvals remain separate.
+
+WHOOP app-owner administration was also verified November 18: Sandbox, 1 of 10
+members, 100 requests/minute and 10,000/day. The explicitly authorized hosted
+callback was saved alongside localhost, preserving existing scopes and credentials.
+The retired Notion policy link remains a SEN-26 prerequisite; the host stays
+Google-only and collection paused. This does not establish live token renewal or
+participant sign-in.

@@ -169,6 +169,16 @@ enrollment service is deployed against the target.
 
 ## Afterwards
 
+On November 18, after the passing result and explicit owner authorization, the
+isolated `sentra-recovery-20261118` project was permanently deleted. Its organization
+returned to an empty project list with zero database size. Exactly the copied
+encrypted archive and nine temporary credential/configuration files listed in the
+private cleanup plan were removed locally. The original archive's manifest SHA-256
+was rechecked and unchanged; backup and recovery receipts, unrelated evidence, the
+empty Free recovery organization and the live project were preserved. The private
+cleanup receipt records the exact paths and timestamp. This completed rehearsal
+cleanup does not authorize deleting any source/live data or backup.
+
 After recording the result, obtain explicit authorization to permanently delete the
 named throwaway project and its rehearsal copies; they contain participant data.
 Keep the verified source archive and recovery evidence. Remove only the rehearsal's

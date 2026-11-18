@@ -46,9 +46,10 @@ Last updated: November 18, 2026; see dated implementation/hosted evidence in [ev
 
 - **Collection is paused.** Merging or deploying never restarts it; restart needs explicit
   authorization and readiness evidence. (#53)
-- **Provider limits.** Google Testing mode means weekly Fitbit reconnects. WHOOP is limited to 10
-  members in development and is disabled on the host until its developer app registers the hosted
-  callback. (#33, #64)
+- **Provider limits.** Google Testing mode means weekly Fitbit reconnects. WHOOP Sandbox showed
+  1 of 10 members on November 18. The hosted callback is now registered, but the host remains
+  Google-only; approved policy publication, hosted enablement and live authorization remain
+  separate. (#33, #64)
 - **Real-phone evidence is partial.** One real Google signup and a sharing update are recorded;
   phone timing, reconnect and withdrawal on real devices, and hosted organization-user acceptance
   are outstanding. (#52, #64)
@@ -57,14 +58,16 @@ Last updated: November 18, 2026; see dated implementation/hosted evidence in [ev
   database can pause again. (#36, #64)
 - **Provider-side authorization remains unverified.** On November 18 the dedicated Sentra
   Google session showed External / Testing, two test users, and the registered local and
-  hosted enrollment/viewer callbacks. No settings changed. WHOOP still needs its app-owner
-  sign-in; stored token metadata and callback registration do not prove a participant's
+  hosted enrollment/viewer callbacks. No Google settings changed. WHOOP app-owner
+  administration, limits and the authorized hosted callback addition were verified;
+  stored token metadata and callback registration do not prove a participant's
   current authorization. (#53)
 
 ## Storage, backup and recovery
 
-- **Retention periods are proposals.** The team, advisor and IRB decide them; no expiry is
-  implemented. (#58, [retention policy](retention-policy.md))
+- **Interim retention has team agreement.** The owner reported agreement on November 18.
+  Advisor/IRB decisions and post-project custody remain open; no expiry is implemented.
+  (#58, [retention policy](retention-policy.md))
 - **Supabase's own backups remain unverified.** The full encrypted application backup
   and isolated hosted restore passed November 18: all 16 table counts/fingerprints and
   220 destination-original hashes matched. Derived-output rebuilding, off-machine
@@ -97,8 +100,10 @@ Last updated: November 18, 2026; see dated implementation/hosted evidence in [ev
   organizations. Individual consent/withdrawal and the five-contributor hosted matrix still
   need an isolated synthetic fixture. Temporary roles were deactivated. (#72, #111)
 
-- **Recovery does not establish retention agreement.** The November 18
+- **Recovery does not authorize live deletion.** The November 18
   rollout and one full encrypted backup completed within the authorized 4.5 GB transfer
   and 500 MB private-backup ceilings. See the [dated record](storage-plan.md#rollout-and-verified-backup-observed-november-18).
-  The separate hosted recovery also passed within its bounded scope. Retention
-  agreement and destructive approvals remain separate gates; no deletion ran.
+  The separate hosted recovery also passed within its bounded scope. Team retention
+  agreement was subsequently reported, and separately authorized cleanup removed the
+  isolated recovery project and its temporary copies. Live destructive approvals,
+  exact previews and remaining lossless checks are still required; no live deletion ran.
