@@ -1,10 +1,12 @@
 """Laptop-independent collector entry point; explicit sanitized output only."""
-import argparse,json,logging,os,re,tempfile,time
-from datetime import date,timedelta
+import argparse,hashlib,json,logging,os,re,tempfile,time
+from dataclasses import replace
+from datetime import date,datetime,timedelta,timezone
 from pathlib import Path
 from uuid import uuid4
 from cryptography.fernet import Fernet
 import psycopg,requests
+from psycopg.types.json import Jsonb
 from .auth import access_token
 from .cloud_collect import OUTCOMES,collect_job,failure_outcome,independent_providers
 from .cloud_store import CloudStore,clock
@@ -79,10 +81,11 @@ def configured_connections(participants):
     return pairs
 
 
-def connection_targets(credentials,limits,participants):
+def connection_targets(credentials,limits,participants,*,include_enrolled=None):
     pairs=configured_connections(participants)
-    config=json.loads(os.environ.get('SENTRA_COLLECTOR_CONFIG','{}'))
-    if config.get('include_enrolled') is True:
+    if include_enrolled is None:
+        include_enrolled=json.loads(os.environ.get('SENTRA_COLLECTOR_CONFIG','{}')).get('include_enrolled')
+    if include_enrolled is True:
         backend=SharedBackend(credentials,limits)
         try:
             backend.guard()
@@ -137,8 +140,48 @@ def preview_schedule(credentials, limits, scope, day):
         backend.close()
 
 
+def scope_digest(pid, provider, datasets):
+    encoded = json.dumps([pid,provider,sorted(datasets)],separators=(',',':')).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def update_window(backend, previous, updated):
+    result = backend.db.execute('''update collector_private.observation_control set settings=%s,updated_at=now()
+        where singleton and settings=%s''',(Jsonb(updated),Jsonb(previous)))
+    if result.rowcount != 1:
+        raise SentraError('Collection window changed. Inspect the current operator decision.')
+
+
+def claim_pilot_day(backend, settings, today, pid, provider, datasets):
+    pilot = settings['pilot']
+    if not datasets or scope_digest(pid,provider,datasets) != pilot['scope']:
+        raise SentraError('The approved pilot scope does not match this run.')
+    if pilot['next_day'] != today.isoformat():
+        raise SentraError('This pilot day was already claimed or the previous day did not succeed.')
+    if datetime.now(timezone.utc).strftime('%Y-%m') != pilot['ledger_month']:
+        raise CapacityStop('The approved pilot budget belongs to another accounting month.')
+    ceiling = pilot['stop_bytes']
+    if type(ceiling) is not int or not 0 < ceiling <= backend.limits.monthly_egress_bytes:
+        raise CapacityStop('Invalid pilot egress ceiling.')
+    backend.limits = replace(backend.limits, monthly_egress_bytes=ceiling)
+    backend.guard()
+    claimed = {**settings,'pilot':{**pilot,'next_day':None}}
+    update_window(backend, settings, claimed)
+    return claimed
+
+
+def finish_pilot_day(backend, claimed, today, succeeded):
+    tomorrow = (today+timedelta(days=1)).isoformat()
+    if succeeded and tomorrow < claimed['end']:
+        updated = {**claimed,'pilot':{**claimed['pilot'],'next_day':tomorrow}}
+    else:
+        updated = {'enabled':False}
+    update_window(backend, claimed, updated)
+
+
 def run_provider(credentials,limits,pid,provider,cipher,args,execution,*,scheduled_datasets=None):
     backend=SharedBackend(credentials,limits); locked=False
+    claimed = None
     run_id=attempt_run_id(execution)
     details={'run_id':run_id,'execution_id':execution,'started_at':clock(),'status':'running','mode':args.mode,
              'completed':0,'skipped':0,'changed':0,'unchanged':0,'failures':[],'outcomes':dict.fromkeys(OUTCOMES,0),
@@ -156,10 +199,14 @@ def run_provider(credentials,limits,pid,provider,cipher,args,execution,*,schedul
             state=window_status(settings,today)
             if state!='active':
                 details.update(status='paused',pause_reason=state); return details
+            if 'pilot' in settings:
+                claimed = claim_pilot_day(backend,settings,today,pid,provider,scheduled_datasets)
         jobs,failures=jobs_for(provider,args.mode,today,store.states(),args.start,args.end,args.dataset,
                                scheduled_datasets=scheduled_datasets)
         details['failures'].extend({**f,'outcome':'failed'} for f in failures)
         details['outcomes']['failed']+=len(failures)
+        if claimed and (failures or not jobs):
+            raise SentraError('Pilot planning did not produce a complete daily plan.')
         vault=CloudTokenVault(TokenRepository(backend.db),pid,provider,cipher)
         c=vault.connection()
         client=ReadClient(lambda refresh=False:access_token(c,vault,force_refresh=refresh),guard=vault.ensure_active)
@@ -178,7 +225,7 @@ def run_provider(credentials,limits,pid,provider,cipher,args,execution,*,schedul
                 details['failures'].append({'dataset':job.dataset,'start':job.start_date,'message':message,'outcome':outcome})
                 details['outcomes'][outcome]+=1
                 print(f'{provider} {job.dataset} {job.start_date}: {outcome}',flush=True)
-                if isinstance(e,CapacityStop) or time.monotonic()>=deadline:
+                if claimed or isinstance(e,CapacityStop) or time.monotonic()>=deadline:
                     details['status']='capacity_stop' if isinstance(e,CapacityStop) else 'partial'; break
         if details['status']=='running': details['status']='partial' if details['failures'] else 'succeeded'
     except Exception as e:
@@ -190,6 +237,8 @@ def run_provider(credentials,limits,pid,provider,cipher,args,execution,*,schedul
             try:
                 details['storage_usage']=backend.usage()
                 store.run_status(run_id,details)
+                if claimed:
+                    finish_pilot_day(backend,claimed,today,details['status']=='succeeded')
             except (SentraError,psycopg.Error):
                 details['status']='failed'; details['status_persistence']='unavailable; inspect last durable state and capacity'
             finally:

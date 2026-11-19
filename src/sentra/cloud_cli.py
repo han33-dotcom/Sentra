@@ -1,5 +1,5 @@
 """Operator setup and reconnect commands; scheduled runtime has no admin key."""
-from datetime import date
+from datetime import date,datetime,timedelta,timezone
 import hashlib,json,os,subprocess,sys
 from pathlib import Path
 from psycopg.types.json import Jsonb
@@ -37,6 +37,7 @@ def add_commands(sub):
     p.add_argument('--ongoing',action='store_true',help='No automatic end date; quota/auth gates and explicit pause still apply')
     p.add_argument('--pause',action='store_true')
     p.add_argument('--approved',action='store_true',help='Operator confirms human approval of published collection controls')
+    p.add_argument('--pilot-mb',type=int,help='Single-account three-day pilot allowance in decimal MB')
 
 
 def install_schema(private):
@@ -117,7 +118,28 @@ def run_command(args):
             else: handoff(repo,c,vault,cloud_cipher)
             print(f'{c.provider}: credentials managed in encrypted cloud state; stale local copy cannot refresh. No token values displayed.')
         elif args.command=='cloud-window':
-            if not args.pause:backend.guard()
+            if not args.pause:
+                usage=backend.guard()
+            if getattr(args,'pilot_mb',None) is not None:
+                from .cloud_run import connection_targets,scheduled_scope,scope_digest
+                month = datetime.now(timezone.utc).strftime('%Y-%m')
+                if (args.pause or args.ongoing or args.pilot_mb <= 0 or
+                        any(day.strftime('%Y-%m') != month for day in
+                            (args.start-timedelta(days=1),args.start+timedelta(days=2)))):
+                    raise SentraError('A budgeted pilot requires a bounded three-day window in the current accounting month.')
+                env_config = setup['config']
+                directory = env_config['participants']
+                pairs = connection_targets(credentials,limits,directory,
+                                           include_enrolled=env_config.get('include_enrolled',False))
+                scope = scheduled_scope(os.environ.get('SENTRA_SCHEDULE_SCOPE',''),pairs,args.start)
+                if len(scope) != 1:
+                    raise SentraError('A budgeted pilot is limited to one explicitly scoped connection.')
+                (pid,provider),datasets = next(iter(scope.items()))
+                stop = usage['egress_bytes'] + args.pilot_mb*1_000_000
+                if stop >= limits.monthly_egress_bytes:
+                    raise SentraError('Pilot allowance exceeds available calendar-month headroom.')
+                settings['pilot'] = dict(scope=scope_digest(pid,provider,datasets),next_day=args.start.isoformat(),
+                                         stop_bytes=stop,ledger_month=month)
             backend.db.execute('update collector_private.observation_control set settings=%s,updated_at=now() where singleton',(Jsonb(settings),))
             print(json.dumps(settings))
         return 0

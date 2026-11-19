@@ -53,6 +53,35 @@ class CloudRunTests(unittest.TestCase):
                          [('sleep','2026-11-17'),('sleep','2026-11-18'),('sleep','2026-11-19')])
         self.assertEqual([f['dataset'] for f in failures],['cycle'])
 
+    def test_budgeted_pilot_claim_retry_failure_and_end(self):
+        from datetime import datetime,timezone
+        from unittest.mock import MagicMock
+        from sentra.cloud_run import claim_pilot_day,finish_pilot_day,scope_digest
+        from sentra.shared import Limits
+        backend = MagicMock()
+        backend.limits = Limits()
+        backend.db.execute.return_value.rowcount = 1
+        day = date(2026,11,20)
+        datasets = {'sleep','daily_steps'}
+        pilot = {'scope':scope_digest('p01','google_health',datasets),'next_day':day.isoformat(),
+                 'ledger_month':datetime.now(timezone.utc).strftime('%Y-%m'),'stop_bytes':123456789}
+        settings = {'enabled':True,'start':day.isoformat(),'end':'2026-11-23','pilot':pilot}
+        with self.assertRaises(SentraError):
+            claim_pilot_day(backend,settings,day,'p02','google_health',datasets)
+        with self.assertRaises(SentraError):
+            claim_pilot_day(backend,settings,day,'p01','google_health',{'sleep'})
+        claimed = claim_pilot_day(backend,settings,day,'p01','google_health',datasets)
+        self.assertEqual(backend.limits.monthly_egress_bytes,123456789)
+        with self.assertRaises(SentraError):
+            claim_pilot_day(backend,claimed,day,'p01','google_health',datasets)
+        for finished, succeeded, expected in [(day,True,'2026-11-21'),(day,False,None),(date(2026,11,22),True,None)]:
+            finish_pilot_day(backend,claimed,finished,succeeded)
+            updated = backend.db.execute.call_args.args[1][0].obj
+            if expected:
+                self.assertEqual(updated['pilot']['next_day'],expected)
+            else:
+                self.assertEqual(updated,{'enabled':False})
+
     def test_attempt_run_ids_preserve_history_and_execution_identity(self):
         from sentra.cloud_run import attempt_run_id
         from unittest.mock import patch

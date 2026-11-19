@@ -228,3 +228,13 @@ With the same private scope in the local environment, run
 run date. This reserves transfer for bounded metadata reads and prints planned
 datasets, dates and any planning failures. Verify consent, credentials and
 headroom, then obtain the operator decision for the specific dates and budget.
+
+For an approved three-day, single-connection pilot, keep the same private
+scope in the launcher environment and use `sentra cloud-window --start
+YYYY-MM-DD --approved --pilot-mb N` with the approved decimal MB allowance.
+The SQL control binds the account and datasets, pins the current ledger month
+and adds the allowance to the current shared transfer reading. Other shared
+usage consumes this headroom too. The collector claims each Beirut day once
+and opens the next day only after recording success. A crash leaves the day
+claimed for operator inspection. The third successful cycle pauses SQL.
+Inspect the receipts and turn the GitHub schedule switch off at closeout.
