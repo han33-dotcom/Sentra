@@ -57,6 +57,7 @@ jobs:
       - name: Collect into private shared storage
         env:
           SENTRA_COLLECTOR_CONFIG: ${{ secrets.SENTRA_COLLECTOR_CONFIG }}
+          SENTRA_SCHEDULE_SCOPE: ${{ secrets.SENTRA_SCHEDULE_SCOPE }}
           SENTRA_TOKEN_KEY: ${{ secrets.SENTRA_TOKEN_KEY }}
           COLLECTION_MODE: ${{ inputs.mode || 'daily' }}
           COLLECTION_PROVIDER: ${{ inputs.provider || 'all' }}

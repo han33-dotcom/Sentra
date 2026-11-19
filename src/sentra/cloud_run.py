@@ -1,10 +1,12 @@
 """Laptop-independent collector entry point; explicit sanitized output only."""
-import argparse,json,logging,os,re,tempfile,time
-from datetime import date,timedelta
+import argparse,hashlib,json,logging,os,re,tempfile,time
+from dataclasses import replace
+from datetime import date,datetime,timedelta,timezone
 from pathlib import Path
 from uuid import uuid4
 from cryptography.fernet import Fernet
 import psycopg,requests
+from psycopg.types.json import Jsonb
 from .auth import access_token
 from .cloud_collect import OUTCOMES,collect_job,failure_outcome,independent_providers
 from .cloud_store import CloudStore,clock
@@ -18,11 +20,13 @@ from .shared_config import validate_credentials
 from .transport import ReadClient
 
 
-def jobs_for(provider,mode,today,states,start=None,end=None,dataset=None):
+def jobs_for(provider,mode,today,states,start=None,end=None,dataset=None,*,scheduled_datasets=None):
     failures=[]
     if mode=='daily':
         jobs=[]
         for template in day_jobs(provider,today-timedelta(days=1)):
+            if scheduled_datasets is not None and template.dataset not in scheduled_datasets:
+                continue
             try:
                 for day in request_days(states.get(template.dataset,[]),today):
                     jobs.append(next(j for j in day_jobs(provider,day) if j.dataset==template.dataset))
@@ -77,10 +81,11 @@ def configured_connections(participants):
     return pairs
 
 
-def connection_targets(credentials,limits,participants):
+def connection_targets(credentials,limits,participants,*,include_enrolled=None):
     pairs=configured_connections(participants)
-    config=json.loads(os.environ.get('SENTRA_COLLECTOR_CONFIG','{}'))
-    if config.get('include_enrolled') is True:
+    if include_enrolled is None:
+        include_enrolled=json.loads(os.environ.get('SENTRA_COLLECTOR_CONFIG','{}')).get('include_enrolled')
+    if include_enrolled is True:
         backend=SharedBackend(credentials,limits)
         try:
             backend.guard()
@@ -95,8 +100,88 @@ def attempt_run_id(execution):
     return execution+'-attempt-'+os.environ.get('GITHUB_RUN_ATTEMPT','1') if os.environ.get('GITHUB_RUN_ID') else execution
 
 
-def run_provider(credentials,limits,pid,provider,cipher,args,execution):
+def scheduled_scope(raw, pairs, day):
+    """Validate the entire private schedule before the first account can run."""
+    try:
+        entries = json.loads(raw)
+        if not isinstance(entries, list) or not 1 <= len(entries) <= 100:
+            raise ValueError
+        targets = {}
+        for entry in entries:
+            if not isinstance(entry, dict) or set(entry) != {'participant', 'provider', 'datasets'}:
+                raise ValueError
+            pair = (entry['participant'], entry['provider'])
+            datasets = entry['datasets']
+            if pair not in pairs or pair in targets or not isinstance(datasets, list) or not datasets:
+                raise ValueError
+            selectable = {job.dataset for job in day_jobs(pair[1], day)}
+            if len(set(datasets)) != len(datasets) or not set(datasets) <= selectable:
+                raise ValueError
+            targets[pair] = frozenset(datasets)
+        return targets
+    except (TypeError, ValueError):
+        raise SentraError('Missing or invalid scheduled scope. Verify each configured connection and daily dataset.') from None
+
+
+def preview_schedule(credentials, limits, scope, day):
+    backend = SharedBackend(credentials, limits)
+    backend.egress_purpose = 'operations'
+    try:
+        backend.guard()
+        failed = False
+        for (pid, provider), datasets in scope.items():
+            states = CloudStore(backend, pid, provider).states()
+            jobs, failures = jobs_for(provider, 'daily', day, states, scheduled_datasets=datasets)
+            print(json.dumps({'provider':provider, 'jobs':[(j.dataset,j.start_date) for j in jobs],
+                              'planning_failures':failures}), flush=True)
+            failed = failed or bool(failures)
+        return int(failed)
+    finally:
+        backend.close()
+
+
+def scope_digest(pid, provider, datasets):
+    encoded = json.dumps([pid,provider,sorted(datasets)],separators=(',',':')).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def update_window(backend, previous, updated):
+    result = backend.db.execute('''update collector_private.observation_control set settings=%s,updated_at=now()
+        where singleton and settings=%s''',(Jsonb(updated),Jsonb(previous)))
+    if result.rowcount != 1:
+        raise SentraError('Collection window changed. Inspect the current operator decision.')
+
+
+def claim_pilot_day(backend, settings, today, pid, provider, datasets):
+    pilot = settings['pilot']
+    if not datasets or scope_digest(pid,provider,datasets) != pilot['scope']:
+        raise SentraError('The approved pilot scope does not match this run.')
+    if pilot['next_day'] != today.isoformat():
+        raise SentraError('This pilot day was already claimed or the previous day did not succeed.')
+    if datetime.now(timezone.utc).strftime('%Y-%m') != pilot['ledger_month']:
+        raise CapacityStop('The approved pilot budget belongs to another accounting month.')
+    ceiling = pilot['stop_bytes']
+    if type(ceiling) is not int or not 0 < ceiling <= backend.limits.monthly_egress_bytes:
+        raise CapacityStop('Invalid pilot egress ceiling.')
+    backend.limits = replace(backend.limits, monthly_egress_bytes=ceiling)
+    backend.guard()
+    claimed = {**settings,'pilot':{**pilot,'next_day':None}}
+    update_window(backend, settings, claimed)
+    return claimed
+
+
+def finish_pilot_day(backend, claimed, today, succeeded):
+    tomorrow = (today+timedelta(days=1)).isoformat()
+    if succeeded and tomorrow < claimed['end']:
+        updated = {**claimed,'pilot':{**claimed['pilot'],'next_day':tomorrow}}
+    else:
+        updated = {'enabled':False}
+    update_window(backend, claimed, updated)
+
+
+def run_provider(credentials,limits,pid,provider,cipher,args,execution,*,scheduled_datasets=None):
     backend=SharedBackend(credentials,limits); locked=False
+    claimed = None
     run_id=attempt_run_id(execution)
     details={'run_id':run_id,'execution_id':execution,'started_at':clock(),'status':'running','mode':args.mode,
              'completed':0,'skipped':0,'changed':0,'unchanged':0,'failures':[],'outcomes':dict.fromkeys(OUTCOMES,0),
@@ -114,9 +199,14 @@ def run_provider(credentials,limits,pid,provider,cipher,args,execution):
             state=window_status(settings,today)
             if state!='active':
                 details.update(status='paused',pause_reason=state); return details
-        jobs,failures=jobs_for(provider,args.mode,today,store.states(),args.start,args.end,args.dataset)
+            if 'pilot' in settings:
+                claimed = claim_pilot_day(backend,settings,today,pid,provider,scheduled_datasets)
+        jobs,failures=jobs_for(provider,args.mode,today,store.states(),args.start,args.end,args.dataset,
+                               scheduled_datasets=scheduled_datasets)
         details['failures'].extend({**f,'outcome':'failed'} for f in failures)
         details['outcomes']['failed']+=len(failures)
+        if claimed and (failures or not jobs):
+            raise SentraError('Pilot planning did not produce a complete daily plan.')
         vault=CloudTokenVault(TokenRepository(backend.db),pid,provider,cipher)
         c=vault.connection()
         client=ReadClient(lambda refresh=False:access_token(c,vault,force_refresh=refresh),guard=vault.ensure_active)
@@ -135,7 +225,7 @@ def run_provider(credentials,limits,pid,provider,cipher,args,execution):
                 details['failures'].append({'dataset':job.dataset,'start':job.start_date,'message':message,'outcome':outcome})
                 details['outcomes'][outcome]+=1
                 print(f'{provider} {job.dataset} {job.start_date}: {outcome}',flush=True)
-                if isinstance(e,CapacityStop) or time.monotonic()>=deadline:
+                if claimed or isinstance(e,CapacityStop) or time.monotonic()>=deadline:
                     details['status']='capacity_stop' if isinstance(e,CapacityStop) else 'partial'; break
         if details['status']=='running': details['status']='partial' if details['failures'] else 'succeeded'
     except Exception as e:
@@ -147,6 +237,8 @@ def run_provider(credentials,limits,pid,provider,cipher,args,execution):
             try:
                 details['storage_usage']=backend.usage()
                 store.run_status(run_id,details)
+                if claimed:
+                    finish_pilot_day(backend,claimed,today,details['status']=='succeeded')
             except (SentraError,psycopg.Error):
                 details['status']='failed'; details['status_persistence']='unavailable; inspect last durable state and capacity'
             finally:
@@ -165,11 +257,22 @@ def main(argv=None):
     parser.add_argument('--participant',help='Limit collection to one pseudonymous participant')
     parser.add_argument('--start',type=date.fromisoformat); parser.add_argument('--end',type=date.fromisoformat)
     parser.add_argument('--dataset')
+    parser.add_argument('--preview-schedule',type=date.fromisoformat,metavar='BEIRUT_DATE',
+                        help='Read stored coverage and print the scoped daily plan without dispatching it')
     args=parser.parse_args(argv)
     try:
         with tempfile.TemporaryDirectory(prefix='sentra-cloud-') as folder:
             credentials,limits,participants,cipher=runtime_config(folder)
             pairs=connection_targets(credentials,limits,participants)
+            schedule = None
+            if os.environ.get('GITHUB_EVENT_NAME') == 'schedule' or args.preview_schedule:
+                if args.mode != 'daily' or args.provider != 'all' or any((args.participant,args.dataset,args.start,args.end)):
+                    raise SentraError('Scheduled collection accepts only the approved daily scope.')
+                day = args.preview_schedule or collection_day()
+                schedule = scheduled_scope(os.environ.get('SENTRA_SCHEDULE_SCOPE',''), pairs, day)
+                if args.preview_schedule:
+                    return preview_schedule(credentials, limits, schedule, day)
+                pairs = list(schedule)
             if args.provider!='all': pairs=[(pid,p) for pid,p in pairs if p==args.provider]
             if args.participant:
                 if not re.fullmatch(r'p[0-9]{2,4}',args.participant): raise SentraError('Invalid participant.')
@@ -181,8 +284,9 @@ def main(argv=None):
             # The same run ID skips already-complete jobs on retries; another run rechecks content.
             results=[]
             for pid,provider in pairs:
-                for result in independent_providers([provider],lambda p:run_provider(credentials,limits,pid,p,cipher,args,execution)):
-                    results.append({'participant_id':pid,**result})
+                options = {'scheduled_datasets': schedule[pid,provider]} if schedule is not None else {}
+                for result in independent_providers([provider],lambda p:run_provider(credentials,limits,pid,p,cipher,args,execution,**options)):
+                    results.append(result if schedule is not None else {'participant_id':pid,**result})
             print(json.dumps(results),flush=True)
             return int(any(r['status'] not in ('succeeded','paused') for r in results))
     except Exception as e:

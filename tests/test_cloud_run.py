@@ -4,6 +4,84 @@ from sentra.daily_plan import day_jobs
 from sentra.errors import SentraError
 
 class CloudRunTests(unittest.TestCase):
+    def test_schedule_selects_only_approved_account_and_dataset_pairs(self):
+        import json
+        from contextlib import redirect_stdout
+        from io import StringIO
+        from unittest.mock import patch
+        from sentra import cloud_run
+
+        scope = [{'participant':'p01','provider':'google_health','datasets':['daily_steps','sleep']},
+                 {'participant':'p03','provider':'whoop','datasets':['cycle','recovery']}]
+        directory = {'google_health':['p01','p02'], 'whoop':['p01','p03']}
+        with patch.dict('os.environ', {'GITHUB_EVENT_NAME':'schedule','SENTRA_SCHEDULE_SCOPE':json.dumps(scope)}), \
+             patch.object(cloud_run,'runtime_config',return_value=({},None,directory,None)), \
+             patch.object(cloud_run,'run_provider',return_value={'status':'succeeded'}) as run, \
+             redirect_stdout(StringIO()):
+            self.assertEqual(cloud_run.main([]),0)
+        actual = [(c.args[2:4], c.kwargs['scheduled_datasets']) for c in run.call_args_list]
+        self.assertEqual(actual,[(('p01','google_health'),{'sleep','daily_steps'}),(('p03','whoop'),{'cycle','recovery'})])
+
+    def test_invalid_schedule_cannot_start_a_partial_run(self):
+        import json
+        from sentra.cloud_run import scheduled_scope
+        pairs = [('p01','google_health')]
+        row = {'participant':'p01','provider':'google_health','datasets':['daily_steps']}
+        for raw in ('', '[]', '{}', json.dumps([row,row]), json.dumps([row,dict(row,participant='p02')]),
+                    json.dumps([dict(row,datasets=['activity-level'])]), json.dumps([dict(row,datasets=[])])):
+            with self.subTest(raw=raw), self.assertRaises(SentraError):
+                scheduled_scope(raw,pairs,date(2026,11,20))
+
+    def test_preview_uses_dated_schedule_without_dispatching(self):
+        from unittest.mock import patch
+        from sentra import cloud_run
+        env = {'SENTRA_SCHEDULE_SCOPE':'[{"participant":"p01","provider":"whoop","datasets":["sleep"]}]'}
+        with patch.dict('os.environ',env), \
+             patch.object(cloud_run,'runtime_config',return_value=({},None,{'whoop':'p01'},None)), \
+             patch.object(cloud_run,'preview_schedule',return_value=0) as preview, \
+             patch.object(cloud_run,'run_provider') as run:
+            self.assertEqual(cloud_run.main(['--preview-schedule','2026-11-20']),0)
+        preview.assert_called_once_with({},None,{('p01','whoop'):{'sleep'}},date(2026,11,20))
+        run.assert_not_called()
+
+    def test_scoped_daily_planning_retains_gap_and_correction_rules(self):
+        from sentra.cloud_run import jobs_for
+        states = {'sleep':[{'requested_civil_start':'2026-10-01','requested_civil_end':'2026-11-19'}],
+                  'cycle':[{'requested_civil_start':'2026-10-01','requested_civil_end':'2026-10-02'}]}
+        jobs, failures = jobs_for('whoop','daily',date(2026,11,20),states,scheduled_datasets={'sleep','cycle'})
+        self.assertEqual([(j.dataset,j.start_date) for j in jobs],
+                         [('sleep','2026-11-17'),('sleep','2026-11-18'),('sleep','2026-11-19')])
+        self.assertEqual([f['dataset'] for f in failures],['cycle'])
+
+    def test_budgeted_pilot_claim_retry_failure_and_end(self):
+        from datetime import datetime,timezone
+        from unittest.mock import MagicMock
+        from sentra.cloud_run import claim_pilot_day,finish_pilot_day,scope_digest
+        from sentra.shared import Limits
+        backend = MagicMock()
+        backend.limits = Limits()
+        backend.db.execute.return_value.rowcount = 1
+        day = date(2026,11,20)
+        datasets = {'sleep','daily_steps'}
+        pilot = {'scope':scope_digest('p01','google_health',datasets),'next_day':day.isoformat(),
+                 'ledger_month':datetime.now(timezone.utc).strftime('%Y-%m'),'stop_bytes':123456789}
+        settings = {'enabled':True,'start':day.isoformat(),'end':'2026-11-23','pilot':pilot}
+        with self.assertRaises(SentraError):
+            claim_pilot_day(backend,settings,day,'p02','google_health',datasets)
+        with self.assertRaises(SentraError):
+            claim_pilot_day(backend,settings,day,'p01','google_health',{'sleep'})
+        claimed = claim_pilot_day(backend,settings,day,'p01','google_health',datasets)
+        self.assertEqual(backend.limits.monthly_egress_bytes,123456789)
+        with self.assertRaises(SentraError):
+            claim_pilot_day(backend,claimed,day,'p01','google_health',datasets)
+        for finished, succeeded, expected in [(day,True,'2026-11-21'),(day,False,None),(date(2026,11,22),True,None)]:
+            finish_pilot_day(backend,claimed,finished,succeeded)
+            updated = backend.db.execute.call_args.args[1][0].obj
+            if expected:
+                self.assertEqual(updated['pilot']['next_day'],expected)
+            else:
+                self.assertEqual(updated,{'enabled':False})
+
     def test_attempt_run_ids_preserve_history_and_execution_identity(self):
         from sentra.cloud_run import attempt_run_id
         from unittest.mock import patch
