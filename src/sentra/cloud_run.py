@@ -18,11 +18,13 @@ from .shared_config import validate_credentials
 from .transport import ReadClient
 
 
-def jobs_for(provider,mode,today,states,start=None,end=None,dataset=None):
+def jobs_for(provider,mode,today,states,start=None,end=None,dataset=None,*,scheduled_datasets=None):
     failures=[]
     if mode=='daily':
         jobs=[]
         for template in day_jobs(provider,today-timedelta(days=1)):
+            if scheduled_datasets is not None and template.dataset not in scheduled_datasets:
+                continue
             try:
                 for day in request_days(states.get(template.dataset,[]),today):
                     jobs.append(next(j for j in day_jobs(provider,day) if j.dataset==template.dataset))
@@ -95,7 +97,47 @@ def attempt_run_id(execution):
     return execution+'-attempt-'+os.environ.get('GITHUB_RUN_ATTEMPT','1') if os.environ.get('GITHUB_RUN_ID') else execution
 
 
-def run_provider(credentials,limits,pid,provider,cipher,args,execution):
+def scheduled_scope(raw, pairs, day):
+    """Validate the entire private schedule before the first account can run."""
+    try:
+        entries = json.loads(raw)
+        if not isinstance(entries, list) or not 1 <= len(entries) <= 100:
+            raise ValueError
+        targets = {}
+        for entry in entries:
+            if not isinstance(entry, dict) or set(entry) != {'participant', 'provider', 'datasets'}:
+                raise ValueError
+            pair = (entry['participant'], entry['provider'])
+            datasets = entry['datasets']
+            if pair not in pairs or pair in targets or not isinstance(datasets, list) or not datasets:
+                raise ValueError
+            selectable = {job.dataset for job in day_jobs(pair[1], day)}
+            if len(set(datasets)) != len(datasets) or not set(datasets) <= selectable:
+                raise ValueError
+            targets[pair] = frozenset(datasets)
+        return targets
+    except (TypeError, ValueError):
+        raise SentraError('Missing or invalid scheduled scope. Verify each configured connection and daily dataset.') from None
+
+
+def preview_schedule(credentials, limits, scope, day):
+    backend = SharedBackend(credentials, limits)
+    backend.egress_purpose = 'operations'
+    try:
+        backend.guard()
+        failed = False
+        for (pid, provider), datasets in scope.items():
+            states = CloudStore(backend, pid, provider).states()
+            jobs, failures = jobs_for(provider, 'daily', day, states, scheduled_datasets=datasets)
+            print(json.dumps({'provider':provider, 'jobs':[(j.dataset,j.start_date) for j in jobs],
+                              'planning_failures':failures}), flush=True)
+            failed = failed or bool(failures)
+        return int(failed)
+    finally:
+        backend.close()
+
+
+def run_provider(credentials,limits,pid,provider,cipher,args,execution,*,scheduled_datasets=None):
     backend=SharedBackend(credentials,limits); locked=False
     run_id=attempt_run_id(execution)
     details={'run_id':run_id,'execution_id':execution,'started_at':clock(),'status':'running','mode':args.mode,
@@ -114,7 +156,8 @@ def run_provider(credentials,limits,pid,provider,cipher,args,execution):
             state=window_status(settings,today)
             if state!='active':
                 details.update(status='paused',pause_reason=state); return details
-        jobs,failures=jobs_for(provider,args.mode,today,store.states(),args.start,args.end,args.dataset)
+        jobs,failures=jobs_for(provider,args.mode,today,store.states(),args.start,args.end,args.dataset,
+                               scheduled_datasets=scheduled_datasets)
         details['failures'].extend({**f,'outcome':'failed'} for f in failures)
         details['outcomes']['failed']+=len(failures)
         vault=CloudTokenVault(TokenRepository(backend.db),pid,provider,cipher)
@@ -165,11 +208,22 @@ def main(argv=None):
     parser.add_argument('--participant',help='Limit collection to one pseudonymous participant')
     parser.add_argument('--start',type=date.fromisoformat); parser.add_argument('--end',type=date.fromisoformat)
     parser.add_argument('--dataset')
+    parser.add_argument('--preview-schedule',type=date.fromisoformat,metavar='BEIRUT_DATE',
+                        help='Read stored coverage and print the scoped daily plan without dispatching it')
     args=parser.parse_args(argv)
     try:
         with tempfile.TemporaryDirectory(prefix='sentra-cloud-') as folder:
             credentials,limits,participants,cipher=runtime_config(folder)
             pairs=connection_targets(credentials,limits,participants)
+            schedule = None
+            if os.environ.get('GITHUB_EVENT_NAME') == 'schedule' or args.preview_schedule:
+                if args.mode != 'daily' or args.provider != 'all' or any((args.participant,args.dataset,args.start,args.end)):
+                    raise SentraError('Scheduled collection accepts only the approved daily scope.')
+                day = args.preview_schedule or collection_day()
+                schedule = scheduled_scope(os.environ.get('SENTRA_SCHEDULE_SCOPE',''), pairs, day)
+                if args.preview_schedule:
+                    return preview_schedule(credentials, limits, schedule, day)
+                pairs = list(schedule)
             if args.provider!='all': pairs=[(pid,p) for pid,p in pairs if p==args.provider]
             if args.participant:
                 if not re.fullmatch(r'p[0-9]{2,4}',args.participant): raise SentraError('Invalid participant.')
@@ -181,8 +235,9 @@ def main(argv=None):
             # The same run ID skips already-complete jobs on retries; another run rechecks content.
             results=[]
             for pid,provider in pairs:
-                for result in independent_providers([provider],lambda p:run_provider(credentials,limits,pid,p,cipher,args,execution)):
-                    results.append({'participant_id':pid,**result})
+                options = {'scheduled_datasets': schedule[pid,provider]} if schedule is not None else {}
+                for result in independent_providers([provider],lambda p:run_provider(credentials,limits,pid,p,cipher,args,execution,**options)):
+                    results.append(result if schedule is not None else {'participant_id':pid,**result})
             print(json.dumps(results),flush=True)
             return int(any(r['status'] not in ('succeeded','paused') for r in results))
     except Exception as e:

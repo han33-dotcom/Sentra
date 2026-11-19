@@ -30,6 +30,8 @@ def add_commands(sub):
     p.add_argument('--participant',help='Limit collection to one pseudonymous participant')
     p.add_argument('--start',type=date.fromisoformat); p.add_argument('--end',type=date.fromisoformat)
     p.add_argument('--dataset')
+    p.add_argument('--preview-schedule',type=date.fromisoformat,metavar='BEIRUT_DATE',
+                   help='Preview the dated scheduled scope from stored coverage without provider requests')
     p=sub.add_parser('cloud-window',help='Approved ongoing daily collection, bounded legacy window, or pause')
     p.add_argument('--start',type=date.fromisoformat)
     p.add_argument('--ongoing',action='store_true',help='No automatic end date; quota/auth gates and explicit pause still apply')
@@ -96,9 +98,9 @@ def run_command(args):
     if args.command=='cloud-run-local':
         env=dict(os.environ,SENTRA_COLLECTOR_CONFIG=json.dumps(setup['config']),SENTRA_TOKEN_KEY=setup['token_key'])
         command=[sys.executable,'-m','sentra.cloud_run','--mode',args.mode,'--provider',args.provider]
-        for field in ('participant','start','end','dataset'):
+        for field in ('participant','start','end','dataset','preview_schedule'):
             value=getattr(args,field)
-            if value is not None: command.extend(['--'+field,str(value)])
+            if value is not None: command.extend(['--'+field.replace('_','-'),str(value)])
         return subprocess.run(command,env=env).returncode
     backend=SharedBackend(credentials,limits)
     backend.egress_purpose = 'operations'

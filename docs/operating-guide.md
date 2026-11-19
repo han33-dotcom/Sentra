@@ -197,3 +197,34 @@ Document definitions, vendor classification, units, sampling, source IDs and
 observed gaps/delays. Keep findings preliminary; two different devices cannot
 validate general accuracy or health predictions. [Stage 6 evidence](stage-6-validation.md)
 states the exact demonstrated scope and pending checks.
+
+## November pilot collection scope
+
+The sprint target is ten distinct consenting contributors with usable recent data,
+five WHOOP and five Fitbit. Count enrollment, connected accounts, usable recent
+coverage and assessment readiness separately for each provider. Count a person
+wearing both devices only once toward ten. Record aggregate evidence on SEN-38,
+SEN-47, SEN-43 and SEN-50. Use approved private pilot records for reconciliation.
+
+For scheduled GitHub runs, set the private repository secret
+`SENTRA_SCHEDULE_SCOPE` to a JSON list before requesting restart approval.
+Each entry names exactly one configured or discovered connection and a nonempty
+list of daily datasets. For example, these **synthetic** entries show the format:
+
+```json
+[
+  {"participant":"p901","provider":"google_health","datasets":["daily_steps","sleep","daily-resting-heart-rate","daily-heart-rate-variability"]},
+  {"participant":"p902","provider":"whoop","datasets":["cycle","sleep","recovery"]}
+]
+```
+
+Keep the actual secret and account IDs private. A missing, empty or invalid
+scope stops the scheduled run before any provider request. Additional enrolled
+accounts need a separately approved scope update. Initial and recovery imports
+use the existing bounded manual procedure. The scope does not grant consent,
+establish initial coverage, change correction dates or activate either control.
+With the same private scope in the local environment, run
+`sentra cloud-run-local --preview-schedule YYYY-MM-DD` for the intended Beirut
+run date. This reserves transfer for bounded metadata reads and prints planned
+datasets, dates and any planning failures. Verify consent, credentials and
+headroom, then obtain the operator decision for the specific dates and budget.
