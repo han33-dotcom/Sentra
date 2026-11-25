@@ -17,6 +17,32 @@ from . import tiers as t
 VERSION='monthly-v1'
 MAX_PARTITIONS=1200
 MAX_CACHE_BYTES=500_000_000
+SOURCE_GROUPS=(('hr_raw','hr_minute'),('measurements',),('sessions',))
+
+
+def group_signature(signatures, month, names):
+    return [signatures.get(f'{name}/{month}') for name in names]
+
+
+def rebuild_group(reader, queries, signatures, month, names, now, checkpoint):
+    rows={}
+    for name in names:
+        rows[name]=[]
+        if f'{name}/{month}' in signatures:
+            query,values=queries[name]
+            scoped=f'select * from ({query}) q where {month_expression(name)}=%s'
+            params=(*values,month)
+            if checkpoint is None:
+                rows[name]=reader.read_partition(scoped,params)
+            else:
+                rows[name]=checkpoint.read_partition(reader,scoped,params,(VERSION,name,month,signatures[f'{name}/{month}']))
+    if names==('measurements',):
+        return {'measurements.parquet':t.parquet_bytes(t.measurements_table(rows['measurements']))}
+    if names==('sessions',):
+        return {'sessions.parquet':t.parquet_bytes(t.sessions_table(rows['sessions']))}
+    hot,warm=t.hr_tables(rows['hr_raw'],rows['hr_minute'],now)
+    return {f'{name}/{pid}.parquet':t.parquet_bytes(table)
+            for name,tables in zip(names,(hot,warm)) for pid,table in tables.items()}
 
 
 def lock(reader):
@@ -72,7 +98,7 @@ def previous(storage):
         return report,{key:(Path(folder)/key).read_bytes() for key in report['objects']}
 
 
-def build(reader,limits,storage,*,now=None,force=False,employees=10,period_days=30):
+def build(reader,limits,storage,*,now=None,force=False,employees=10,period_days=30,checkpoint=None):
     now=now or datetime.now(timezone.utc)
     before,old=previous(storage)
     objects={}; rebuilt=[]
@@ -80,24 +106,34 @@ def build(reader,limits,storage,*,now=None,force=False,employees=10,period_days=
     with reader.db.transaction():
         reader.db.execute('set transaction isolation level repeatable read, read only')
         signatures,queries=inventory(reader)
+        if checkpoint is not None:
+            checkpoint.verify_plan(signatures,before.get('sha256',{}))
         months=sorted({key.split('/',1)[1] for key in signatures})
         prior=before.get('source_partitions',{})
+        prior_months={key.split('/',1)[1] for key in prior}
         for month in months:
-            names=[name for name in queries if f'{name}/{month}' in signatures]
             changed=force or any(signatures.get(f'{name}/{month}')!=prior.get(f'{name}/{month}') for name in queries)
             prefix=f'months/{month}/'
             if not changed:
                 objects.update({key:body for key,body in old.items() if key.startswith(prefix)})
                 continue
-            rebuilt.append(month); rows={name:[] for name in queries}
-            for name in names:
-                query,values=queries[name]
-                rows[name]=reader.read_partition(f'select * from ({query}) q where {month_expression(name)}=%s',(*values,month))
-            hot,warm=t.hr_tables(rows['hr_raw'],rows['hr_minute'],now)
-            objects.update({f'{prefix}hr_raw/{pid}.parquet':t.parquet_bytes(table) for pid,table in hot.items()})
-            objects.update({f'{prefix}hr_minute/{pid}.parquet':t.parquet_bytes(table) for pid,table in warm.items()})
-            objects[prefix+'measurements.parquet']=t.parquet_bytes(t.measurements_table(rows['measurements']))
-            objects[prefix+'sessions.parquet']=t.parquet_bytes(t.sessions_table(rows['sessions']))
+            rebuilt.append(month)
+            for names in SOURCE_GROUPS:
+                signature=group_signature(signatures,month,names)
+                if not force and month in prior_months and signature==group_signature(prior,month,names):
+                    for key,data in old.items():
+                        if key.startswith(prefix) and key[len(prefix):].split('/')[0].removesuffix('.parquet') in names:
+                            objects[key]=data
+                    continue
+                # A raw heart-rate checkpoint depends on the hot retention cutoff as well as both inputs.
+                stamp=now.isoformat() if 'hr_raw' in names else None
+                identity=(VERSION,month,names,signature,stamp)
+                part=checkpoint.load(identity) if checkpoint is not None and not force else None
+                if part is None:
+                    part=rebuild_group(reader,queries,signatures,month,names,now,None if force else checkpoint)
+                    if checkpoint is not None:
+                        checkpoint.save(identity,part)
+                objects.update({prefix+key:data for key,data in part.items()})
     # Hot data expires without rereading historical raw rows; warm archives stay intact.
     pa=t._pa(); cutoff=t.epoch(now-t.timedelta(days=t.HOT_DAYS))
     for key in list(objects):
@@ -121,6 +157,8 @@ def build(reader,limits,storage,*,now=None,force=False,employees=10,period_days=
             'locations':{k:f'monthly/{v}.parquet' for k,v in digests.items()},'rebuilt_months':rebuilt,
             'unchanged':signatures==prior and digests==before.get('sha256'),
             'total_bytes':sum(map(len,objects.values()))}
+    if checkpoint is not None:
+        checkpoint.record_prepared(signatures,digests)
     return objects,report
 
 
