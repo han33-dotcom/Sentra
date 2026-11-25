@@ -25,6 +25,14 @@ plus one before and after each compaction batch, backup and refresh. The egress 
 each UTC month, so `shared-measure` reports egress growth only between snapshots of the latest
 month (null until two exist). Table sizes cover the `audit`, `org` and `enrollment_private` schemas.
 
+The collector reserves 4 KiB for the checkpoint size query and, when a checkpoint
+exists, its PostgreSQL JSON text size plus 4 KiB for the payload read. Pagination
+reuses each successfully saved checkpoint. A content-digest lookup reserves 4 KiB
+and returns one boolean scoped to the participant and provider. All reservations
+use the existing shared ledger and the applicable monthly or lower operation cap.
+For a before/after benchmark, compare the same account, dates and datasets and
+record collector-attributed reservations separately from other shared traffic.
+
 ## Baseline (before restart)
 
 | Date | Measure | Value | Source |

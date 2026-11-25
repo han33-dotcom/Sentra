@@ -16,8 +16,11 @@ class CloudCollectTests(unittest.TestCase):
         m=self.module(); job=day_jobs('whoop',date(2026,10,7))[2]
         class Store:
             current=None; durable=[]; fail=True
-            def progress(self,j): return self.current
-            def start(self,j,execution):
+            progress_reads=0
+            def progress(self,j):
+                self.progress_reads+=1
+                return self.current
+            def start(self,j,execution,previous):
                 if self.current is None: self.current={'cursor':'','seen':[],'pages':0,'received':0,'status':'running','execution_id':execution}
                 return self.current
             def page(self,j,cursor,payload,body,next_cursor,progress):
@@ -25,7 +28,7 @@ class CloudCollectTests(unittest.TestCase):
                 self.durable.append(cursor)
                 self.current={**progress,'cursor':next_cursor,'pages':progress['pages']+1,
                               'status':'running' if next_cursor else 'complete'}
-                return {'changed':1,'unchanged':0}
+                return {'changed':1,'unchanged':0,'progress':self.current}
             def failed(self,j,message,outcome='failed'): self.current['status']='failed'
         store=Store(); fetched=[]
         def fetch(j,c):
@@ -40,13 +43,14 @@ class CloudCollectTests(unittest.TestCase):
         before=list(fetched)
         self.assertEqual(m.collect_job(store,job,fetch,'run2')['status'],'skipped')
         self.assertEqual(fetched,before)
+        self.assertEqual(store.progress_reads,3)  # One per invocation, including the skipped retry.
 
     def test_invalid_or_looping_cursor_does_not_checkpoint(self):
         m=self.module(); job=day_jobs('whoop',date(2026,10,7))[2]
         class Store:
             wrote=False
             def progress(self,j): return None
-            def start(self,j,e): return {'cursor':'repeat','seen':[],'pages':0,'status':'running','execution_id':e}
+            def start(self,j,e,previous): return {'cursor':'repeat','seen':[],'pages':0,'status':'running','execution_id':e}
             def page(self,*args): self.wrote=True
             def failed(self,*args): pass
         for cursor in ('repeat',42):
