@@ -20,7 +20,8 @@ def collect_job(store,job,fetch,execution_id,*,deadline=None):
     old=store.progress(job)
     if old and old['status']=='complete' and old['execution_id']==execution_id:
         return {'status':'skipped','changed':0,'unchanged':0,'outcome':old.get('outcome') or completed_outcome(old)}
-    p=store.start(job,execution_id,old); changed=unchanged=0; restarted=False
+    p = {**store.start(job, execution_id, old), 'execution_id': execution_id}
+    changed=unchanged=0; restarted=False
     try:
         while True:
             if deadline is not None and time.monotonic()>=deadline:
