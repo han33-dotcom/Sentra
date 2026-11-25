@@ -150,9 +150,9 @@ class AuditReader:
         self.reserve(int(size*1.2)+65_536)
         self.read_bytes+=size
         with self.db.cursor(name='sentra_monthly_partition') as cursor:
-            cursor.itersize=5000
+            cursor.itersize=512
             cursor.execute(query,values)
-            return cursor.fetchall()
+            return list(cursor)
 
 
 def epoch(value):
