@@ -20,7 +20,7 @@ def collect_job(store,job,fetch,execution_id,*,deadline=None):
     old=store.progress(job)
     if old and old['status']=='complete' and old['execution_id']==execution_id:
         return {'status':'skipped','changed':0,'unchanged':0,'outcome':old.get('outcome') or completed_outcome(old)}
-    p={**store.start(job,execution_id),'execution_id':execution_id}; changed=unchanged=0; restarted=False
+    p=store.start(job,execution_id,old); changed=unchanged=0; restarted=False
     try:
         while True:
             if deadline is not None and time.monotonic()>=deadline:
@@ -42,7 +42,7 @@ def collect_job(store,job,fetch,execution_id,*,deadline=None):
                 raise SentraError('Repeated pagination token; page not checkpointed.')
             counts=store.page(job,cursor,payload,body,nxt,p)
             changed+=counts['changed']; unchanged+=counts['unchanged']
-            p=store.progress(job)
+            p=counts['progress']
             if not nxt: return {'status':'complete','changed':changed,'unchanged':unchanged,'outcome':completed_outcome(p)}
     except Exception as e:
         safe=e if isinstance(e,SentraError) else SentraError('Page operation failed; sensitive details omitted. Repeat to resume.')

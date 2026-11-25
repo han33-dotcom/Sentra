@@ -25,10 +25,21 @@ class CloudStore:
             raise CapacityStop('Metadata capacity exhausted; stop and inspect storage. Existing progress retained.')
 
     def progress(self,job):
-        self.backend.reserve(300_000)
-        row=self.backend.db.execute('select progress from collector_private.daily_jobs where participant_id=%s and provider=%s and dataset=%s and job_key=%s',
-            (self.pid,self.provider,job.dataset,job.key)).fetchone()
-        return row[0] if row else None
+        key = (self.pid, self.provider, job.dataset, job.key)
+        checkpoint = '''from collector_private.daily_jobs
+                        where participant_id=%s and provider=%s and dataset=%s and job_key=%s'''
+        # Account for query/protocol overhead even on a missing checkpoint.
+        self.backend.reserve(4096)
+        size = self.backend.db.execute('select octet_length(progress::text) ' + checkpoint, key).fetchone()
+        if size is None:
+            return None
+        self.backend.reserve(size[0] + 4096)
+        # Keep the response within its reservation if the checkpoint changes between reads.
+        row = self.backend.db.execute('select progress ' + checkpoint + ' and octet_length(progress::text)<=%s',
+                                      (*key, size[0])).fetchone()
+        if row is None:
+            raise SentraError('Checkpoint changed during size inspection; retry the job.')
+        return row[0]
 
     def save_progress(self,job,p,*,complete=False):
         if len(canonical(p).encode())>262144: raise SentraError('Pagination state too large; inspect provider before resuming.')
@@ -54,8 +65,7 @@ class CloudStore:
            'pages':0,'received':0,'started_at':clock(),'completed_at':None,'failure':None}
         self.save_progress(job,p); return p
 
-    def start(self,job,execution):
-        p=self.progress(job)
+    def start(self,job,execution,p):
         if not p or p['status']=='complete': return self.reset(job,execution)
         p={**p,'execution_id':execution,'status':'running','failure':None}
         self.save_progress(job,p); return p
@@ -130,7 +140,7 @@ class CloudStore:
             changed_count+=len(changed); unchanged_count+=len(values)-len(changed)
         # Records may span transactions; cursor/coverage move only after all batches succeed.
         self.save_progress(job,nextp,complete=not next_cursor)
-        return {'changed':changed_count,'unchanged':unchanged_count}
+        return {'changed':changed_count,'unchanged':unchanged_count,'progress':nextp}
 
     def run_status(self,run_id,details):
         self.metadata_guard()
