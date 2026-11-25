@@ -1,9 +1,10 @@
 """Purpose labels must never weaken the durable allowance ledger."""
 import os
 from pathlib import Path
+from datetime import date
 import re
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 from uuid import uuid4
 
 import psycopg
@@ -68,6 +69,50 @@ class EgressDatabaseTests(unittest.TestCase):
         self.db.execute('reset session authorization')
         self.db.execute('delete from collector_private.egress_purposes')
         self.db.execute('update collector_private.egress_budget set baseline_bytes=100,reserved_bytes=0,verified_at=now()')
+
+    def test_checkpoint_reservation_tracks_bytes_and_refuses_over_budget_read(self):
+        from psycopg.types.json import Jsonb
+        from sentra.cloud_store import CloudStore
+        from sentra.daily_plan import day_jobs
+        from sentra.shared import Limits, CapacityStop
+        from sentra.shared_backend import SharedBackend
+
+        with patch('sentra.shared_backend.connect_db', return_value=self.db):
+            backend = SharedBackend({}, Limits(monthly_egress_bytes=100_000))
+        store = CloudStore(backend, 'p99', 'whoop')
+        job = day_jobs('whoop', date(2026, 1, 1))[0]
+        self.assertIsNone(store.progress(job))
+        self.db.execute("insert into audit.participants(participant_id) values ('p99')")
+        payload = {'cursor': 'ü' * 1024}
+        size = self.db.execute("""insert into collector_private.daily_jobs
+            (participant_id,provider,dataset,job_key,progress) values ('p99','whoop',%s,%s,%s)
+            returning octet_length(progress::text)""", (job.dataset, job.key, Jsonb(payload))).fetchone()[0]
+        self.assertEqual(store.progress(job), payload)
+        reserved = self.db.execute('select reserved_bytes from collector_private.egress_budget').fetchone()[0]
+        self.assertEqual(reserved, 3 * 4096 + size)
+        self.db.execute('update collector_private.egress_budget set baseline_bytes=%s',
+                        (100_000 - reserved - 8192 - size,))
+        with self.assertRaises(CapacityStop):
+            store.progress(job)
+        self.assertEqual(self.db.execute('select reserved_bytes from collector_private.egress_budget').fetchone()[0],
+                         reserved + 4096)
+
+    def test_object_lookup_is_scoped_to_provider_participant_and_digest(self):
+        from sentra.shared import Limits
+        from sentra.shared_backend import SharedBackend
+
+        with patch('sentra.shared_backend.connect_db', return_value=self.db):
+            backend = SharedBackend({}, Limits())
+        self.db.execute("insert into audit.participants(participant_id) values ('p98')")
+        digest = 'a' * 64
+        self.assertFalse(backend.has_object('whoop', 'p98', digest))
+        self.db.execute("""insert into audit.raw_response_manifest values
+            (%s,'p98','whoop','cycle','synthetic','{}','daily',now(),'synthetic',%s,0,'{}')""",
+                        ('b' * 64, digest))
+        self.assertTrue(backend.has_object('whoop', 'p98', digest))
+        self.assertFalse(backend.has_object('google_health', 'p98', digest))
+        self.assertFalse(backend.has_object('whoop', 'p97', digest))
+        self.assertFalse(backend.has_object('whoop', 'p98', 'c' * 64))
 
     def test_migration_keeps_prior_reservations_and_baseline(self):
         self.assertEqual(self.migrated,(100,123))

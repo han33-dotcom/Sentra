@@ -31,7 +31,7 @@ class CloudStoreTests(unittest.TestCase):
             def save_progress(self,j,p,*,complete=False): self.saved=(p,complete)
         s=Store(Backend(),'p02','whoop'); job=day_jobs('whoop',date(2026,10,7))[0]
         counts=s.page(job,'',{'records':[]},b'{"records":[]}','',{'pages':0,'received':0,'seen':[],'execution_id':'test'})
-        self.assertEqual(counts,{'changed':0,'unchanged':0})
+        self.assertEqual(counts,{'changed':0,'unchanged':0,'progress':s.saved[0]})
         self.assertEqual(s.saved[0]['status'],'complete'); self.assertTrue(s.saved[1])
 
     def test_malformed_whoop_missing_records_cannot_mean_empty_coverage(self):

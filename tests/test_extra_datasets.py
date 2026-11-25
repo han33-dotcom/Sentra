@@ -54,7 +54,7 @@ class Store:
 
     def progress(self, j): return self.current
 
-    def start(self, j, execution):
+    def start(self, j, execution, previous):
         self.current = {'cursor': '', 'seen': [], 'pages': 0, 'received': 0, 'status': 'running', 'execution_id': execution}
         return self.current
 
@@ -63,7 +63,7 @@ class Store:
         self.pages.append((cursor, len(records)))
         self.current = {**p, 'cursor': nxt, 'pages': p['pages'] + 1, 'received': p['received'] + len(records),
                         'seen': p['seen'] + ([cursor] if cursor else []), 'status': 'running' if nxt else 'complete'}
-        return {'changed': len(records), 'unchanged': 0}
+        return {'changed': len(records), 'unchanged': 0, 'progress': self.current}
 
     def failed(self, j, message, outcome='failed'):
         self.outcome = outcome

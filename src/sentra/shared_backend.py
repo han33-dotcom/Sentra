@@ -108,7 +108,6 @@ class SharedBackend:
         self.credentials, self.limits = credentials, limits
         self.db = connect_db(credentials)
         self.storage = PrivateStorage(credentials, self.reserve)
-        self._object_cache = {}
 
     def close(self):
         self.db.close()
@@ -155,13 +154,10 @@ class SharedBackend:
         return {r[0] for r in self.db.execute('select response_id from audit.raw_response_manifest where provider=%s and participant_id=%s',(provider,participant))}
 
     def has_object(self, provider, participant, digest):
-        identity = (provider,participant)
-        if identity not in self._object_cache:
-            self.reserve(32_768)
-            count = self.db.execute('select count(*) from audit.raw_response_manifest where provider=%s and participant_id=%s',identity).fetchone()[0]
-            self.reserve(count*256+32_768)
-            self._object_cache[identity] = {r[0] for r in self.db.execute('select distinct content_sha256 from audit.raw_response_manifest where provider=%s and participant_id=%s',identity)}
-        return digest in self._object_cache[identity]
+        self.reserve(4096)
+        return self.db.execute('''select exists(select 1 from audit.raw_response_manifest
+            where participant_id=%s and provider=%s and content_sha256=%s)''',
+            (participant, provider, digest)).fetchone()[0]
 
     def put_manifest(self, m, compressed):
         key = object_key(m['provider'],m['participant_id'],m['content_sha256'])
@@ -178,7 +174,6 @@ class SharedBackend:
                 on conflict (response_id) do nothing''', (m['response_id'],m['participant_id'],m['provider'],m['dataset'],m['endpoint'],
                     Jsonb({k:m.get(k) for k in ('requested_start','requested_end','requested_civil_start','requested_civil_end')}),
                     m['resolution'],m['collected_at'],BUCKET+'/'+key,m['content_sha256'],len(compressed),Jsonb(cloud)))
-        self._object_cache[(m['provider'],m['participant_id'])].add(m['content_sha256'])
 
     def record_hashes(self, participant, provider, dataset):
         self.reserve(32_768)
