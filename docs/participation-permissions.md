@@ -100,13 +100,12 @@ A participant can withdraw at any time, without giving a reason:
 
 ## Provider limits
 
-| Provider | Limit | Effect on the five-participant target |
+| Provider | Limit | Effect on the five-per-provider pilot |
 | --- | --- | --- |
-| Google Health (OAuth app in **Testing**) | Up to 100 test users; each must be added before authorizing. Authorizations and refresh tokens **expire 7 days after consent**. | Each Fitbit participant must reconnect weekly while the app stays in Testing. Switching to **In production** is separate from verification: an unverified app still shows a warning and keeps a lifetime user cap, in Testing or production. Whether verification is required, or this pilot qualifies for an exception (for example, a few personally known users), must be checked and recorded before choosing between weekly reconnects and publication. |
+| Google Health (OAuth app in **Testing**) | Up to 100 test users; each must be added before authorizing. Authorizations and refresh tokens **expire 7 days after consent**. | Each Fitbit participant must reconnect weekly while the app stays in Testing. Switching to **In production** is separate from verification: an unverified app still shows a warning and keeps a lifetime user cap, in Testing or production. The team chose participant-led reconnects for this pilot. Verify publication requirements before any future change to the app audience. |
 | WHOOP (app not yet approved) | Up to **10 WHOOP members** in development. Approval requires a working app, contact email and privacy policy URL; review times are not guaranteed. | Five participants fit within the limit. Approval is not needed this sprint. |
 
-The Google reconnect question is shared with the collection restart task, which
-decides between weekly assisted reconnects and pursuing publication. Sources:
+The pilot used Google Testing with participant-led reconnects. [Pilot decision](https://github.com/han33-dotcom/Sentra/issues/44#issuecomment-6992808159). Sources:
 [Google OAuth audience and testing](https://support.google.com/cloud/answer/15549945),
 [restricted-scope verification exceptions](https://developers.google.com/identity/protocols/oauth2/production-readiness/restricted-scope-verification#exceptions),
 [Google Health API setup](https://developers.google.com/health/setup),

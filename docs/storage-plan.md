@@ -1,12 +1,10 @@
 # Storage and Supabase usage plan
 
-Status: **proposal for review**. Nothing in this document deletes data yet. Every step
-that removes rows is gated on verification and explicit approval by both code owners.
+The project uses Supabase Pro with a 4.5 GB internal monthly transfer stop and no additional spend. One separately approved removal reconstructed all 774 readings and preserved the original response. Each future removal requires its own preview, recovery evidence and approvals. [Bounded removal](https://github.com/han33-dotcom/Sentra/issues/46#issuecomment-6992737541) · [November sprint closeout](sprint-closeout.md)
 
 ## Why
 
-Sentra runs on Supabase Free. Its guards stop collection safely before the free
-allowances are reached:
+The following October sizing proposal records the plan, limits and usage at that time.
 
 | Resource | Free allowance | Sentra guard | Measured (11 Oct 2026) |
 | --- | --- | --- | --- |
@@ -201,7 +199,7 @@ Full backups cover compact data; operational controls remain separately configur
 recovery, with 012 defaulting off. Synthetic PostgreSQL tests compare all 22 columns and
 exercise role permissions, retries, correction/omission, rollback and capacity rejection.
 
-Still open before phase 3:
+At this checkpoint, the following items were open before phase 3:
 - Egress purpose attribution is implemented by sql/013 and compatible clients; apply the migration to begin the breakdown.
 - Phase 3 deletion stays gated as below.
 

@@ -9,7 +9,7 @@ The data held is:
 - original API responses, compressed and hashed
 - consent history
 
-It is stored in Supabase Postgres (free tier), in private object storage, and in compressed Parquet archives.
+It is stored in Supabase Postgres, in private object storage, and in compressed Parquet archives.
 
 **This is not legal advice.** This file collects sources a retention and backup policy can cite. The team, the faculty advisor and the AUB IRB decide the actual periods and controls. GDPR and HIPAA are included as reference standards. Neither is assumed to apply to Sentra directly. Where a claim could not be checked against the source, it is marked **(unverified)**.
 

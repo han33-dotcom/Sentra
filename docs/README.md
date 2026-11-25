@@ -1,5 +1,7 @@
 # Sentra technical documentation
 
+For the latest participant counts, dashboard publication and operating limits, see the [November sprint closeout](sprint-closeout.md).
+
 Start with [AGENTS.md](../AGENTS.md), [Agent-owned delivery](local-delivery.md),
 [Team workflow](team-workflow.md) and [Collaborator setup](collaborator-setup.md).
 These define current code delivery. [Workspace activation](github-workspace-activation.md),
@@ -61,7 +63,7 @@ Tasks belong in [GitHub Issues](https://github.com/han33-dotcom/Sentra/issues); 
 - [stage 7 audit plan](stage-7-audit-plan.md)
 - [capacity measurements](capacity-measurements.md)
 - [recovery rehearsal](recovery-rehearsal.md)
-- [retention and backup policy (proposal)](retention-policy.md)
+- [interim retention and backup policy](retention-policy.md)
 - [retention evidence](retention-evidence.md)
 - [storage plan](storage-plan.md)
 - [team workflow](team-workflow.md)

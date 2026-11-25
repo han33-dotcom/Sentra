@@ -51,4 +51,3 @@ WHOOP recovery (%).
   Per the November 3 sequencing, elaborate group comparisons are deferrable.
 - Only measures published on the wellness board are covered.
 - Data is only as current as the daily board refresh. Collection remains paused.
-- With today's two participants, every real group day is correctly hidden.

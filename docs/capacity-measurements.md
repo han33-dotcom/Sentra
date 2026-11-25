@@ -1,8 +1,6 @@
 # Capacity measurements and growth forecast (#50)
 
-Status: **measurement log started.** The recommendation for the next participant batch is the
-later deliverable. It needs several days of observed collection after restart (#47).
-Projections stay labelled as projections until measured.
+The November sprint measured the original Fitbit pilot, its replay, the two-provider batches and the stored-data dashboard refresh. The [November sprint closeout](sprint-closeout.md) gives the figures, caps and dated evidence.
 
 ## What is measured, and how
 
@@ -48,18 +46,6 @@ record collector-attributed reservations separately from other shared traffic.
 These numbers are older than the current code or come from local data. They are the
 starting point, not a forecast.
 
-## To fill after restart
+## Capacity decision
 
-| Measure | Day 1 | Day 7 | Day 14 |
-| --- | --- | --- | --- |
-| Database bytes per participant-day (ongoing) | | | |
-| Egress per day (collection + refresh + viewer) | | | |
-| Runs succeeded / failed / paused | | | |
-| Usable days and complete assessments per participant | | | |
-| Refresh `read_bytes` | | | |
-
-## Recommendation (pending)
-
-A measured recommendation for the next batch will state participants per device mix, the
-headroom left under each guard, and the assumptions it depends on. Around 100 participants
-remains a direction, not a commitment.
+The measured pair supported adding four Fitbit and four WHOOP participants with a 60 MB shared cap. The eight-person batch used 46.38 MB. The team stopped at ten contributors. The pilot measured repeated daily operation for one Fitbit only. A larger cohort or recurring schedule needs a new estimate, current capacity and separate approval. [Measurement and forecast acceptance](https://github.com/han33-dotcom/Sentra/issues/50#issuecomment-7175918152)
