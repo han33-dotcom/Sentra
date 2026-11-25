@@ -10,6 +10,7 @@ eligibility is reconciled from the already-published board.
     python -m sentra.wellness_refresh --force    # rebuild anyway
 """
 import argparse
+from dataclasses import replace
 from datetime import datetime, timezone
 import json
 import os
@@ -76,7 +77,8 @@ def _eligibility(writer, board):
         raise SentraError('Board is published, but eligibility metadata could not be updated. Retry the refresh; existing data is retained.') from None
 
 
-def refresh(reader, limits, storage, *, force=False, now=None, log=print, eligibility_writer=None, incremental=False):
+def refresh(reader, limits, storage, *, force=False, now=None, log=print, eligibility_writer=None, incremental=False,
+            checkpoint=None, finish_allowance=0):
     now = now or datetime.now(timezone.utc)
     source = latest_run(reader)
     before={}
@@ -91,8 +93,16 @@ def refresh(reader, limits, storage, *, force=False, now=None, log=print, eligib
             log('No changed collection data or rules since the last board; tiers not read or published.')
             feed = _eligibility(eligibility_writer,before) if current_rules else 'not_available'
             return {'status': 'skipped', 'source_run': source, 'eligibility':feed}
-    objects, report = (monthly_tiers.build(reader,limits,storage,now=now,force=force) if incremental
-                       else build(reader, limits, now=now))
+    if finish_allowance:
+        if not incremental or not 0 < finish_allowance < limits.monthly_egress_bytes:
+            raise SentraError('Invalid dashboard publication allowance.')
+        reader.limits=replace(limits,monthly_egress_bytes=limits.monthly_egress_bytes-finish_allowance)
+    try:
+        objects, report = (monthly_tiers.build(reader,limits,storage,now=now,force=force,checkpoint=checkpoint) if incremental
+                           else build(reader, limits, now=now))
+    finally:
+        if finish_allowance:
+            reader.limits=limits
     if (incremental and not force and report.get('unchanged')
             and before.get('assessment_version')==ASSESSMENT_VERSION and before.get('board_version')==BOARD_VERSION
             and before.get('tier_sha256')==report['sha256']):
@@ -127,10 +137,17 @@ def refresh(reader, limits, storage, *, force=False, now=None, log=print, eligib
 def main(argv=None):
     parser = argparse.ArgumentParser(description='Sentra daily wellness board refresh and bounded eligibility metadata')
     parser.add_argument('--force', action='store_true')
+    parser.add_argument('--checkpoint-dir',type=Path,
+                        help='Private local directory for encrypted incremental refresh checkpoints')
     args = parser.parse_args(argv)
     try:
         with tempfile.TemporaryDirectory(prefix='sentra-viewer-') as folder:
             credentials, limits = viewer_config(folder, env='SENTRA_VIEWER_CONFIG')
+            checkpoint=None
+            if args.checkpoint_dir is not None:
+                from .refresh_checkpoint import RefreshCheckpoint
+                from .vault import local_cipher
+                checkpoint=RefreshCheckpoint(args.checkpoint_dir,local_cipher(),credentials['url'])
             with connect_db(credentials) as db, connect_db(credentials) as budget_db:
                 reader = AuditReader(db, limits, budget_db=budget_db)
                 storage = PrivateStorage(collector_storage(), reader.reserve, bucket=TIER_BUCKET)
@@ -138,7 +155,8 @@ def main(argv=None):
                 try:
                     monthly_tiers.lock(reader)
                     print(json.dumps(refresh(reader, limits, storage, force=args.force,
-                        eligibility_writer=lambda board:eligibility.publish(publisher,board),incremental=True)), flush=True)
+                        eligibility_writer=lambda board:eligibility.publish(publisher,board),incremental=True,
+                        checkpoint=checkpoint)), flush=True)
                 finally:
                     monthly_tiers.unlock(reader)
                     publisher.close()

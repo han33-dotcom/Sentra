@@ -238,3 +238,23 @@ usage consumes this headroom too. The collector claims each Beirut day once
 and opens the next day only after recording success. A crash leaves the day
 claimed for operator inspection. The third successful cycle pauses SQL.
 Inspect the receipts and turn the GitHub schedule switch off at closeout.
+
+### Resuming a local stored-data refresh
+
+The incremental builder compares source fingerprints per month for measurements,
+sessions, and the two heart-rate inputs together. Corrections and removals
+invalidate the affected group. The hot retention cutoff still applies to reused
+heart-rate files.
+
+For an approved local run, `--checkpoint-dir` on `python -m sentra.wellness_refresh`
+keeps authenticated, encrypted pages and completed derived groups in a private
+operator directory. It uses the existing OS credential store. An interrupted
+read resumes against a fresh source fingerprint. Keep the same project, code,
+checkpoint directory and absolute transfer ceiling on retry. Handle checkpoint
+files as private participant data under the existing retention policy.
+
+The bounded operator can pass a sized source inventory and expected published
+hashes to `RefreshCheckpoint`, and `finish_allowance` to `refresh` to keep
+transfer available for publishing and independent verification. All reads and
+writes still use the shared transfer ledger. A stopped run grants no new
+allowance.
