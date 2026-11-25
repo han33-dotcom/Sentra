@@ -7,8 +7,7 @@ task through self-review, acceptance, CI, develop and main. See
 for automatic instruction loading and the one-time refresh after policy updates.
 
 Sentra is the wearable-data pipeline for our final-year project. It collects data
-for consenting participants: currently one Fitbit Air account through Google Health
-v4 and one WHOOP account through WHOOP v2. Each response is stored privately and
+for consenting participants through Google Health v4 (Fitbit) and WHOOP v2. Each response is stored privately and
 unchanged, then normalized conservatively into Supabase PostgreSQL. A private
 research viewer sits on top.
 
@@ -140,8 +139,7 @@ each person's own recent pattern**.
 - They are not medical assessments and must never be presented as a diagnosis.
 - All thresholds in `src/sentra/processing/thresholds.json` are
   **v0 — pending medical expert sign-off**.
-- Cohort days with fewer than 5 people are suppressed. With the current two
-  participants, every cohort day is suppressed.
+- Cohort days with fewer than 5 people are suppressed. Each statistic needs five eligible contributors for that device and date.
 
 The stage documents also contain historical evidence and earlier decisions. The
 current collection decision is the bounded, paused state described here and in the
@@ -149,50 +147,7 @@ operating guide.
 
 ## Current operational state
 
-Snapshot verified on **October 10, 2026 at 15:58 Beirut time**:
-
-- **October 7–9 backfill:** succeeded for both providers (**57 Google jobs and 12
-  WHOOP jobs**) with no collection failures. The final date is October 9 because
-  October 10 was still incomplete.
-- **Coverage:** retained requested coverage includes **October 3–9** across the
-  recurring datasets. Google minute request coverage spans **October 1–9**. Original
-  heart rate is still the single initial representative day.
-- **Empty results:** some requests returned no records, including Google sleep on
-  October 9. Completed request coverage does not prove uninterrupted measurements or
-  that every metric is available.
-- **Collection controls:** both automatic controls are disabled (the GitHub
-  scheduling variable and the database daily-collection control).
-- **Database:**
-  - Ceiling **400 MB** with a **20 MB reserve**, giving an effective **380 MB import
-    limit** before estimated next-batch checks.
-  - Use **287.56 MB**, so about **92.44 MB** remains before the import limit.
-  - Private original objects use about **0.73 MB**.
-  - These are decimal MB and a dated snapshot, not a live quota reading.
-- **Objects and egress:** the object ceiling is **700 MB** and the monthly egress
-  ceiling **3.5 GB**. Egress tracking uses a verified baseline plus conservative
-  reservations, not a billing meter. The baseline must be checked at least weekly
-  and at the start of each UTC month. Parquet tiers and the processing job reserve
-  egress through the same budget and count toward the object ceiling.
-
-**Update, October 11, 2026** (after the Sprint 6 merges):
-- **Probe:** the new-dataset probe ran (see the [results](docs/data-dictionary.md#bounded-probe-results-october-39-2026)).
-  Activity October 3–8 is deferred.
-- **Tiers and processing:** the tier migration, the first `tiers-build`, private
-  publication and processing from the bucket succeeded. The tiers hold 3.27 MB of
-  parquet; the read cost 39.7 MB of database egress.
-- **Guarded usage:**
-  - database **310.2 MB**, so about **70 MB** remains before the 380 MB import limit;
-  - objects **4.0 MB**;
-  - month-to-date egress **2.52 GB** of 3.5 GB.
-- **Read API:** local checks passed. All 32 cohort days are suppressed.
-- **Collection:** still disabled.
-
-**Ceiling settings:** the collector settings already use the new database ceiling.
-The hosted viewer's capacity indicator needs its managed settings updated separately
-if it still shows the older ceiling.
-
-**Midnight schedule:** a midnight workflow is configured, but successful unattended
-midnight collection has not been demonstrated during this paused research phase.
+Five Fitbit and five WHOOP participants contributed readings for November 23–24. The private dashboard was refreshed and verified on November 26. Regular collection is paused. The owner retained Supabase Pro, a 4.5 GB monthly transfer stop and no additional spend. [November sprint closeout](docs/sprint-closeout.md) · [Historical capacity measurements](docs/capacity-measurements.md)
 
 ## Local development
 

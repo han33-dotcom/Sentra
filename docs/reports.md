@@ -72,7 +72,7 @@ reading of the consent and is open to the team's review.
 - The PDF uses standard fonts (Western European characters), which covers all report text today.
 - Follow-up counts cover the latest 50 follow-ups the user may read, open and ongoing first.
 - No department comparisons (no departments in the schema), and no reports through the read
-  API, whose key has no organization scope.
+  API. Organization API credentials are scoped to permitted processed data.
 - Pilot participants without a consent record are never in a demonstration copy.
-  With today's participants every real group figure is hidden.
+  Each published statistic requires enough eligible contributors with demonstration consent.
 - Data is only as current as the daily board refresh.

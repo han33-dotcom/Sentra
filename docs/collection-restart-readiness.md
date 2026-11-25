@@ -3,14 +3,9 @@
 Task: [#44](https://github.com/han33-dotcom/Sentra/issues/44). Owner:
 `han33-dotcom`; optional additional code reviewer: `MohamadNasrallah`.
 Code delivery follows [agent-owned delivery](local-delivery.md); restart
-authorization remains a separate operator decision. This is the current restart
-ledger, separate from October's historical acceptance in the stage guides.
+authorization remains a separate operator decision. The November 19 readiness decision covered a bounded Fitbit pilot. Its three scheduled days finished and the later cohort follow-ups were canceled. Regular collection is paused. [Readiness acceptance](https://github.com/han33-dotcom/Sentra/issues/44#issuecomment-7007731434) · [November sprint closeout](sprint-closeout.md)
 
-**November 18, 2026 checkpoint: blocked; collection remains paused.**
-The provider console and participation-policy checks have progressed. Stored
-authorization still needs attention, and the proposed windows and restart have
-not been authorized. See the current evidence and gates below. Neither this
-document nor a successful inspection authorizes collection.
+The console readings, proposed windows and checklist below preserve the November 18 checkpoint. A future request needs fresh consent, capacity checks and approval for the exact accounts, dates, datasets and transfer cap.
 
 ## Repeatable inspection
 
@@ -200,7 +195,7 @@ notice, signed-out publication verification and saved Google and WHOOP links.
 [testing-decision]: https://github.com/han33-dotcom/Sentra/issues/44#issuecomment-6992808159
 [storage-verified]: https://github.com/han33-dotcom/Sentra/issues/46#issuecomment-6992737541
 
-## Proposed windows, awaiting agreement
+## Historical proposed windows on November 18
 
 1. **Forward collection:** start from the agreed restart date in Asia/Beirut,
    after all gates below. Normal daily collection revisits the prior three days
@@ -229,6 +224,8 @@ No dates, reconnects, health requests, workflow dispatches or activation command
 in this proposal have been approved or executed by this readiness work.
 
 ## Outstanding restart gates
+
+This checklist records the November 18 state before the bounded pilot approval. Use the [operating guide](operating-guide.md) for future work.
 
 - [x] Signed-in Supabase Free, organization usage and budget controls verified.
   Preserve reservations and limits. Reverify at least weekly, at each new UTC

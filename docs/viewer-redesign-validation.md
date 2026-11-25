@@ -134,7 +134,9 @@ relation/index size before approval. Preserve encrypted backups and the current
 representation until verified; coexistence needs headroom. Normalizing context
 alone will not guarantee indefinite capacity. This revision does not apply it.
 
-## Operational gates still pending
+## Operational gates at the redesign checkpoint
+
+These observations predate the November pilot. For current operating limits and completed checks, see the [November sprint closeout](sprint-closeout.md).
 
 On 10 October: database **269,145,779 bytes**, originals **657,222 bytes**; latest
 conservative egress after checks **2,020,577,882 bytes**. Baseline was verified

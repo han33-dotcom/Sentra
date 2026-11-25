@@ -329,19 +329,9 @@ Further changes require implementation-agent self-review, acceptance, CI and rel
 under [agent-owned delivery](local-delivery.md), plus verified deployment. Synthetic tests use fake accounts/records and an isolated
 loopback PostgreSQL database; they grant no real person organization access.
 
-Operational prerequisites still open:
+Hosted provider status and operating requirements:
 
-- **WHOOP:** the app is implemented but is not enabled on the current Google-only
-  host. On November 18, the owner authorized adding
-  `https://sentra-enrollment.onrender.com/oauth/whoop/callback`; the saved app now
-  lists it alongside localhost, preserving existing read-only scopes including
-  `read:profile`. Sandbox showed 1 of 10 members and limits of 100 requests/minute
-  and 10,000/day. The approved public privacy notice was subsequently saved in the
-  provider settings under SEN-26. Hosted enablement and participant authorization remain separate;
-  no live sign-in or provider-data request was performed. WHOOP
-  requires membership for developer access, so a free account alone is not an
-  alternative. See [WHOOP requirements](https://developer.whoop.com/docs/developing/overview/)
-  and [redirect/team configuration](https://developer.whoop.com/docs/developing/getting-started/).
+- **Hosted sign-in** offers Fitbit and WHOOP on the same invitation. Both authorization starts and registered callbacks were verified on November 19. Five participants per provider subsequently connected and supplied usable readings. [Hosted provider check](https://github.com/han33-dotcom/Sentra/issues/28#issuecomment-7007700210) · [Recruitment acceptance](https://github.com/han33-dotcom/Sentra/issues/38#issuecomment-7174441747)
 - **Assessment:** migration 014 and the bounded enrollment-facing eligibility feed
   from #45/#49 are deployed. Missing or stale publications still mean unknown.
   Do not infer insufficient history, readiness or a wellness result from signup,

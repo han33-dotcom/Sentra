@@ -4,7 +4,7 @@ Task: [SEN-32](https://github.com/han33-dotcom/Sentra/issues/32). One consolidat
 from the limitations recorded in each merged PR and the reviewed documents. Each item links its
 source; owners keep their own items current. See also the [evaluation table](evaluation.md).
 
-Last updated: November 18, 2026; see dated implementation/hosted evidence in [evaluation](evaluation.md).
+Updated November 26, 2026. [November sprint closeout](sprint-closeout.md) · [Evaluation](evaluation.md)
 
 ## Meaning of the results
 
@@ -51,22 +51,9 @@ Last updated: November 18, 2026; see dated implementation/hosted evidence in [ev
 
 - **Collection is paused.** Merging or deploying never restarts it; restart needs explicit
   authorization and readiness evidence. (#53)
-- **Provider limits.** Google Testing mode means weekly Fitbit reconnects. WHOOP Sandbox showed
-  1 of 10 members on November 18. The hosted callback is now registered, but the host remains
-  Google-only; hosted enablement and live authorization remain separate. The approved
-  privacy notice and provider links are now published and verified. (#33, #64)
-- **Real-phone evidence is partial.** One real Google signup and a sharing update are recorded;
-  phone timing, reconnect and withdrawal on real devices, and hosted organization-user acceptance
-  are outstanding. (#52, #64)
-- **Eligibility is derived, not live.** Migration 014 and the one authorized stored-data refresh completed November 17; version/digest readback passed. Absent or stale results remain unknown.
-- **Free hosting.** The enrollment host can take tens of seconds to wake, and an inactive Free
-  database can pause again. (#36, #64)
-- **Provider-side authorization remains unverified.** On November 18 the dedicated Sentra
-  Google session showed External / Testing, two test users, and the registered local and
-  hosted enrollment/viewer callbacks. No Google settings changed. WHOOP app-owner
-  administration, limits and the authorized hosted callback addition were verified;
-  stored token metadata and callback registration do not prove a participant's
-  current authorization. (#53)
+- **Enrollment and renewal.** Hosted sign-in supports Fitbit and WHOOP. Google Testing can require participant-led reconnects. Recheck consent and usable authorization before a future run. [Hosted provider verification](https://github.com/han33-dotcom/Sentra/issues/28#issuecomment-7007700210)
+- **Phone evidence.** The accepted Fitbit flow includes a real phone signup. Reconnect and withdrawal have synthetic transaction coverage. Elapsed signup time was optional. [Enrollment acceptance](https://github.com/han33-dotcom/Sentra/issues/28)
+- **Assessment needs enough history.** Five Fitbit and four WHOOP contributors had a recent dashboard day. One Fitbit contributor had a complete recent assessment. Absent or stale eligibility remains unknown. [November sprint closeout](sprint-closeout.md)
 
 ## Storage, backup and recovery
 
@@ -78,22 +65,17 @@ Last updated: November 18, 2026; see dated implementation/hosted evidence in [ev
   and isolated hosted restore passed November 18: all 16 table counts/fingerprints and
   220 destination-original hashes matched. Derived-output rebuilding, off-machine
   custody and key-loss recovery were not rehearsed. See the [dated recovery record](recovery-rehearsal.md#record).
-- **Compact storage is extra space for now.** Removing the per-field rows (phase 3) stays gated on
-  the retention policy, a verified backup, the recovery rehearsal and both owners' approval. (#59)
+- **Bounded storage removal.** One approved removal was verified against all 774 reconstructed readings. Each further removal requires a fresh preview, recovery evidence and approval. The measured 5.1× difference in representation size does not establish reclaimed disk space. [Storage acceptance](https://github.com/han33-dotcom/Sentra/issues/46#issuecomment-6992737541)
 - **Publication is ordered, not atomic across board and tiers.** A board upload failure retains its previous complete version; tier hashes force repair on retry. Monthly immutable objects, legacy slots and obsolete versions count against storage until separately reviewed cleanup. Both writer commands share a database lock. (#57, #80, #106)
-- **Monthly refresh still does server work.** Source fingerprints scan all logical source rows, and processing downloads the complete bounded compact cache. Changed months alone leave the database; new hashes alone upload. Live cost savings remain unmeasured. (#106)
-- **Refresh is not scheduled.** The one authorized November 17 refresh published the current
-  board/assessment/monthly contracts. Collection remains paused; another refresh requires
-  its own operational authorization. (#79, #106)
+- **Monthly refresh still does server work.** Source fingerprints scan all logical source rows, and processing downloads the complete bounded compact cache. The builder can reuse unchanged groups within a month. [Refresh accounting](sprint-closeout.md)
+- **Refresh is not scheduled.** The November 26 publication used stored readings through November 24. Another refresh requires its own authorization.
 - **Compact reads depend on records.** Phase 3 must keep `audit.records`, whose response ID proves
   a compact reading is current. The private viewer now reads current compact-only rows (#98). Compact writes default off (012); deletion uses separately gated previews and actual owner approval comments (#105).
-- **Growth forecast pending.** The next-batch recommendation needs enough days of collection;
-  egress comparisons are only valid within one month. (#60)
+- **Recurring cost remains unmeasured.** The eight-person batch fit within its 60 MB cap. The team stopped at ten contributors. [Capacity measurements](capacity-measurements.md)
 
 ## Organization application
 
-- **Small pilot means hidden statistics.** With today's participants, every real group statistic
-  is correctly hidden.
+- **Small groups.** Each statistic needs at least five eligible contributors per device, date and measure. Demonstration reports also require demonstration consent.
 - **The 3-day "recently contributing" window** is a proposal for team agreement. (#62)
 - **Only the latest published day is explained** on Profiles; trends and reports are separate
   tasks. (#65)
@@ -112,4 +94,4 @@ Last updated: November 18, 2026; see dated implementation/hosted evidence in [ev
   The separate hosted recovery also passed within its bounded scope. Team retention
   agreement was subsequently reported, and separately authorized cleanup removed the
   isolated recovery project and its temporary copies. Live destructive approvals,
-  exact previews and remaining lossless checks are still required; no live deletion ran.
+  exact previews and lossless checks apply to each removal.

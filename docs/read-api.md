@@ -2,7 +2,7 @@
 
 Ported from `archive/monorepo-v0:wearables-pipeline/wp/api.py`. The SQLite ingestion,
 sync worker, WHOOP webhook, sync trigger and Windows `.bat` scripts were **not** ported.
-Hasan's GitHub Actions collector (`collect.yml`, paused) is the only collector.
+The CLI and the paused GitHub Actions workflow use the same Sentra collection runtime.
 
 ```
 GitHub Actions collector -> Supabase audit tables --(operator: sentra tiers-build)--> sentra-tiers bucket
@@ -73,7 +73,7 @@ are separate: a service-account login never grants application access.
    expiry in UTC epoch seconds (recommended at most 30 days). Store no plaintext
    bearer credentials in this file. Restrict its filesystem permissions to the operator.
 3. Set `SENTRA_API_ORG_CONFIG` to the same viewer-only configuration shape as
-   `SENTRA_PROCESSING_CONFIG`, preserving the current Free-plan/egress limits.
+   `SENTRA_PROCESSING_CONFIG`, preserving the shared capacity and transfer limits.
    The API refuses collector credentials. Mount the credential directory read-only
    and set `SENTRA_API_ORG_CREDENTIALS_FILE` to its container path. The optional
    `docker-compose.api-org.yml` supplies these settings without changing the default

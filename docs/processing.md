@@ -58,8 +58,7 @@ and outputs must stay beneath `.private`.
 - **No MET values:** `active_min` and `sedentary_min` stay empty.
 - **Cohort:** one row per date and device; Fitbit and WHOOP are never pooled. A row is
   shown only when at least `cohort_k_anonymity` (5) people of that device have usable data,
-  and each statistic needs 5 contributors of its own. With the current participants, every
-  cohort row is suppressed.
+  and each statistic needs 5 contributors of its own.
 
 ## Metric-name mapping (`src/sentra/processing/metric_map.py`)
 

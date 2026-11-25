@@ -4,6 +4,8 @@ Task: [SEN-32](https://github.com/han33-dotcom/Sentra/issues/32). Where to look 
 situation, in one place. Each row links the reviewed procedure, which stays the source of truth;
 nothing here replaces it. See the [architecture](architecture.md) for how the parts fit together.
 
+See the [November sprint closeout](sprint-closeout.md) for measured costs and remaining work.
+
 Collection stays paused until the team agrees the restart. No step here authorizes restarting it,
 and nothing here deletes data.
 
@@ -26,13 +28,14 @@ and nothing here deletes data.
 | --- | --- |
 | Daily operation and first checks | [Operating guide: start here](operating-guide.md#start-here) |
 | Run a collection manually or reconnect a provider | [Manual runs and reconnect](operating-guide.md#manual-runs-and-reconnect) |
-| Restart collection (needs team agreement) | [Collection restart readiness](collection-restart-readiness.md#outstanding-restart-gates) |
+| Restart collection (needs team agreement) | [Operating guide](operating-guide.md#operator-setup) |
 | A read fails, or capacity or egress is near a ceiling | [Read failures and capacity](operating-guide.md#read-failures-and-capacity), [capacity measurements](capacity-measurements.md) |
 | The wellness board did not refresh | [Wellness board](wellness-board.md) |
 | Restore or check the hosted viewer | [Dashboard restoration](dashboard-restoration.md#hosted-configuration-and-recovery) |
 | Enroll participants or deploy the enrollment service | [Before enrolling anyone](participation-permissions.md#before-enrolling-anyone), [prepare a deployment](self-service-enrollment.md#prepare-a-deployment) |
 | Link an existing Fitbit participant to hosted sign-in | [Link an existing Fitbit participant](self-service-enrollment.md#link-an-existing-fitbit-participant) |
-| A participant withdraws or changes their sharing | [Withdrawal](participation-permissions.md#withdrawal); retention after withdrawal: [retention policy](retention-policy.md#withdrawal-proposed) |
+| Link an existing WHOOP participant to their original account | [WHOOP setup and identity verification](self-service-enrollment.md#link-an-existing-whoop-participant) |
+| A participant withdraws or changes their sharing | [Withdrawal](participation-permissions.md#withdrawal); retention after withdrawal: [retention policy](retention-policy.md#withdrawal-interim-team-agreement) |
 | Give an organization officer or reviewer access | [Roles](participation-permissions.md#roles); participation and authorized officer duties may coexist. Never grant a role merely to use a participant as a test identity. Use designated synthetic fixtures for acceptance. |
 | Set up follow-up recording on the hosted viewer | [Follow-ups: operator setup](follow-ups.md#operator-setup-private) |
 | Take and verify a backup | [Backup and recovery](operating-guide.md#backup-and-recovery), [backups](retention-policy.md#backups) |
@@ -51,23 +54,19 @@ and nothing here deletes data.
 - Who may see what: [participation permissions](participation-permissions.md),
   [organization overview](organization-overview.md).
 
-## Open decisions and gates
+## Decisions and operating limits
 
-These decisions belong to the team or the medical expert. Until they are recorded,
-the related steps stay closed:
+The following decisions govern future work.
 
 - **Participation setup:** team approval was reported November 18 and the owner removed
-  the advisor-review outcome from sprint scope. Participant-specific consent and public-policy
-  publication still apply ([before enrolling anyone](participation-permissions.md#before-enrolling-anyone), SEN-26).
-- **Collection restart** ([outstanding restart gates](collection-restart-readiness.md#outstanding-restart-gates)).
+  the advisor-review outcome from sprint scope. The public notice and provider links were verified. Each new participant supplies consent ([before enrolling anyone](participation-permissions.md#before-enrolling-anyone), SEN-26).
+- **Collection restart** ([current procedure](operating-guide.md#operator-setup)).
 - **Live destructive-operation approval:** the interim retention policy is team agreed and
   backup/recovery verified (SEN-29/SEN-30); exact previews and owner approvals still apply.
   Post-project custody is outside this sprint ([retention policy](retention-policy.md)).
 - **Medical expert sign-off on thresholds** ([indicator contract](indicator-contract.md),
   SEN-49). The dashboard owner agreed the v0 names/states/meanings on November 14;
   that agreement does not approve the thresholds.
-- **Hosted verification** of the organization pages after the next release: run the
-  [privacy checks](privacy-checks.md) and fill in the hosted column of the
-  [evaluation table](evaluation.md).
+- **Hosted privacy evidence:** sequential role and group follow-up checks passed. Individual withdrawal and five-contributor cases were verified with isolated fixtures. The [privacy checks](privacy-checks.md) and [evaluation table](evaluation.md) record which cases ran on the host.
 
 Remaining gaps are listed in [limitations](limitations.md).

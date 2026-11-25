@@ -1,7 +1,6 @@
 # Sentra operating guide
 
-For the consented university team. Current participants are `p01` (Google Health /
-Fitbit Air) and `p02` (WHOOP). Keep individual records, downloads, credentials and
+For the authorized university team. See the [November sprint closeout](sprint-closeout.md) for verified participant counts and the last dashboard publication. Keep individual records, downloads, credentials and
 consent details private. Vendor summaries and scores are not diagnoses or raw
 physical sensor signals. No AI model or health-risk score is implemented.
 
@@ -13,7 +12,7 @@ that deployment reference must exist while the host uses it. See the
 [dashboard restoration runbook](dashboard-restoration.md) for the verified
 configuration and recovery evidence. Sign in with an approved Google account,
 choose participant/provider and Beirut dates, then **Load selected data**.
-After the restoration changes are released, the initial dates select the latest
+The initial dates select the latest
 available measurement week for that participant/provider. **Latest available week**
 returns to that period; **Last 7 calendar days** selects the trailing seven calendar days.
 Manual dates survive navigation through the Wellness board. Measurement dates
@@ -118,7 +117,7 @@ and [WHOOP renewal](https://developer.whoop.com/docs/developing/oauth/).
 | Failed/partial fetch | Inspect dataset status and repeat bounded recovery after addressing the reported cause. Earlier durable pages remain. |
 | Reconnect required | Use the affected cloud reconnect command; never print tokens or provider error bodies. |
 | Capacity stop or unavailable/stale budget | Check organization usage and the next batch size; preserve data and thresholds. |
-| Viewer database unavailable | Check project pause, connection/certificate and viewer-only secrets. Resume a paused Free project through its dashboard. |
+| Viewer database unavailable | Check project pause, connection/certificate and viewer-only secrets. Check the project state in the signed-in dashboard. |
 | Streamlit says no access or app does not exist | Sign in to the deployment account at share.streamlit.io. Confirm the app, branch and entrypoint before changing sharing. This message alone does not establish that the app was deleted. |
 | Streamlit source download fails / main module does not exist | Check that the configured Git branch exists. Preserve the existing private app, secrets and URL; see the restoration runbook before replacing a deployment. |
 
@@ -139,7 +138,8 @@ and at each new UTC month. Unknown/stale usage stops operations. Read/download
 checks also consume allowance. Do not reset reservations, silently delete history,
 raise quotas, upgrade plans or add paid runners.
 
-Keep Supabase on Free and GitHub's account-wide Actions **$0 budget / Stop usage:
+The owner retained Supabase Pro with no additional spend. The software still requires the legacy configuration field
+`confirmed_free_plan`. Keep the 4.5 GB stop and GitHub's account-wide Actions **$0 budget / Stop usage:
 Yes**. Recheck their dashboards before enabling collection; account-wide allowances are
 shared with other projects. Initial-import growth averages are approximate and
 include gaps/index overhead. They do not promise ongoing capacity.
@@ -175,7 +175,7 @@ whose seven audit tables are all empty; it refuses populated targets and require
 [recovery-rehearsal.md](recovery-rehearsal.md)). Recreate
 migrations/permissions/configuration and reconnect before operating a replacement.
 A full new-project disaster recovery and off-machine key recovery have not been
-demonstrated. Free hosting needs manual backups; [Supabase's backup guide](https://supabase.com/docs/guides/platform/backups)
+demonstrated. Keep verified application backups, including original objects; [Supabase's backup guide](https://supabase.com/docs/guides/platform/backups)
 also explains that database backups alone exclude Storage objects.
 
 ## Observation approval and documentation
@@ -200,7 +200,7 @@ states the exact demonstrated scope and pending checks.
 
 ## November pilot collection scope
 
-The sprint target is ten distinct consenting contributors with usable recent data,
+The completed sprint verified ten distinct consenting contributors with usable recent data,
 five WHOOP and five Fitbit. Count enrollment, connected accounts, usable recent
 coverage and assessment readiness separately for each provider. Count a person
 wearing both devices only once toward ten. Record aggregate evidence on SEN-38,
