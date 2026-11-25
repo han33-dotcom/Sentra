@@ -80,7 +80,7 @@ class EnrollmentPostgresTests(unittest.TestCase):
                     '004_daily_collection.sql', '005_viewer_status.sql', '006_parquet_tiers.sql',
                     '007_organization_access.sql', '008_self_service_enrollment.sql',
                     '011_fitbit_link_invites.sql','014_assessment_eligibility.sql',
-                    '016_fitbit_self_service.sql'):
+                    '016_fitbit_self_service.sql','017_whoop_link_invites.sql'):
                 migration = Path('sql', filename).read_text(encoding='utf-8')
                 # Fixture roles are cluster-wide; grants remain scoped to this new database.
                 migration = re.sub(r'create role (sentra_[a-z]+) login[^;]+;',
@@ -140,14 +140,58 @@ class EnrollmentPostgresTests(unittest.TestCase):
             store.invite(digest(token), org, seats, 7)
         return token
 
-    def legacy_fitbit(self, status='active'):
+    def legacy_account(self, status='active', provider='google_health'):
         with self.admin_db() as db:
             pid = 'p' + str(db.execute("select nextval('enrollment_private.participant_number')").fetchone()[0])
             db.execute('insert into audit.participants(participant_id) values (%s)', (pid,))
             old_token = token_state({'access_token': 'old-access', 'refresh_token': 'old-refresh', 'expires_in': 3600})
-            body = self.login.envelope('google_health', pid, old_token)
-            TokenRepository(db).insert(pid, 'google_health', body, status)
+            body = self.login.envelope(provider, pid, old_token)
+            TokenRepository(db).insert(pid, provider, body, status)
         return pid
+
+    def test_whoop_setup_requires_original_subject_and_reuses_historical_participant(self):
+        pid = self.legacy_account(provider='whoop')
+        link = 'whoop.' + secrets.token_urlsafe(32)
+        subject = self.config.identity('whoop', self.code)
+        with open_store(self.config) as store:
+            store.invite_whoop_link(digest(link), self.org, pid, subject, 1)
+        state = self.start(self.client, link)
+        self.assertEqual(state['providers_available'], ['whoop'])
+        for provider, accepted in [('google_health', True), ('whoop', False)]:
+            response = self.client.post('/api/connect', json={'provider': provider, 'accepted': accepted},
+                headers={**self.headers, 'X-CSRF-Token': state['csrf']})
+            self.assertGreaterEqual(response.status_code, 400)
+        pending = self.pending(self.client, state)
+        response = self.client.get('/oauth/whoop/callback', params={'state': pending, 'code': 'other-synthetic-user'})
+        self.assertEqual(response.headers['location'], '/join?connection=failed')
+        with self.admin_db() as db:
+            self.assertEqual(TokenRepository(db).read(pid, 'whoop')['version'], 1)
+            self.assertFalse(db.execute('select 1 from org.memberships where org_id=%s', (self.org,)).fetchone())
+        status = self.complete(invite=link)
+        self.assertEqual(status['participant_id'], pid)
+        self.assertTrue(status['enrolled'] and status['connected'])
+        self.assertEqual(self.complete(self.browser())['participant_id'], pid)
+        response = self.browser().post('/api/session', json={'invite':link}, headers=self.headers)
+        self.assertEqual(response.status_code, 410)
+
+    def test_reissued_and_expired_whoop_setup_links_cannot_be_redeemed(self):
+        pid = self.legacy_account(provider='whoop')
+        original, replacement = ['whoop.' + secrets.token_urlsafe(32) for _ in range(2)]
+        subject = self.config.identity('whoop', self.code)
+        with open_store(self.config) as store:
+            store.invite_whoop_link(digest(original), self.org, pid, subject, 1)
+        pending = self.pending(self.client, self.start(invite=original))
+        with open_store(self.config) as store:
+            store.invite_whoop_link(digest(replacement), self.org, pid, subject, 1)
+        response = self.client.get('/oauth/whoop/callback', params={'state':pending, 'code':self.code})
+        self.assertEqual(response.headers['location'], '/join?connection=failed')
+        pending = self.pending(self.client, self.start(invite=replacement))
+        with self.admin_db() as db:
+            db.execute("update enrollment_private.whoop_link_invites set expires_at=now()-interval '1 second' where participant_id=%s", (pid,))
+        response = self.client.get('/oauth/whoop/callback', params={'state':pending, 'code':self.code})
+        self.assertEqual(response.headers['location'], '/join?connection=failed')
+        with self.admin_db() as db:
+            self.assertFalse(db.execute('select 1 from org.memberships where participant_id=%s', (pid,)).fetchone())
 
     def fitbit_link(self, pid):
         token = secrets.token_urlsafe(32)
@@ -235,7 +279,7 @@ class EnrollmentPostgresTests(unittest.TestCase):
             self.assertFalse(db.execute('select 1 from org.memberships where org_id=%s', (self.org,)).fetchone())
 
     def test_fitbit_link_and_returning_sign_in_keep_the_existing_participant(self):
-        pid = self.legacy_fitbit()
+        pid = self.legacy_account()
         link = self.fitbit_link(pid)
         with self.admin_db() as db:
             sequence_before = db.execute('select last_value from enrollment_private.participant_number').fetchone()[0]
@@ -283,7 +327,7 @@ class EnrollmentPostgresTests(unittest.TestCase):
                                         (digest(self.invite),)).fetchone()[0], 5)
 
     def test_legacy_credential_guard_allows_collector_refresh_and_hosted_withdrawal(self):
-        pid = self.legacy_fitbit()
+        pid = self.legacy_account()
         status = self.complete(invite=self.fitbit_link(pid), provider='google_health')
         with self.admin_db() as db:
             before = TokenRepository(db).read(pid, 'google_health')
@@ -313,7 +357,7 @@ class EnrollmentPostgresTests(unittest.TestCase):
             self.assertEqual(after['refresh_status'], 'withdrawn')
 
     def test_linked_fitbit_explicit_reconnect_has_the_same_self_service_capabilities(self):
-        pid = self.legacy_fitbit()
+        pid = self.legacy_account()
         status = self.complete(invite=self.fitbit_link(pid), provider='google_health')
         with self.admin_db() as db:
             before = TokenRepository(db).read(pid, 'google_health')
@@ -346,7 +390,7 @@ class EnrollmentPostgresTests(unittest.TestCase):
             self.assertEqual(TokenRepository(db).read(pid, 'google_health')['refresh_status'], 'withdrawn')
 
     def test_linked_fitbit_reconnect_rejects_another_account_and_preserves_the_old_connection(self):
-        pid = self.legacy_fitbit()
+        pid = self.legacy_account()
         status = self.complete(invite=self.fitbit_link(pid), provider='google_health')
         with self.admin_db() as db:
             before = TokenRepository(db).read(pid, 'google_health')
@@ -359,7 +403,7 @@ class EnrollmentPostgresTests(unittest.TestCase):
                                       (pid,)).fetchone()[0].startswith('fitbit-link:'))
 
     def test_linked_fitbit_promotion_rolls_back_if_credential_save_fails(self):
-        pid = self.legacy_fitbit()
+        pid = self.legacy_account()
         status = self.complete(invite=self.fitbit_link(pid), provider='google_health')
         with self.admin_db() as db:
             before = TokenRepository(db).read(pid, 'google_health')
@@ -381,7 +425,7 @@ class EnrollmentPostgresTests(unittest.TestCase):
                            'drop function enrollment_private.stop_test_reconnect()')
 
     def test_linked_fitbit_withdrawal_during_reconnect_cannot_promote_or_restart(self):
-        pid = self.legacy_fitbit()
+        pid = self.legacy_account()
         status = self.complete(invite=self.fitbit_link(pid), provider='google_health')
         with self.admin_db() as db:
             before = TokenRepository(db).read(pid, 'google_health')['encrypted_token_bundle']
@@ -399,7 +443,7 @@ class EnrollmentPostgresTests(unittest.TestCase):
                                       (pid,)).fetchone()[0].startswith('fitbit-link:'))
 
     def test_linked_fitbit_rejoins_only_with_a_fresh_invitation_and_choices(self):
-        pid = self.legacy_fitbit()
+        pid = self.legacy_account()
         status = self.complete(invite=self.fitbit_link(pid), provider='google_health')
         self.client.post('/api/withdraw', json={}, headers={**self.headers, 'X-CSRF-Token':status['csrf']})
         returning = self.complete(self.browser(), provider='google_health')
@@ -413,7 +457,7 @@ class EnrollmentPostgresTests(unittest.TestCase):
             self.assertEqual(db.execute('select count(*) from org.memberships where participant_id=%s', (pid,)).fetchone()[0], 2)
 
     def test_fitbit_promotion_is_narrow_and_not_available_to_viewer_or_collector(self):
-        pid = self.legacy_fitbit()
+        pid = self.legacy_account()
         self.complete(invite=self.fitbit_link(pid), provider='google_health')
         identity = self.config.identity('google_health', self.code)
         with self.admin_db() as db:
@@ -430,7 +474,7 @@ class EnrollmentPostgresTests(unittest.TestCase):
 
     def test_fitbit_link_rejects_an_already_linked_google_identity_without_consuming(self):
         original = self.complete(invite=self.invite, provider='google_health')
-        pid = self.legacy_fitbit()
+        pid = self.legacy_account()
         link = self.fitbit_link(pid)
         other = self.browser()
         pending = self.pending(other, self.start(other, link), 'google_health')
@@ -445,7 +489,7 @@ class EnrollmentPostgresTests(unittest.TestCase):
         self.assertNotEqual(recovered['participant_id'], original['participant_id'])
 
     def test_two_fitbit_links_cannot_create_two_memberships_for_one_participant(self):
-        pid = self.legacy_fitbit()
+        pid = self.legacy_account()
         attempts = []
         for _ in range(2):
             client = self.browser()
@@ -468,7 +512,7 @@ class EnrollmentPostgresTests(unittest.TestCase):
     def test_fitbit_link_rechecks_existing_credential_and_membership_at_redemption(self):
         for changed in ('withdrawn', 'enrolled'):
             with self.subTest(changed=changed):
-                pid = self.legacy_fitbit()
+                pid = self.legacy_account()
                 link = self.fitbit_link(pid)
                 other = self.browser()
                 pending = self.pending(other, self.start(other, link), 'google_health')
@@ -664,7 +708,7 @@ class EnrollmentPostgresTests(unittest.TestCase):
         for role in ('anon', 'authenticated', 'sentra_viewer'):
             with self.admin_db() as db:
                 db.execute(sql.SQL('set role {}').format(sql.Identifier(role)))
-                for table in ('sessions', 'fitbit_link_invites'):
+                for table in ('sessions', 'fitbit_link_invites', 'whoop_link_invites'):
                     with self.subTest(role=role, table=table), self.assertRaises(psycopg.errors.InsufficientPrivilege):
                         db.execute(sql.SQL('select 1 from {} limit 0').format(
                             sql.Identifier('enrollment_private', table)))

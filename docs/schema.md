@@ -193,3 +193,5 @@ participant/day/completeness rows. The collector can publish through a bounded
 security-definer function; enrollment can read a single participant's dated eligibility
 through another. Neither role gets direct table access. Unknown/stale/incompatible
 results stay unknown. See [eligibility feed](self-service-enrollment.md#published-eligibility-feed-sql014).
+
+Migration [017](../sql/017_whoop_link_invites.sql) stores one expiring WHOOP setup link per historical participant. The private table binds the invitation digest to an organization, participant and keyed provider subject. Redemption consumes the link in the same transaction as enrollment. Pending links are ephemeral.
