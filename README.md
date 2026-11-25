@@ -32,10 +32,10 @@ Google Health v4 / WHOOP v2
   -> GitHub Actions collector (collect.yml, paused)  -> Supabase Storage sentra-originals (unchanged responses)
                                                      -> Supabase Postgres audit.* (records, measurements, runs)
 Participant phone -> enrollment service (Render)     -> Supabase Postgres org.* (memberships, consent history)
-GitHub Actions wellness refresh (read-only)          -> sentra-tiers: parquet tiers, processing, board.json
+Wellness refresh (reads audit, publishes results)          -> sentra-tiers: parquet tiers, processing, board.json
 Streamlit private viewer (read-only role)            -> team pages; organization overview, profiles,
                                                         trends and follow-ups within each user's permissions
-Read-only FastAPI (operator, X-API-Key)              -> pseudonymous processed outputs
+Read-only FastAPI (operator or scoped org user)              -> pseudonymous processed outputs
 ```
 
 Components, hosting, database roles, migrations and privacy boundaries:
@@ -121,9 +121,9 @@ See the [collection contracts and evidence](docs/stage-2-collection.md).
 | Read API and Docker | Read-only FastAPI over processed outputs; Compose runs only the API and the processing job | [Read API](docs/read-api.md) |
 | Repository rules | CI (`guard`, `test`), data guard, pre-commit hooks, PR template, code owners and branch model | [Contributing](CONTRIBUTING.md) |
 | Website | Static project site published to GitHub Pages | [website/README.md](website/README.md) |
-| Wellness board | Daily-refreshed pseudonymous board (latest day, wellness timeline, trends) inside the private viewer | [Wellness board](docs/wellness-board.md) |
+| Wellness board | Private board refreshed from stored readings (latest day, wellness timeline, trends) inside the private viewer | [Wellness board](docs/wellness-board.md) |
 
-**Viewer.** The redesigned viewer has four views: **Daily activity**, **Sleep**,
+**Viewer.** The viewer’s four data exploration pages are **Daily activity**, **Sleep**,
 **Workouts** and **Data availability**.
 - Sleep uses its Beirut wake date and workouts use their start date.
 - WHOOP recovery links to sleep through the provider's sleep ID.
@@ -204,11 +204,7 @@ docker compose up -d --build   # API on http://127.0.0.1:8000
 
 ## Contributing
 
-Work happens on `feat/*`, `fix/*`, `chore/*`, `ci/*` or `docs/*` branches. Open a PR
-into `develop`; releases go by PR from `develop` to `main`. Both protected branches
-follow the PR flow with green CI, PR policy and local acceptance checks. Reviews are optional. Feature
-branches are squash-merged. Commits use conventional messages (`feat:`, `fix:`,
-`ci:`, `chore:`, `docs:`). The data guard (`scripts/check_no_data.py`, also a
+Work on focused branches and open a PR into `develop`. The implementation agent records its self-review and acceptance checks. Required CI gates the squash merge. Release `develop` to `main` and synchronize its history back through PRs. The data guard (`scripts/check_no_data.py`, also a
 pre-commit hook) and gitleaks block health data, exports and secrets. See
 [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -236,9 +232,7 @@ shared project (October 11) also succeeded.
 - The viewer, the tier reader and the processing job use the read-only
   `sentra_viewer` role. The viewer uses an identity-only Google client and receives
   no provider-token bundle or admin credentials.
-- The API holds no database or provider credentials and returns pseudonymous
-  participant IDs only.
-- Access is restricted to approved accounts and the agreed team.
+- The team-only API reads processed files. Optional organization access uses a restricted database reader to check current roles and consent on each request. Provider credentials stay outside the API.
 
 **Limits.**
 - This MVP is a usable basis for project research. It does not establish device
@@ -246,25 +240,14 @@ shared project (October 11) also succeeded.
   guarantee.
 - Google authorization in Testing mode has a short refresh-token lifetime, so
   reconnects remain an operational dependency.
-- Database growth prevents indefinite collection at the current representation.
-  Parquet tiers are the planned way to scale, but no database retention or deletion
-  has been applied.
+- The approved compaction verified one bounded removal. New collection and further removals require separate estimates and approval.
 - Full replacement-project disaster recovery and off-machine key recovery remain
   unverified.
-- Processing has no sleep-stage timeline or MET values yet. Wellness thresholds need
-  medical expert sign-off before any output reaches employees or managers.
-
-**Next steps.**
-- Choose the research question using observed coverage, definitions, gaps and
-  delivery behavior. Add use-case-specific quality rules only after that decision.
-- Run the approved probe for the new Fitbit datasets and the first `tiers-build` to
-  replace the estimates with measured sizes.
-- Revisit continuous collection once storage and sign-off are in place.
+- Processing uses Fitbit sleep stages where supplied and WHOOP nightly totals. MET-based activity fields remain empty. Wellness thresholds require medical expert sign-off.
 
 ## Team workspace
 
 Use the [documentation index](docs/README.md) and [team workflow](docs/team-workflow.md).
 Software tasks live in GitHub Issues and the project board; technical documents stay
 in this repository. Meeting notes and general references belong in the Wiki after
-publication. See [workspace activation](docs/github-workspace-activation.md) for the
-current rollout status. [Local delivery](docs/local-delivery.md) automates acceptance, fixes and merges using existing Codex subscriptions.
+publication. [Team workflow](docs/team-workflow.md) records the rollout status. [Local delivery](docs/local-delivery.md) describes agent-owned review, acceptance and release.

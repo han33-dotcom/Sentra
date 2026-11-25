@@ -1,6 +1,8 @@
 # Stage 2 — local collection and initial import
 
-The authorized scope is two consenting participants, institutional health and
+This stage records the original local import. See the [November sprint closeout](sprint-closeout.md) for the latest verified group and operating limits.
+
+The authorized scope at this stage was two consenting participants, institutional health and
 safety data inspection, and local extraction/audit tools. Google Health v4 is
 working for the existing Sentra project and Fitbit account; WHOOP v2 is working
 for the membership account. No legacy Fitbit integration or manual fallback is

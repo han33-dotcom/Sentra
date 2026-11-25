@@ -24,8 +24,7 @@ an explicit `undated` partition. `fetch()` verifies the complete manifest and ob
 hashes, then materializes the established layout locally for processing.
 
 Each refresh computes bounded per-tier/month row counts and two-half row-hash sums
-inside one read-only repeatable-read database snapshot. Changed months alone are
-read in full; unchanged partitions are downloaded from the compact private cache.
+inside one read-only repeatable-read database snapshot. Within a changed month the builder compares fingerprints for measurements, sessions and the two heart-rate inputs together. It reads changed groups and reuses verified unchanged groups from the compact private cache.
 Corrections, omissions and moves between months invalidate their old/new partitions,
 including old history outside the collector's ordinary correction window. No
 three-day cutoff is used to decide that an archive can never change. A layout-version
@@ -47,7 +46,7 @@ guard; cleanup requires a separately reviewed retention operation. Historical ra
 objects may therefore remain until that operation even after leaving the hot view.
 Digest scans still inspect source rows on the database, and processing still reads
 the complete compact cache. This reduces database transfer and uploads, not all
-server work. Live savings have not yet been measured with collection paused.
+server work. The November stored-data refresh has [measured transfer costs](sprint-closeout.md). Recurring costs for ten participants remain unmeasured.
 
 Missing values stay null. Nothing is zero-filled, interpolated or deduplicated across
 sources. Only identical readings at the same instant collapse to one row in `hr_raw`.

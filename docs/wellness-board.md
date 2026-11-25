@@ -25,7 +25,7 @@ Streamlit viewer "Wellness board" page      ->  reads board/board.json, renders 
      also compares complete monthly source fingerprints, so old corrections and
      omissions cannot hide behind an unchanged run timestamp. Unchanged source and
      current board/rules skip processing and publication after cache verification.
-  2. It rebuilds changed monthly partitions, materializes the full compact cache and
+  2. It rebuilds changed input groups within each month, reuses verified unchanged groups, materializes the compact cache and
      runs processing **before publishing anything**. Processing failure retains the
      previous tiers and board. Changed assessment/board versions rerun processing;
      changed tier layout versions rebuild source partitions too.
