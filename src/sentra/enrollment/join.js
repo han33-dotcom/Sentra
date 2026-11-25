@@ -67,6 +67,7 @@
     el("providers").hidden = (account && !state.enrolled) || !state.providers_available.length;
     el("connect-label").textContent = account ? "Connect or reconnect a wearable" :
       state.linking_fitbit ? "Sign in with the Google account you originally used for Fitbit" :
+      state.linking_whoop ? "Sign in with the WHOOP account you originally used for Sentra" :
       state.joining ? "Connect your wearable" : "Sign in with your connected wearable";
     if (account) {
       document.querySelector(`input[name="sharing"][value="${state.sharing}"]`).checked = true;
