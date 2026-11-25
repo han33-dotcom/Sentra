@@ -211,9 +211,11 @@ def main(argv=None):
     operation.add_argument('--summary', action='store_true', help='Read private aggregate participation counts; create no invitation')
     operation.add_argument('--link-fitbit', metavar='PARTICIPANT_ID',
                            help='Create a single-use link for an existing manually connected Fitbit participant')
+    operation.add_argument('--link-whoop', metavar='PARTICIPANT_ID',
+                           help='Create a single-use link for the original WHOOP account')
     args = parser.parse_args(argv)
-    if args.link_fitbit and args.seats is not None:
-        parser.error('--link-fitbit links one existing participant and does not take --seats')
+    if (args.link_fitbit or args.link_whoop) and args.seats is not None:
+        parser.error('Account setup links target one existing participant and do not take --seats')
     try:
         settings = EnrollmentSettings.from_env()
         if args.summary:
@@ -229,15 +231,27 @@ def main(argv=None):
                 warnings.simplefilter('error', GetPassWarning)
                 address = getpass('Verified Gmail address for the existing Fitbit connection: ')
             email_hash = settings.fitbit_email_hash(address)
+        elif args.link_whoop:
+            if 'whoop' not in settings.clients:
+                raise EnrollmentError('WHOOP enrollment is unavailable.')
+            with warnings.catch_warnings():
+                warnings.simplefilter('error', GetPassWarning)
+                subject = getpass('WHOOP user_id verified from the original participant record: ')
+            if not re.fullmatch(r'[1-9][0-9]{0,19}', subject):
+                raise EnrollmentError('Expected a positive numeric WHOOP user ID.')
+            invite = 'whoop.' + invite
         with open_store(settings) as store:
-            if args.link_fitbit:
+            if args.link_whoop:
+                store.invite_whoop_link(digest(invite), args.organization, args.link_whoop,
+                                        settings.identity('whoop', subject), args.days)
+            elif args.link_fitbit:
                 store.invite_fitbit_link(digest(invite), args.organization, args.link_fitbit, email_hash, args.days)
             else:
                 store.invite(digest(invite), args.organization, args.seats or 5, args.days)
         print(f'{settings.origin}/join#invite={invite}')
         return 0
     except GetPassWarning:
-        print('Run this command from a private interactive terminal to enter the Gmail address.')
+        print('Run this command from a private interactive terminal to enter the verified account identifier.')
     except EnrollmentError as error:
         print(error)
     except Exception:

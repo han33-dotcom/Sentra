@@ -159,6 +159,24 @@ collection. Before distributing real invitations:
    advertising it as operational. Private provider app configuration, live OAuth,
    deployed access enforcement and real-device timing need separate verification.
 
+## Link an existing WHOOP participant
+
+Apply migration 017 before issuing a WHOOP setup link. Verify the target organization,
+the original participant ID, and the numeric WHOOP `user_id` from a provenance-checked
+original response for that participant. The CLI prompts privately for this identifier.
+A name, email address or invitation alone cannot establish ownership.
+
+```text
+python -m sentra.enrollment --organization YOUR_ORG_ID --link-whoop EXISTING_PARTICIPANT_ID --days 1
+```
+
+Send the expiring link privately to its intended participant. They review the current
+sharing choices and authorize their original account. The callback checks WHOOP's
+authenticated subject against the stored keyed digest. Only a match can redeem the
+link and record consent, membership and the renewed credential on the original participant.
+A new link replaces an earlier unused WHOOP setup link for the same participant.
+Collection controls are independent of enrollment.
+
 ## Link an existing Fitbit participant
 
 Use this flow for a manually connected Fitbit participant who has an existing

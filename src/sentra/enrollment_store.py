@@ -14,7 +14,7 @@ from .enrollment import EnrollmentError, ParticipationSetupRequired, digest
 from .processing.pipeline import ASSESSMENT_VERSION
 from .shared import MONTHLY_EGRESS_CEILING
 
-FITBIT_LINK_CREDENTIAL_STATES = ('active', 'refresh_pending')
+LINK_CREDENTIAL_STATES = ('active', 'refresh_pending')
 FITBIT_LINK_IDENTITY_PREFIX = 'fitbit-link:'
 
 
@@ -71,17 +71,17 @@ class EnrollmentStore:
         self.db.execute('insert into enrollment_private.invites values (%s,%s,%s,now()+%s)',
                         (hashed, org_id, seats, timedelta(days=days)))
 
-    def _require_legacy_fitbit(self, pid):
+    def _require_legacy_account(self, pid, provider):
         eligible = self.db.execute('''select exists (
             select 1 from collector_private.provider_credentials
-            where participant_id=%s and provider='google_health' and refresh_status=any(%s) for share
+            where participant_id=%s and provider=%s and refresh_status=any(%s) for share
         ) and not exists (
             select 1 from org.memberships where participant_id=%s
         ) and not exists (
             select 1 from enrollment_private.identities where participant_id=%s
-        )''', (pid, list(FITBIT_LINK_CREDENTIAL_STATES), pid, pid)).fetchone()[0]
+        )''', (pid, provider, list(LINK_CREDENTIAL_STATES), pid, pid)).fetchone()[0]
         if not eligible:
-            raise EnrollmentError('This participant is no longer eligible for a Fitbit link.', 409)
+            raise EnrollmentError('This participant is no longer eligible for an account setup link.', 409)
 
     def operator_managed_fitbit(self, pid):
         return self.db.execute('''select exists (select 1 from enrollment_private.identities
@@ -95,9 +95,22 @@ class EnrollmentStore:
             self.db.execute('''delete from enrollment_private.fitbit_link_invites
                 where participant_id=%s and expires_at<=now()''', (pid,))
             self._lock_participant(pid)
-            self._require_legacy_fitbit(pid)
+            self._require_legacy_account(pid, 'google_health')
             self.db.execute('insert into enrollment_private.fitbit_link_invites values (%s,%s,%s,%s,now()+%s)',
                             (hashed, org_id, pid, email_hash, timedelta(days=days)))
+
+    def invite_whoop_link(self, hashed, org_id, pid, identity_hash, days):
+        if not 1 <= days <= 30:
+            raise EnrollmentError('Invalid invitation limits.')
+        with self.db.transaction():
+            self._lock_participant(pid)
+            self._require_legacy_account(pid, 'whoop')
+            if self.db.execute("select 1 from enrollment_private.identities where provider='whoop' and identity_hash=%s",
+                               (identity_hash,)).fetchone():
+                raise EnrollmentError('This WHOOP account already has a hosted identity.', 409)
+            self.db.execute('delete from enrollment_private.whoop_link_invites where participant_id=%s', (pid,))
+            self.db.execute('insert into enrollment_private.whoop_link_invites values (%s,%s,%s,%s,now()+%s)',
+                            (hashed, org_id, pid, identity_hash, timedelta(days=days)))
 
     def start(self, invite, remote):
         with self.db.transaction():
@@ -119,15 +132,22 @@ class EnrollmentStore:
                 if not 30 <= len(invite) <= 100:
                     raise EnrollmentError('This invitation is unavailable. Ask for a new link.', 410)
                 hashed = digest(invite)
-                row = self.db.execute('''select i.org_id,o.display_name from enrollment_private.invites i
-                    join org.organizations o using(org_id) where i.invite_hash=%s
-                    and i.expires_at>now() and i.remaining>0''', (hashed,)).fetchone()
-                if not row:
-                    row = self.db.execute('''select i.org_id,o.display_name,i.email_hash
-                        from enrollment_private.fitbit_link_invites i join org.organizations o using(org_id)
-                        where i.invite_hash=%s and i.expires_at>now()''', (hashed,)).fetchone()
+                if invite.startswith('whoop.'):
+                    row = self.db.execute('''select i.org_id,o.display_name,i.participant_id from enrollment_private.whoop_link_invites i
+                        join org.organizations o using(org_id) where i.invite_hash=%s and i.expires_at>now()''',
+                        (hashed,)).fetchone()
                     if row:
-                        value['fitbit_email_hash'] = row[2]
+                        value['whoop_link_pid'] = row[2]
+                else:
+                    row = self.db.execute('''select i.org_id,o.display_name from enrollment_private.invites i
+                        join org.organizations o using(org_id) where i.invite_hash=%s
+                        and i.expires_at>now() and i.remaining>0''', (hashed,)).fetchone()
+                    if not row:
+                        row = self.db.execute('''select i.org_id,o.display_name,i.email_hash
+                            from enrollment_private.fitbit_link_invites i join org.organizations o using(org_id)
+                            where i.invite_hash=%s and i.expires_at>now()''', (hashed,)).fetchone()
+                        if row:
+                            value['fitbit_email_hash'] = row[2]
                 if not row:
                     raise EnrollmentError('This invitation is full or expired. Ask for a new link.', 410)
                 value.update(invite_hash=hashed, org_id=row[0], organization=row[1])
@@ -207,6 +227,18 @@ class EnrollmentStore:
                         or not hmac.compare_digest(pending.get('fitbit_email_hash', ''), link[2])):
                     raise EnrollmentError('This Fitbit account cannot use the link.', 403)
                 invite_org, pid, _ = link
+            elif value.get('whoop_link_pid'):
+                if provider != 'whoop' or row or expected:
+                    raise EnrollmentError('Use your original WHOOP account for this link.', 403)
+                self._lock_participant(value['whoop_link_pid'])
+                link = self.db.execute('''delete from enrollment_private.whoop_link_invites
+                    where invite_hash=%s and identity_hash=%s and org_id=%s
+                    and participant_id=%s and expires_at>clock_timestamp()
+                    returning org_id,participant_id''', (value['invite_hash'], identity_hash, value['org_id'],
+                                                       value['whoop_link_pid'])).fetchone()
+                if not link:
+                    raise EnrollmentError('Check your original WHOOP account or request a fresh setup link.', 403)
+                invite_org, pid = link
             elif value.get('invite_hash'):
                 invite = self.db.execute('''select org_id,remaining from enrollment_private.invites
                     where invite_hash=%s and expires_at>now() for update''', (value['invite_hash'],)).fetchone()
@@ -223,7 +255,9 @@ class EnrollmentStore:
             # Serializes consent changes, provider additions and withdrawal for this person.
             self._lock_participant(pid)
             if fitbit_link:
-                self._require_legacy_fitbit(pid)
+                self._require_legacy_account(pid, 'google_health')
+            elif value.get('whoop_link_pid'):
+                self._require_legacy_account(pid, 'whoop')
             consent = self._consent(pid)
             if invite_org is not None and consent and consent['withdrawn'] and consent['recorded_epoch'] > pending['started']:
                 raise EnrollmentError('Participation changed during connection. Please open a new invitation.', 409)
@@ -296,6 +330,8 @@ class EnrollmentStore:
         value = self.session(sid)
         public = {k: value[k] for k in ('csrf', 'organization') if k in value}
         public.update(joining=bool(value.get('invite_hash')), signed_in=bool(value.get('account')))
+        if value.get('whoop_link_pid'):
+            public['linking_whoop'] = True
         if value.get('fitbit_email_hash'):
             public['linking_fitbit'] = True
         if not value.get('account'):

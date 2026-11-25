@@ -60,6 +60,8 @@ def create_app(settings=None, store_factory=None, provider_login=None):
         providers = list(config.clients)
         if result.get('linking_fitbit'):
             providers = [p for p in providers if p == 'google_health']
+        elif result.get('linking_whoop'):
+            providers = [p for p in providers if p == 'whoop']
         result.update(providers_available=providers, consent_version=config.consent_version)
         return result
 
@@ -150,6 +152,8 @@ def create_app(settings=None, store_factory=None, provider_login=None):
             fitbit_email_hash = value.get('fitbit_email_hash')
             if fitbit_email_hash and data.provider != 'google_health':
                 raise EnrollmentError('Use the original Fitbit account for this link.', 403)
+            if value.get('whoop_link_pid') and data.provider != 'whoop':
+                raise EnrollmentError('Use your original WHOOP account for this link.', 403)
             # Returning Google sign-in proves identity only. Reconnect is a distinct
             # action after login; it must not request health consent just to manage sharing.
             identity_only = data.provider == 'google_health' and not account and not value.get('invite_hash')
