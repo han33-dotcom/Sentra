@@ -17,7 +17,7 @@ Streamlit viewer "Wellness board" page      ->  reads board/board.json, renders 
   - Missing values are left out, never zero.
   - Comparisons use each day's processing baseline from the preceding 28 calendar days.
     A missing baseline leaves the comparison empty; current and future days never substitute for it.
-- **Refresh job:** `python -m sentra.wellness_refresh`, run daily by
+- **Refresh job:** `python -m sentra.wellness_refresh`, available through
   `.github/workflows/wellness.yml`.
   1. Checks finished `audit.collection_runs` against durable record-write timestamps,
      including partial runs whose counters omit already committed pages.
@@ -25,7 +25,7 @@ Streamlit viewer "Wellness board" page      ->  reads board/board.json, renders 
      also compares complete monthly source fingerprints, so old corrections and
      omissions cannot hide behind an unchanged run timestamp. Unchanged source and
      current board/rules skip processing and publication after cache verification.
-  2. It rebuilds changed monthly partitions, materializes the full compact cache and
+  2. It rebuilds changed input groups within each month, reuses verified unchanged groups, materializes the compact cache and
      runs processing **before publishing anything**. Processing failure retains the
      previous tiers and board. Changed assessment/board versions rerun processing;
      changed tier layout versions rebuild source partitions too.
@@ -77,7 +77,7 @@ Limitations:
 - Scheduled/manual refreshes and `tiers-build` share a database publication lock.
   Obsolete immutable objects remain until a separately reviewed cleanup; their
   storage is included in capacity checks.
-- Not yet exercised against the shared bucket: collection and the daily refresh stay paused.
+- The November 26 stored-data refresh published and verified the dashboard. The daily schedule remains paused. [November sprint closeout](sprint-closeout.md)
 
 ## Data used
 
@@ -96,7 +96,9 @@ Every field above comes from data the collector already requests.
 Second-by-second heart rate would cost far more database space than the 400 MB ceiling
 allows, and the board only needs minute heart rate.
 
-## Turning it on (repository owner)
+## Controls for a separately authorized refresh
+
+For a capped run on stored data, use the [resumable refresh procedure](operating-guide.md#resuming-a-local-stored-data-refresh). The controls below describe the hosted workflow.
 
 1. **Secret `SENTRA_VIEWER_CONFIG`:** a single-line JSON with the viewer-only database and
    storage credentials (same fields as the processing job's `SENTRA_PROCESSING_CONFIG`).
@@ -111,14 +113,4 @@ allows, and the board only needs minute heart rate.
 
 ## Capacity
 
-- **Database:** the board itself adds nothing.
-- **Objects:** the tiers are about 3–4 MB and `board.json` is under 1 MB; both are
-  replaced on each run.
-- **Egress:** each refresh after new collection reads about 40 MB from the database (the
-  full tier rebuild). Daily, that is about 1.2 GB per month of the 4.5 GB monthly
-  budget. When collection is paused, a run reads only a few kilobytes.
-- **Daily collection itself:** about 4.5 MB of database per participant-day. With about
-  70 MB left before the 380 MB import stop, two participants fill it in roughly a week.
-  Continuous daily updates therefore need a storage reduction step first: moving
-  minute-level rows to the tiers, or retention in PostgreSQL. That is a reviewed
-  follow-up, not part of this change.
+Budget for reading changed data, processing the compact files, publication and verification. A stopped attempt still uses its reservations. The November stopped attempts and sizing reserved 99.50 MB. The successful retry and verification reserved another 64.60 MB. Estimate and cap each future run against the shared 4.5 GB monthly stop. [Measured transfer and limitations](sprint-closeout.md)

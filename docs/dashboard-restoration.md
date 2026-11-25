@@ -41,7 +41,7 @@ uncached egress. November's application budget row was absent, so guarded reads
 would still stop after the database recovered. The existing `set_budget` operator
 function established a conservative **1,000,000,000-byte** November baseline,
 above that entire observed billing-cycle usage. Reservation readback confirmed
-none were reset. This keeps the existing 3.5 GB ceiling and seven-day freshness
+none were reset. At the November 3 checkpoint this preserved the then-current 3.5 GB ceiling and seven-day freshness
 check; operators must continue verifying usage weekly and at each UTC month change.
 
 The resumed database reported approximately 310.31 MB used and 4.04 MB of Storage

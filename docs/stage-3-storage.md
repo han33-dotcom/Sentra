@@ -1,5 +1,7 @@
 # Stage 3 — private shared storage
 
+This stage records the October storage setup. See the [operating guide](operating-guide.md#read-failures-and-capacity) for current capacity limits and billing decisions.
+
 Implemented on `ETL-pipeline`, 8 October 2026. No branch change, paid service,
 commit or push was made. Both participants' recorded agreement settings were
 checked before transferring the existing Stage 2 imports.

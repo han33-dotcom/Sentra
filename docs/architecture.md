@@ -15,15 +15,15 @@ Secrets, custodian details and recovery locations stay in the restricted operato
 | --- | --- | --- | --- | --- |
 | Collector | `sentra.cloud_run`, `.github/workflows/collect.yml` | GitHub Actions, 00:00 Beirut (**paused**) | `sentra_collector` | Requests bounded date ranges from Google Health and WHOOP, keeps every original response, loads records and measurements ([operating guide](operating-guide.md)) |
 | Original responses | — | Supabase Storage, private bucket `sentra-originals` | written by the collector | Unchanged, compressed, hash-keyed responses; never modified |
-| Audit tables | `sql/001`–`006`, `009` | Supabase PostgreSQL, schemas `audit` and `collector_private` | — | Records, measurements, sessions, coverage and collection runs; private collection cursors and controls ([schema](schema.md), [data dictionary](data-dictionary.md)) |
-| Organization tables | `sql/007`, `008`, `010`, `011` | Supabase PostgreSQL, schemas `org` and `enrollment_private` | — | Organizations, officers and reviewers, memberships, consent history and follow-ups (`org`); invitations, sign-in identities and sessions (`enrollment_private`) ([participation permissions](participation-permissions.md)) |
+| Audit tables | `sql/001`–`006`, `009`, `012`–`015` | Supabase PostgreSQL, schemas `audit` and `collector_private` | — | Records, measurements, sessions, coverage and collection runs; private collection cursors and controls ([schema](schema.md), [data dictionary](data-dictionary.md)) |
+| Organization tables | `sql/007`, `008`, `010`, `011`, `014`, `016`, `017` | Supabase PostgreSQL, schemas `org` and `enrollment_private` | — | Organizations, officers and reviewers, memberships, consent history and follow-ups (`org`); invitations, sign-in identities and sessions (`enrollment_private`) ([participation permissions](participation-permissions.md)) |
 | Enrollment service | `sentra.enrollment_web`, `src/sentra/enrollment/` | Render (Frankfurt), `/join` | `sentra_enrollment` | Participants join from an invitation link, choose sharing, connect a wearable and manage or withdraw ([self-service enrollment](self-service-enrollment.md)). See the [service handoff](service-account-handoff.md) for the approved compute plan. |
 | Daily wellness refresh | `sentra.wellness_refresh`, `.github/workflows/wellness.yml` | GitHub Actions, 01:30 Beirut (paused with collection) | `sentra_viewer` to read; collector storage account to write | Builds parquet tiers, runs processing and publishes `board/board.json` in the private bucket `sentra-tiers` ([wellness board](wellness-board.md)) |
 | Processing | `sentra.processing` | Inside the refresh, or the operator's Compose `processing` container | `sentra_viewer` | v0 daily wellness features, flags against each person's own baseline, and k-anonymous group statistics per device; mixed-device participants enter no device statistic ([processing](processing.md), [indicator contract](indicator-contract.md)) |
 | Private viewer | `viewer/app.py`, `sentra.viewer_app` | Streamlit Community Cloud, private app | `sentra_viewer` (read-only) | Team pages (daily activity, sleep, workouts, availability, board) and organization pages: overview, profiles, trends, follow-ups and reports ([reports](reports.md)); hosted acceptance remains separate |
 | Follow-up writes | `sentra.follow_up_store`, `sql/010` | Called by the viewer | `sentra_followups` (two functions only) | The only write path from the viewer; every rule rechecked in the database ([follow-ups](follow-ups.md)) |
 | Read API | `sentra.api` | Operator's Docker Compose, `127.0.0.1` | optional `sentra_viewer` for current organization policy | Team key or individual organization bearer credential; processed outputs read-only, organization scope resolved on every request through `sentra.access` ([read API](read-api.md)) |
-| Backups and recovery | `sentra.shared_backup`, `sentra.recovery` | Operator's machine | admin, run by the operator | Encrypted full backups of required audit tables, installed compact series, and organization, consent, enrollment and follow-up tables; offline verification and isolated restore. Provider credentials, keys, pending Fitbit links, browser sessions and rate limits are excluded ([retention policy](retention-policy.md), [recovery rehearsal](recovery-rehearsal.md)) |
+| Backups and recovery | `sentra.shared_backup`, `sentra.recovery` | Operator's machine | admin, run by the operator | Encrypted full backups of required audit tables, installed compact series, and organization, consent, enrollment and follow-up tables; offline verification and isolated restore. Provider credentials, keys, pending Fitbit and WHOOP setup links, browser sessions and rate limits are excluded ([retention policy](retention-policy.md), [recovery rehearsal](recovery-rehearsal.md)) |
 | Project website | `website/`, `.github/workflows/website.yml` | GitHub Pages, from `main` | none | Public project website; no data |
 | Team workflow | `.github/workflows/ci.yml`, `pr-policy.yml`, `team-*.yml` | GitHub Actions | none | Tests on Linux and Windows, data guard, PR policy, project board and Slack signals ([team workflow](team-workflow.md)) |
 
@@ -67,10 +67,15 @@ applies it and in what order.
 | `006_parquet_tiers.sql` | The private `sentra-tiers` bucket for derived tiers |
 | `007_organization_access.sql` | The `org` schema: organizations, users, memberships, consent history |
 | `008_self_service_enrollment.sql` | The enrollment role; invitations, participant sign-in identities and sessions; encrypted provider credentials |
-| `012_compact_writes.sql` | Disabled-by-default compact writer switch and compatible bounded enrollment recency; apply after 008/009. Collection authorization is separate. |
 | `009_compact_series.sql` | Lossless compact series (additive; nothing deleted); included in new backups since #85. Older archives report `audit.series` as not covered ([storage plan](storage-plan.md)) |
 | `010_follow_ups.sql` | Follow-ups, their append-only history and the follow-up role |
 | `011_fitbit_link_invites.sql` | Separate links for existing Fitbit participants to use hosted sign-in |
+| `012_compact_writes.sql` | Disabled-by-default compact writes and bounded enrollment recency |
+| `013_egress_purpose.sql` | Transfer reservations by purpose within the shared budget |
+| `014_assessment_eligibility.sql` | Bounded publication of dated assessment eligibility for enrollment |
+| `015_approved_egress_ceiling.sql` | The 4.5 GB monthly ceiling for guarded viewer reservations |
+| `016_fitbit_self_service.sql` | Same-account Fitbit reconnect through hosted enrollment |
+| `017_whoop_link_invites.sql` | Expiring WHOOP setup links bound to the original participant and provider account |
 
 Which migrations are applied on the hosted project is an operator record, kept with the hosted
 configuration, not in this repository.

@@ -56,8 +56,7 @@ precision. They are distinct from the pipeline's global daily cohort output; usi
 cohort here would include people outside the officer's permitted organization.
 
 Measures: sleep (minutes), resting heart rate (bpm), heart rate variability (ms), steps,
-and WHOOP recovery (%). With today's two participants, every real group statistic is
-correctly hidden.
+and WHOOP recovery (%). Each statistic depends on the eligible contributors for that device, day and measure.
 
 ## Profiles
 
@@ -69,7 +68,7 @@ personal baseline yet" are explicit.
 ## Limitations
 
 - Profiles show measured values and personal baselines; the overview's assessment availability
-  uses the current complete-assessment contract. Detailed rule explanations remain follow-up work.
+  uses the current complete-assessment contract. [Observations](observations.md) explains the supported published signals.
 - Data comes from the published wellness board, so it is only as current as the latest
   daily refresh. Collection remains paused.
 - Organization users need, privately: migration 007 applied, an `org.org_users` row and

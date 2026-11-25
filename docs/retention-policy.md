@@ -101,7 +101,7 @@ not to the 28-day baseline, because baselines use daily values.
   These tables force row-level security, so the backup reads them with `row_security = off`.
   An admin connection without bypass rights therefore stops the backup with an error, instead
   of silently backing up no rows.
-- Supabase Free's own backups are not relied on; this was not verified.
+- Recovery relies on the verified application backup. Provider-managed recovery remains unverified.
 
 ## Gates before any destructive storage step (#46)
 

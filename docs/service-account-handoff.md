@@ -9,7 +9,7 @@ The dated cutover evidence and remaining acceptance checks are in [SEN-70].
 | Service | Administration and contacts | Recovery or access dependency |
 | --- | --- | --- |
 | Google Cloud and OAuth | The Sentra identity is the sole Owner of the existing project. Use the dedicated mailbox for OAuth user support and as a developer contact alongside the retained team contacts. | Recover the dedicated Google identity first. Check IAM, both existing OAuth clients, redirects and the External / Testing audience. Review project notification contacts separately. |
-| Supabase | The Sentra identity is the sole Owner of the existing organization and is the configured billing email recipient. The former Owner remains a Developer to preserve saved queries and reports. | Use the existing organization and project on the Free plan with the spend cap. Keep project recovery and runtime configuration in the restricted operator inventory. |
+| Supabase | The Sentra identity is the sole Owner of the existing organization and is the configured billing email recipient. The former Owner remains a Developer to preserve saved queries and reports. | Use the existing organization and project on the owner-approved Pro plan with the 4.5 GB internal transfer stop and no additional spend. Keep project recovery and runtime configuration in the restricted operator inventory. |
 | Render | Use the Sentra mailbox and the Render password for the existing enrollment service. The owner approved retaining its $7/month compute plan on November 18, 2026. | Recover through the Sentra mailbox. Check the original service, URL, GitHub deployment connection and `main` branch before operating it. |
 | Streamlit Community Cloud | Use **Continue with Google** and choose the Sentra identity. The existing viewer is private and uses `ETL-pipeline` / `viewer/app.py`. | Hosting management still depends on the linked `han33-dotcom` GitHub account. Use Google for the Sentra email login. [Signing in with GitHub can update the Streamlit email to match GitHub.][streamlit-sign-in] |
 
@@ -39,7 +39,7 @@ continues to manage its developer account.
 ## November 18 administration readback
 
 The Render plan approval in [SEN-70] applies to this enrollment service alone.
-Supabase remains on Free with its spend cap, and the GitHub Actions budget remains
+At the November 18 check, Supabase was on Free and the GitHub Actions budget was
 at $0 with usage blocked, as verified during the sprint. The enrollment release
 `7deadd3` was verified live after migration 016. The participant completed the
 one-time account link and returning sign-in, and the account page displayed the
