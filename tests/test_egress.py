@@ -16,6 +16,18 @@ URL = os.environ.get('SENTRA_TEST_DATABASE_URL')
 
 
 class EgressCompatibilityTests(unittest.TestCase):
+    def test_november_proof_is_specific_to_date_and_deployment_key(self):
+        from datetime import datetime, timezone
+        from sentra.viewer_config import november_hosted_proof
+        now = datetime(2026, 11, 26, tzinfo=timezone.utc)
+        hosted = {'redirect_uri': 'https://sentra-wearable-audit.streamlit.app/oauth2callback',
+                  'cookie_secret': 'example-host-only-key'}
+        proof = november_hosted_proof(hosted, now)
+        self.assertEqual(len(proof), 64)
+        self.assertNotEqual(proof, november_hosted_proof(dict(hosted, cookie_secret='other-key'), now))
+        self.assertIsNone(november_hosted_proof(dict(hosted, redirect_uri='http://localhost:8501/oauth2callback'), now))
+        self.assertIsNone(november_hosted_proof(hosted, now.replace(month=12, day=1)))
+
     def test_only_absent_migration_uses_legacy_signature(self):
         for present, expected in ((False,(10,100)),(True,(10,100,'verify'))):
             db=Mock()
@@ -56,6 +68,9 @@ class EgressDatabaseTests(unittest.TestCase):
         cls.history=cls.db.execute('select purpose,reserved_bytes from collector_private.egress_purposes').fetchall()
         before=cls.db.execute('select * from collector_private.egress_budget').fetchall()
         cls.db.execute(Path('sql/015_approved_egress_ceiling.sql').read_text())
+        # Substitute a deterministic clock exclusively in this disposable test database.
+        sql = Path('sql/018_november_hosted_viewer.sql').read_text()
+        cls.db.execute(sql.replace('clock_timestamp()', "current_setting('test.grant_clock')::timestamptz"))
         cls.headroom_preserved=(before==cls.db.execute('select * from collector_private.egress_budget').fetchall()
             and cls.history==cls.db.execute('select purpose,reserved_bytes from collector_private.egress_purposes').fetchall())
 
@@ -96,6 +111,43 @@ class EgressDatabaseTests(unittest.TestCase):
             store.progress(job)
         self.assertEqual(self.db.execute('select reserved_bytes from collector_private.egress_budget').fetchone()[0],
                          reserved + 4096)
+
+    def test_hosted_grant_is_atomic_private_bounded_and_expires(self):
+        db = self.db
+        db.execute("set test.grant_clock='2026-11-26 20:00:00+00'")
+        db.execute("insert into collector_private.november_viewer_grant(proof_digest) values(sha256('fixture'::bytea))")
+        db.execute('update collector_private.egress_budget set baseline_bytes=4499999900')
+        call = 'select public.sentra_reserve_november_hosted_viewer(%s,4500000000,%s)'
+        db.execute('set session authorization sentra_collector')
+        with self.assertRaises(psycopg.errors.InsufficientPrivilege):
+            db.execute(call, (200, 'fixture'))
+        db.execute('set session authorization sentra_viewer')
+        with self.assertRaises(psycopg.Error):
+            reserve(db, 200, 4500000000, 'viewer', viewer=True)
+        with self.assertRaises(psycopg.Error):
+            db.execute(call, (200, 'other'))
+        db.execute("set test.grant_clock='2026-12-01 00:00:00+00'")
+        with self.assertRaises(psycopg.Error):
+            db.execute(call, (200, 'fixture'))
+        db.execute("set test.grant_clock='2026-11-30 23:59:59+00'")
+        db.execute('reset session authorization')
+        db.execute("update collector_private.egress_budget set verified_at=now()-interval '8 days'")
+        db.execute('set session authorization sentra_viewer')
+        with self.assertRaises(psycopg.Error):
+            db.execute(call, (200, 'fixture'))
+        db.execute('reset session authorization')
+        db.execute('update collector_private.egress_budget set verified_at=now()')
+        db.execute('set session authorization sentra_viewer')
+        for amount in (200, 49999800):
+            db.execute(call, (amount, 'fixture'))
+        with self.assertRaises(psycopg.Error):
+            db.execute(call, (1, 'fixture'))
+        db.execute('reset session authorization')
+        self.assertEqual(db.execute('select spent_bytes from collector_private.november_viewer_grant').fetchone(), (50000000,))
+        self.assertEqual(db.execute('select baseline_bytes,reserved_bytes from collector_private.egress_budget').fetchone(),
+                         (4499999900, 50000000))
+        self.assertEqual(db.execute('select purpose,reserved_bytes from collector_private.egress_purposes').fetchall(),
+                         [('viewer', 50000000)])
 
     def test_object_lookup_is_scoped_to_provider_participant_and_digest(self):
         from sentra.shared import Limits

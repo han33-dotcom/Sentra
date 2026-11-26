@@ -138,6 +138,17 @@ and at each new UTC month. Unknown/stale usage stops operations. Read/download
 checks also consume allowance. Do not reset reservations, silently delete history,
 raise quotas, upgrade plans or add paid runners.
 
+On November 26 the owner approved up to 50,000,000 additional reserved bytes
+for the private hosted viewer through November 30 UTC (SEN-165). Migration 018
+starts with an empty grant table. The operator registers a SHA-256 digest of
+the November proof derived from the hosted deployment's own identity
+configuration. Keep the proof and cookie key private. The local viewer uses a
+separate cookie key. Only the restricted viewer login with the registered
+proof can charge the grant. Each charge also enters the ordinary monthly and
+viewer-purpose ledgers and requires a fresh baseline. The database expires
+the grant at December 1, 00:00 UTC. Registration is once only and must
+preserve the spent counter on retry. Collection remains paused.
+
 The owner retained Supabase Pro with no additional spend. The software still requires the legacy configuration field
 `confirmed_free_plan`. Keep the 4.5 GB stop and GitHub's account-wide Actions **$0 budget / Stop usage:
 Yes**. Recheck their dashboards before enabling collection; account-wide allowances are
