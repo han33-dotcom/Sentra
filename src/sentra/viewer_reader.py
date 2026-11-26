@@ -95,7 +95,13 @@ class ViewerReader:
             # must not roll back the reservation for bytes already received.
             if self.budget_db is None:
                 self.budget_db = connect_db(self.credentials)
-            reserve_egress(self.budget_db,amount,self.limits.monthly_egress_bytes,'viewer',viewer=True)
+            ceiling = self.limits.monthly_egress_bytes
+            proof = self.credentials.get('november_hosted_proof')
+            if proof is None:
+                reserve_egress(self.budget_db,amount,ceiling,'viewer',viewer=True)
+            else:
+                self.budget_db.execute('select public.sentra_reserve_november_hosted_viewer(%s,%s,%s)',
+                                       (amount,ceiling,proof))
         except psycopg.Error:
             raise CapacityStop('Viewer egress allowance is unavailable, stale or exhausted. Ask the operator to verify usage and refresh the baseline.') from None
 

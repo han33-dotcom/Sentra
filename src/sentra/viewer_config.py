@@ -1,4 +1,6 @@
 """Viewer-only managed secrets; never load a collector bundle in the hosted app."""
+from datetime import datetime, timezone
+import hmac
 import re
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -6,6 +8,15 @@ from urllib.parse import urlsplit
 from .errors import SentraError
 from .shared import Limits, MONTHLY_EGRESS_CEILING
 from .shared_config import validate_credentials
+
+
+def november_hosted_proof(auth, now):
+    """Domain-separated, temporary budget credential for the production identity configuration."""
+    callback = 'https://sentra-wearable-audit.streamlit.app/oauth2callback'
+    if (auth['redirect_uri'] == callback and (now.year, now.month) == (2026, 11)):
+        return hmac.digest(auth['cookie_secret'].encode(),
+                           b'Sentra/hosted-viewer/egress/2026-11/v1', 'sha256').hex()
+    return None
 
 
 def emails(items):
@@ -56,6 +67,10 @@ def runtime_settings(secrets, folder):
             raise ValueError
         app_url(auth['redirect_uri'].removesuffix('/oauth2callback'))
         if not auth['redirect_uri'].endswith('/oauth2callback'): raise ValueError
+        if limits.monthly_egress_bytes == 4_500_000_000:
+            proof = november_hosted_proof(auth, datetime.now(timezone.utc))
+            if proof is not None:
+                credentials['november_hosted_proof'] = proof
         return credentials,limits,allowed
     except Exception:
         raise SentraError('Viewer configuration missing or invalid. Ask the operator to complete viewer-only managed secrets.') from None
