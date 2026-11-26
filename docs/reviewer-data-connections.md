@@ -10,6 +10,14 @@ displayed field with its dataset, provider field path, canonical metric and boar
 `tests/test_reviewer_prototype.py` checks each reference against the code, so a renamed
 dataset, field path, board key or rule fails CI.
 
+## Live verification
+
+`scripts/reviewer_live_check.py` checks which of these sources actually hold data, using the
+read-only viewer configuration (operator only). It prints aggregate counts per device and
+dataset: board fields present and their share of days, catalog rows, detail-dataset person-days,
+requested coverage, recent request failures and consent totals. It never prints participant IDs,
+names or readings, and every read reserves transfer budget as the viewer does.
+
 ## Status key
 
 | Status | Meaning |
