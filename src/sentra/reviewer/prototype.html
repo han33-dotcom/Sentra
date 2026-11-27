@@ -3,146 +3,166 @@
 <title>Sentra Reviewer</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap">
 <style>
-/* Layout: desktop-first reviewer console; a quiet slate ground, one teal accent for navigation, semantic amber/red only for provisional signals, hatched greys for gaps. */
+/* Layout: one dark console; a left sidebar of sections beside glass cards on a deep navy ground lit by soft blue and violet glows.
+   Violet marks navigation and selection, sky and violet tell the two devices apart, mint/amber/red are reserved for state. Single dark theme by design. */
 :root{
-  --bg:#f4f6f7;--surface:#ffffff;--ink:#16202a;--muted:#5a6673;--faint:#8a95a1;--line:#dde2e7;--line2:#c9d0d7;
-  --accent:#0d6670;--accent-ink:#0a4f57;--accent-soft:#e1f0f1;
-  --amber:#9a5b00;--amber-soft:#fbeed6;--red:#ad2b23;--red-soft:#fbe6e3;
-  --ok:#2f7d5b;--ok-soft:#e2f2ea;--gap:#a3acb6;--gap-soft:#eceff2;
-  --fitbit:#2c5fb8;--whoop:#6a4aa5;
-  --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  color-scheme:dark;
+  --bg:#050a1c;--glow-a:rgba(37,99,235,.28);--glow-b:rgba(99,102,241,.20);
+  --surface:rgba(17,24,52,.72);--surface-2:rgba(28,36,78,.55);--panel:#0e1430;
+  --ink:#eef1ff;--muted:#9aa4c9;--faint:#6c76a0;--line:rgba(129,140,248,.16);--line2:rgba(129,140,248,.30);
+  --accent:#6d6dff;--accent-ink:#aeb0ff;--accent-soft:rgba(109,109,255,.18);--sky:#4fa8ff;
+  --amber:#f6b74c;--amber-soft:rgba(246,183,76,.14);--red:#f77b7b;--red-soft:rgba(247,123,123,.15);
+  --ok:#5ee6b5;--ok-soft:rgba(94,230,181,.13);--gap:#4b5478;--gap-soft:rgba(75,84,120,.35);
+  --fitbit:#4fa8ff;--whoop:#9d8cff;
+  --display:"Outfit","Plus Jakarta Sans",system-ui,sans-serif;
+  --sans:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
 }
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#11161b;--surface:#182028;--ink:#e6ebf0;--muted:#a3afbb;--faint:#76828e;--line:#2a343e;--line2:#36424d;
-  --accent:#5cc0c9;--accent-ink:#8fd6dc;--accent-soft:#163a3e;
-  --amber:#e8b25a;--amber-soft:#3a2c14;--red:#f08a80;--red-soft:#43211e;
-  --ok:#7fcfa6;--ok-soft:#173528;--gap:#5d6874;--gap-soft:#222b34;
-  --fitbit:#7fa6ee;--whoop:#b49be6;color-scheme:dark}}
-:root[data-theme="dark"]{
-  --bg:#11161b;--surface:#182028;--ink:#e6ebf0;--muted:#a3afbb;--faint:#76828e;--line:#2a343e;--line2:#36424d;
-  --accent:#5cc0c9;--accent-ink:#8fd6dc;--accent-soft:#163a3e;
-  --amber:#e8b25a;--amber-soft:#3a2c14;--red:#f08a80;--red-soft:#43211e;
-  --ok:#7fcfa6;--ok-soft:#173528;--gap:#5d6874;--gap-soft:#222b34;
-  --fitbit:#7fa6ee;--whoop:#b49be6;color-scheme:dark}
 *{box-sizing:border-box}
-body{background:var(--bg);color:var(--ink);font:14px/1.5 var(--sans);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 40px}
-body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+body{background:var(--bg);background-image:radial-gradient(900px 520px at 8% -8%,var(--glow-a),transparent 70%),radial-gradient(760px 460px at 92% 4%,var(--glow-b),transparent 70%);background-attachment:fixed;color:var(--ink);font:14px/1.55 var(--sans);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px 40px;display:grid;grid-template-columns:236px minmax(0,1fr);gap:20px;align-items:start;min-height:100%}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
 a{color:var(--accent-ink)}
 button{font:inherit;color:inherit}
-.wrap{max-width:1240px;margin:0 auto}
-header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line);margin:0 calc(-1*max(16px,env(safe-area-inset-left,0px))) 18px;padding:10px max(16px,env(safe-area-inset-left,0px))}
-.top .wrap{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px}
-.brand{font-weight:600;letter-spacing:.01em;display:flex;align-items:center;gap:8px}
-.brand .mark{width:22px;height:22px;border-radius:6px;background:var(--accent);display:inline-grid;place-items:center;color:var(--surface);font:600 12px var(--mono)}
-.org{color:var(--muted)}
-nav.tabs{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
-nav.tabs a{text-decoration:none;color:var(--muted);padding:6px 10px;border-radius:7px;font-weight:500}
-nav.tabs a[aria-current="page"]{background:var(--accent-soft);color:var(--accent-ink)}
-.synth{font:500 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--amber);background:var(--amber-soft);border-radius:5px;padding:3px 7px}
-h1{font-size:22px;font-weight:600;margin:0;text-wrap:balance}
-h2{font-size:16px;font-weight:600;margin:0;text-wrap:balance}
-h3{font-size:13px;font-weight:600;margin:0;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+::selection{background:var(--accent-soft)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1280px;width:100%}
+/* Sidebar */
+aside.side{position:sticky;top:calc(16px + env(safe-area-inset-top,0px));background:linear-gradient(180deg,var(--surface-2),var(--surface));border:1px solid var(--line);border-radius:18px;padding:18px 14px;display:flex;flex-direction:column;gap:18px;backdrop-filter:blur(14px)}
+.brand{font:600 19px var(--display);letter-spacing:.01em;display:flex;align-items:center;gap:10px;padding:2px 6px}
+.brand .mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--sky));display:inline-grid;place-items:center;color:var(--ink);font:700 15px var(--display);box-shadow:0 0 18px var(--accent-soft)}
+.brand small{display:block;font:500 11px var(--sans);color:var(--muted);letter-spacing:.02em}
+.side h4{margin:0 0 6px;padding:0 8px;font:600 11px var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--faint)}
+nav.tabs{display:flex;flex-direction:column;gap:2px}
+nav.tabs a{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--muted);padding:9px 10px;border-radius:10px;font-weight:500}
+nav.tabs a svg{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+nav.tabs a:hover{color:var(--ink);background:var(--surface-2)}
+nav.tabs a[aria-current="page"]{background:var(--accent-soft);color:var(--accent-ink);box-shadow:inset 0 0 0 1px var(--line2)}
+.side .foot{margin:0;padding:12px 8px 0;border-top:1px solid var(--line);font-size:11.5px;line-height:1.5;color:var(--faint)}
+/* Top bar */
+.topbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-bottom:18px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 14px;backdrop-filter:blur(14px)}
+.org{font-weight:600}
+.org span{color:var(--muted);font-weight:500}
+.synth{margin-left:auto;font:600 11px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--amber);background:var(--amber-soft);border:1px solid var(--amber-soft);border-radius:999px;padding:3px 10px}
+h1{font:600 26px/1.2 var(--display);margin:0;text-wrap:balance}
+h2{font:600 19px/1.3 var(--display);margin:0;text-wrap:balance;letter-spacing:.005em}
+h3{font:600 12px var(--sans);margin:0;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
 .muted{color:var(--muted)} .small{font-size:12.5px} .mono{font-family:var(--mono)}
 .num{font-variant-numeric:tabular-nums}
-.status{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin-bottom:16px}
-.status .ok{color:var(--ok);font-weight:600}
-.grid2{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:16px}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;min-width:0}
-.card-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;margin-bottom:10px}
+.status{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 14px;margin-bottom:18px;backdrop-filter:blur(14px)}
+.status .ok{color:var(--ok);font-weight:600;background:var(--ok-soft);border-radius:999px;padding:2px 10px}
+.grid2{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px}
+.card{background:linear-gradient(180deg,var(--surface-2),var(--surface));border:1px solid var(--line);border-radius:18px;padding:20px;min-width:0;backdrop-filter:blur(14px);box-shadow:0 18px 40px -28px rgba(0,0,0,.8)}
+.card-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;margin-bottom:14px}
 .card-h .sub{color:var(--muted);font-size:12.5px}
-.stack{display:flex;flex-direction:column;gap:16px}
-.code{font:500 13px var(--mono);background:var(--accent-soft);color:var(--accent-ink);border:0;border-radius:6px;padding:2px 7px;cursor:pointer;text-decoration:none;white-space:nowrap}
+.stack{display:flex;flex-direction:column;gap:18px}
+.code{font:500 13px var(--mono);background:var(--accent-soft);color:var(--accent-ink);border:1px solid var(--line2);border-radius:8px;padding:2px 8px;cursor:pointer;text-decoration:none;white-space:nowrap}
+.obs>.code,.issues li>.code{align-self:start}
 .code:hover,.code:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
-.code.locked{background:var(--gap-soft);color:var(--muted);cursor:default}
-.obs{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;padding:10px 0;border-top:1px solid var(--line)}
+.obs{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;padding:12px 0;border-top:1px solid var(--line)}
 .obs:first-of-type{border-top:0}
 .obs-main{background:none;border:0;padding:0;text-align:left;cursor:pointer;display:block;width:100%}
 .obs-main:hover .obs-val,.obs-main:focus-visible .obs-val{text-decoration:underline}
 .obs-line{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
-.obs-val{font-weight:600}
-.pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:500;border-radius:999px;padding:1px 8px;white-space:nowrap}
+.obs-val{font:600 15px var(--display)}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;border-radius:999px;padding:2px 9px;white-space:nowrap}
 .pill.amber{background:var(--amber-soft);color:var(--amber)} .pill.red{background:var(--red-soft);color:var(--red)}
 .pill.gap{background:var(--gap-soft);color:var(--muted)} .pill.ok{background:var(--ok-soft);color:var(--ok)}
 .pill.accent{background:var(--accent-soft);color:var(--accent-ink)}
-.dev{font:500 11px var(--mono);border-radius:5px;padding:1px 6px;border:1px solid currentColor}
+.dev{font:500 11px var(--mono);border-radius:6px;padding:1px 7px;border:1px solid currentColor}
 .dev.Fitbit{color:var(--fitbit)} .dev.WHOOP{color:var(--whoop)}
 .issues{list-style:none;margin:0;padding:0}
-.issues li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;padding:8px 0;border-top:1px solid var(--line)}
+.issues li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;padding:10px 0;border-top:1px solid var(--line)}
 .issues li:first-child{border-top:0}
-.covwrap{overflow-x:auto;margin-top:10px}
+.covwrap{overflow-x:auto;margin-top:12px}
 table{border-collapse:collapse;width:100%}
-th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
-th{font-size:12px;color:var(--muted);font-weight:500}
-.cov{border-collapse:separate;border-spacing:2px;width:auto}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:600 11px var(--sans);color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+.cov{border-collapse:separate;border-spacing:3px;width:auto}
 .cov td,.cov th{padding:0;border:0}
-.cov th{font:400 11px var(--mono);color:var(--faint);padding:0 2px 2px;text-align:center}
+.cov th{font:400 11px var(--mono);color:var(--faint);padding:0 2px 2px;text-align:center;text-transform:none;letter-spacing:0}
 .cov .rowh{padding-right:8px;text-align:left}
 .cell{display:grid;grid-template-rows:repeat(3,7px);gap:1px;width:22px;background:none;border:0;padding:0;cursor:pointer}
 .cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .st{display:block;border-radius:2px}
 .s-ok{background:var(--accent)} .s-partial{background:repeating-linear-gradient(90deg,var(--accent) 0 3px,var(--accent-soft) 3px 6px)}
-.s-none{background:var(--surface);box-shadow:inset 0 0 0 1px var(--line2)} .s-failed{background:var(--red)}
-.s-preissue{background:repeating-linear-gradient(135deg,var(--gap) 0 2px,var(--gap-soft) 2px 5px)} .s-notworn{background:var(--gap)}
+.s-none{background:var(--panel);box-shadow:inset 0 0 0 1px var(--line2)} .s-failed{background:var(--red)}
+.s-preissue{background:repeating-linear-gradient(135deg,var(--gap) 0 2px,var(--panel) 2px 5px)} .s-notworn{background:var(--gap)}
 .s-delayed{background:var(--amber)} .s-na{background:transparent;box-shadow:inset 0 0 0 1px var(--line)} .s-notreq{background:var(--gap-soft)}
-.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--muted);margin-top:8px}
-.legend span{display:inline-flex;align-items:center;gap:5px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--muted);margin-top:10px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
 .legend i{width:14px;height:8px;border-radius:2px;display:inline-block}
-.covnote{margin-top:8px;font-size:12.5px;min-height:20px}
+.covnote{margin-top:10px;font-size:12.5px;min-height:20px}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
 .tiles.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
-@media (max-width:640px){.tiles.g3{grid-template-columns:minmax(0,1fr)}}
-.tile{border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-width:0}
-.tile .k{font-size:12px;color:var(--muted)} .tile .v{font-size:20px;font-weight:600;margin-top:2px} .tile .n{font-size:12px;color:var(--muted)}
-.tile.dim .v{font-size:14px;font-weight:500;color:var(--muted)}
-.seg{display:inline-flex;border:1px solid var(--line2);border-radius:8px;overflow:hidden}
-.seg button{background:var(--surface);border:0;padding:5px 10px;cursor:pointer;color:var(--muted)}
-.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent-ink);font-weight:500}
+.tile{background:var(--surface-2);border:1px solid var(--line);border-radius:14px;padding:12px 14px;min-width:0}
+.tile .k{font-size:12.5px;color:var(--muted)} .tile .v{font:600 26px/1.2 var(--display);margin-top:4px} .tile .n{font-size:12px;color:var(--muted);margin-top:2px}
+.tile.dim{background:transparent;border-style:dashed}
+.tile.dim .v{font:500 15px var(--sans);color:var(--muted)}
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:10px;overflow:hidden;background:var(--panel)}
+.seg button{background:transparent;border:0;padding:6px 12px;cursor:pointer;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
 .chart{width:100%;height:auto;display:block}
 .chart text{fill:var(--muted);font:11px var(--sans)}
+.chart path{filter:drop-shadow(0 0 5px var(--accent-soft))}
 .note{font-size:12.5px;color:var(--muted)}
-.crumb{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
-.back{background:none;border:0;color:var(--accent-ink);cursor:pointer;padding:4px 0;font-weight:500}
-.prof-h{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin-bottom:14px}
-.bigcode{font:600 26px var(--mono);color:var(--accent-ink)}
+.crumb{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+.back{background:none;border:0;color:var(--accent-ink);cursor:pointer;padding:4px 0;font-weight:600}
+.prof-h{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin-bottom:18px}
+.bigcode{font:700 30px var(--display);color:var(--ink);background:linear-gradient(135deg,var(--accent),var(--sky));border-radius:14px;padding:4px 14px}
 .kv{display:flex;flex-wrap:wrap;gap:4px 16px;color:var(--muted);font-size:13px}
-.kv b{color:var(--ink);font-weight:500}
-.tag{font-size:11px;color:var(--amber);border:1px dashed var(--amber);border-radius:4px;padding:0 5px;margin-left:4px;white-space:nowrap}
-.sections{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.kv b{color:var(--ink);font-weight:600}
+.tag{font-size:11px;color:var(--amber);border:1px dashed var(--amber);border-radius:5px;padding:0 5px;margin-left:4px;white-space:nowrap}
+.sections{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
 .strip{display:flex;gap:1px;margin-top:6px}
 .strip span{flex:1;height:6px;border-radius:1px}
-.entry{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.entry button{background:var(--surface);border:1px solid var(--line2);border-radius:7px;padding:4px 9px;cursor:pointer;font-size:12.5px}
+.entry{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.entry button{background:var(--panel);border:1px solid var(--line2);border-radius:9px;padding:5px 10px;cursor:pointer;font-size:12.5px}
 .entry button:hover,.entry button:focus-visible{border-color:var(--accent);color:var(--accent-ink)}
-.unsupported{border:1px dashed var(--line2);border-radius:10px;padding:10px 12px;color:var(--muted);font-size:13px}
-.vals{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:8px}
-.vals table td,.vals table th{font:12px var(--mono);padding:4px 8px}
-.vals thead th{position:sticky;top:0;background:var(--surface)}
+.unsupported{border:1px dashed var(--line2);border-radius:12px;padding:10px 12px;color:var(--muted);font-size:13px}
+.tablewrap{overflow-x:auto}
+.vals{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.vals table td,.vals table th{font:12px var(--mono);padding:4px 8px;text-transform:none;letter-spacing:0}
+.vals thead th{position:sticky;top:0;background:var(--panel)}
 .prov{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 14px;font-size:12.5px}
 .prov dt{color:var(--muted)} .prov dd{margin:0;font-family:var(--mono);overflow-wrap:anywhere}
-.empty{border:1px dashed var(--line2);border-radius:10px;padding:18px;text-align:center;color:var(--muted)}
+.empty{border:1px dashed var(--line2);border-radius:14px;padding:20px;text-align:center;color:var(--muted)}
 .wl{list-style:none;padding:0;margin:0}
-.wl li{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+.wl li{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
 .wl li:first-child{border-top:0}
-.foot{margin-top:24px;font-size:12px;color:var(--muted);max-width:80ch}
-@media (max-width:900px){.grid2,.sections{grid-template-columns:minmax(0,1fr)}}
-@media (prefers-reduced-motion:no-preference){.card{transition:border-color .15s}}
+@media (max-width:1100px){.grid2,.sections{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:860px){
+  body{grid-template-columns:minmax(0,1fr);gap:14px}
+  aside.side{position:static;flex-direction:row;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:12px}
+  .side h4{display:none}
+  .side .foot{flex-basis:100%;padding-top:10px}
+  nav.tabs{flex-direction:row;flex-wrap:wrap}
+  .side section{display:contents}
+}
+@media (max-width:640px){.tiles.g3{grid-template-columns:minmax(0,1fr)}.synth{margin-left:0}}
+@media (prefers-reduced-motion:no-preference){.card,nav.tabs a{transition:border-color .15s,background-color .15s}}
 </style>
 
-<header class="top"><div class="wrap">
-  <span class="brand"><span class="mark">S</span>Sentra reviewer</span>
-  <span class="org">Cedar Logistics · Health and safety</span>
-  <span class="synth">Synthetic prototype</span>
-  <nav class="tabs" aria-label="Sections">
-    <a href="#overview" data-nav="overview">Overview</a>
-    <a href="#people" data-nav="people">People</a>
-    <a href="#sources" data-nav="sources">Data sources</a>
-  </nav>
-</div></header>
-<main class="wrap" id="app"></main>
-<p class="wrap foot">Every person, name and reading here is fictional and generated in this page. Field names, dataset names, baselines and the five-contributor rule come from the Sentra repository. Wellness information only, compared with each person's own pattern; not a medical assessment. Signals are provisional (thresholds v0, pending expert sign-off).</p>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+  <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--accent)"/><stop offset="1" style="stop-color:var(--sky)"/></linearGradient>
+</defs></svg>
+<aside class="side" aria-label="Sentra reviewer">
+  <span class="brand"><span class="mark">S</span><span>Sentra<small>Reviewer</small></span></span>
+  <section>
+    <h4>Review</h4>
+    <nav class="tabs" aria-label="Sections">
+      <a href="#overview" data-nav="overview"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Overview</a>
+      <a href="#people" data-nav="people"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.7a3.5 3.5 0 0 1 0 6.6M18.5 14.8c1.6.8 2.6 2.5 3 5.2"/></svg>People</a>
+      <a href="#sources" data-nav="sources"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5v13c0 1.6 3.4 2.8 7.5 2.8s7.5-1.2 7.5-2.8v-13M4.5 12c0 1.6 3.4 2.8 7.5 2.8s7.5-1.2 7.5-2.8"/></svg>Data sources</a>
+    </nav>
+  </section>
+  <p class="foot">Every person, name and reading here is fictional and generated in this page. Field names, dataset names, baselines and the five-contributor rule come from the Sentra repository. Wellness information only, compared with each person's own pattern; not a medical assessment. Signals are provisional (thresholds v0, pending expert sign-off).</p>
+</aside>
+<div class="wrap">
+  <div class="topbar"><span class="org">Example organization <span>· Health and safety</span></span><span class="synth">Synthetic prototype</span></div>
+  <main id="app"></main>
+</div>
 
 <script id="field-map" type="application/json">[
  {
@@ -1223,9 +1243,24 @@ th{font-size:12px;color:var(--muted);font-weight:500}
   "resolution": "per participant",
   "checks": [
    [
-    "source_text",
-    "sql/007_organization_access.sql",
-    "c.demonstration"
+    "sql",
+    "org.current_consent",
+    "sharing"
+   ],
+   [
+    "sql",
+    "org.current_consent",
+    "demonstration"
+   ],
+   [
+    "sql",
+    "org.current_consent",
+    "withdrawn"
+   ],
+   [
+    "sql",
+    "org.current_consent",
+    "membership_open"
    ]
   ]
  },
@@ -1317,18 +1352,19 @@ function hex8(s){return seedOf(s).toString(16).padStart(8,'0')}
 function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 const DAYS=range(START,NOW.date);
 
-/* People: codes in enrollment order. Names are fictional; Sentra stores no names (see Data sources). */
+/* People: codes in enrollment order. Names are fictional; Sentra stores no names (see Data sources).
+   Group-only people carry no name and appear only inside group statistics. */
 const PEOPLE=[
  {id:'p01',name:'Lina Haddad',dev:'Fitbit',joined:'2026-10-01',share:'individual'},
  {id:'p02',name:'Omar Khalil',dev:'Fitbit',joined:'2026-10-01',share:'individual'},
  {id:'p03',name:'Rami Saade',dev:'Fitbit',joined:'2026-10-02',share:'individual'},
- {id:'p04',name:'Nour Fares',dev:'Fitbit',joined:'2026-10-02',share:'group_only'},
+ {id:'p04',dev:'Fitbit',joined:'2026-10-02',share:'group_only'},
  {id:'p05',name:'Karim Aoun',dev:'Fitbit',joined:'2026-10-03',share:'individual'},
  {id:'p06',name:'Maya Daher',dev:'Fitbit',joined:'2026-10-05',share:'individual'},
  {id:'p07',name:'Ziad Mansour',dev:'Fitbit',joined:'2026-10-06',share:'individual'},
  {id:'p08',name:'Sara Nassar',dev:'WHOOP',joined:'2026-10-01',share:'individual'},
  {id:'p09',name:'Hadi Rizk',dev:'WHOOP',joined:'2026-10-01',share:'individual'},
- {id:'p10',name:'Leila Chamoun',dev:'WHOOP',joined:'2026-10-03',share:'group_only'},
+ {id:'p10',dev:'WHOOP',joined:'2026-10-03',share:'group_only'},
  {id:'p11',name:'Tarek Abboud',dev:'WHOOP',joined:'2026-10-20',share:'individual',issued:'2026-10-20'},
  {id:'p12',name:'Dana Younes',dev:'WHOOP',joined:'2026-10-04',share:'individual'},
  {id:'p13',name:'Jad Habib',dev:'WHOOP',joined:'2026-10-07',share:'individual'},
@@ -1407,6 +1443,9 @@ function buildPerson(p){
 }
 const DATA=PEOPLE.map(buildPerson);
 const P=Object.fromEntries(DATA.map(p=>[p.id,p]));
+/* Officer scope: only people who share individual data are listed, linked or shown per person anywhere. */
+const SHARED=DATA.filter(p=>p.share==='individual');
+function visible(id){return !!(P[id]&&P[id].share==='individual')}
 
 /* Baselines exactly as the indicator contract: previous 28 calendar days, today excluded, >= 7 readings, median, MAD x 1.4826 with metric floors. */
 function median(a){const s=[...a].sort((x,y)=>x-y),n=s.length;return n?(n%2?s[(n-1)/2]:(s[n/2-1]+s[n/2])/2):null}
@@ -1433,7 +1472,7 @@ function valueText(m,v){if(v==null)return '—';return m==='sleep'?hm(v):m==='rh
 /* Worth a look: previous seven days including the latest day; lead with code, date, measurement and personal comparison. */
 function worthALook(){
   const out=[];const days=range(addDays(NOW.date,-6),NOW.date);
-  for(const p of DATA){if(p.share!=='individual')continue;
+  for(const p of SHARED){
     for(const d of days){const s=signals(p,d);for(const sig of s.list){const b=baseline(p,sig.metric,d);out.push({p,d,sig,lvl:s.lvl,state:s.state,value:p.byDay[d][sig.metric],usual:b?b.med:null})}}}
   return out.sort((a,b)=>a.d<b.d?1:a.d>b.d?-1:a.p.id.localeCompare(b.p.id));
 }
@@ -1445,7 +1484,7 @@ function coverageIssues(){
    {id:'p06',when:'3 Nov',text:'The heart rate variability request failed; other measures arrived.',pill:['red','Request failed']},
    {id:'p11',when:'1–19 Oct',text:'Before device issued (issued 20 Oct, synthetic issue date).',pill:['gap','Before device issued']},
    {id:'p02',when:'12 Oct',text:'Device not worn: zero worn minutes recorded that day.',pill:['gap','Device not worn']},
-  ];
+  ].filter(c=>visible(c.id));
 }
 const STATE_LABEL={ok:'Readings present',partial:'Partial (today so far)',none:'No readings returned',failed:'Request failed',preissue:'Before device issued',notworn:'Device not worn',delayed:'Not yet synced',na:'Not provided by this device in Sentra',notreq:'Not requested',notyet:'Not available yet today'};
 function covGroup(r,group){
@@ -1527,7 +1566,7 @@ function svgBars(xs,vals,opt){
   xs.forEach((d,i)=>{const x=L+i*bw;
     if(i%step===0)g+=`<text x="${x+bw/2}" y="${H-8}" text-anchor="middle">${dShort(d)}</text>`;
     const v=vals[i];if(v==null){g+=`<rect x="${x+bw*.2}" y="${H-B-3}" width="${bw*.6}" height="3" fill="var(--gap)" opacity=".5"/>`;return}
-    const col=opt.color?opt.color(i,v):'var(--accent)';
+    const col=opt.color?opt.color(i,v):'url(#barGrad)';
     g+=`<rect data-i="${i}" x="${x+bw*.15}" y="${Y(v)}" width="${Math.max(1,bw*.7)}" height="${H-B-Y(v)}" rx="1.5" fill="${col}" ${opt.click?'style="cursor:pointer"':''}><title>${dShort(d)}: ${esc(opt.tip?opt.tip(v):v)}</title></rect>`});
   if(opt.refLine)g+=`<path d="${opt.refLine.map((v,i)=>v==null?'':(`M${L+i*bw+bw*.1} ${Y(v)}L${L+i*bw+bw*.9} ${Y(v)}`)).join('')}" stroke="var(--ink)" stroke-width="1.2" opacity=".55"/>`;
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opt.label||'chart')}" ${opt.click?`data-click="${opt.click}"`:''}>${g}</svg>`;
@@ -1537,7 +1576,7 @@ function strip(p,metric,days){return `<div class="strip" aria-hidden="true">${da
 /* ------- router ------- */
 const app=document.getElementById('app');
 const state={range:30,trend:'rhr',scroll:{},covNote:''};
-function codeBtn(id){const p=P[id];return p.share==='individual'?`<a class="code" href="#${id}">${id}</a>`:`<span class="code locked" title="Shares group figures only">${id}</span>`}
+function codeBtn(id){return visible(id)?`<a class="code" href="#${id}">${id}</a>`:''}
 function route(){
   const h=(location.hash||'#overview').slice(1);
   const prev=state.view;state.view=h;
@@ -1546,9 +1585,10 @@ function route(){
   if(h==='overview')renderOverview();
   else if(h==='people')renderPeople();
   else if(h==='sources')renderSources();
-  else if((m=h.match(/^(p\d\d)$/))&&P[m[1]])renderProfile(P[m[1]]);
-  else if((m=h.match(/^(p\d\d)-(night|day)-(\d{4}-\d\d-\d\d)$/))&&P[m[1]])renderDetail(P[m[1]],m[2],m[3]);
-  else if((m=h.match(/^(p\d\d)-(ex|wo)-(\d{4}-\d\d-\d\d)$/))&&P[m[1]])renderWorkout(P[m[1]],m[3]);
+  else if((m=h.match(/^(p\d\d)(?:-(?:night|day|ex|wo)-\d{4}-\d\d-\d\d)?$/))&&!visible(m[1]))renderUnavailable();
+  else if((m=h.match(/^(p\d\d)$/)))renderProfile(P[m[1]]);
+  else if((m=h.match(/^(p\d\d)-(night|day)-(\d{4}-\d\d-\d\d)$/)))renderDetail(P[m[1]],m[2],m[3]);
+  else if((m=h.match(/^(p\d\d)-(ex|wo)-(\d{4}-\d\d-\d\d)$/)))renderWorkout(P[m[1]],m[3]);
   else{location.hash='overview';return}
   const y=state.scroll[h];window.scrollTo(0,y!=null&&h==='overview'?y:0);
 }
@@ -1565,7 +1605,6 @@ function renderOverview(){
   const trendDays=range(addDays(NOW.latest,-29),NOW.latest);
   const tm=state.trend;
   const series=['Fitbit','WHOOP'].map(dev=>({dev,points:trendDays.map(d=>groupStat(dev,tm,d)),color:dev==='Fitbit'?'var(--fitbit)':'var(--whoop)'}));
-  const supp=[];series.forEach(s=>s.points.forEach((pt,i)=>{if(pt.value==null&&pt.n>0)supp.push({dev:s.dev,d:trendDays[i],n:pt.n})}));
   const avail=series.filter(s=>s.points.some(p=>p.value!=null));
   const notes={rhr:'Resting heart rate: Fitbit daily value; WHOOP recovery value.',dayhr:'Daytime average HR (proposed): Fitbit minute heart rate, 08:00–20:00. WHOOP has no daytime series; its cycle average covers the whole physiological day.',sleep:'Asleep minutes by wake date.',steps:'Fitbit steps from minute rollups. WHOOP steps are not available.'};
   app.innerHTML=`
@@ -1592,7 +1631,7 @@ function renderOverview(){
       <div class="seg" role="group" aria-label="Trend measure">${[['rhr','Resting HR'],['dayhr','Daytime HR'],['sleep','Sleep'],['steps','Steps']].map(([k,l])=>`<button type="button" data-trend="${k}" aria-pressed="${tm===k}">${l}</button>`).join('')}</div>
       <span class="legend" style="margin:0"><span><i style="background:var(--fitbit)"></i>Fitbit</span><span><i style="background:var(--whoop)"></i>WHOOP</span></span></div>
     ${svgLine(avail.map(s=>({points:s.points.map(p=>p.value),color:s.color})),{x:trendDays,label:'Group trend',yfmt:tm==='sleep'?(v=>(v/60).toFixed(1)+'h'):null})}
-    <p class="note">${notes[tm]} Average of one value per person. ${avail.length<2?'Only one device has this measure. ':''}${supp.length?`Hidden: ${supp.map(s=>`${s.dev} ${dShort(s.d)} (${s.n} of ${TH.k} needed)`).join(', ')}.`:'No day was hidden.'}</p>
+    <p class="note">${notes[tm]} Average of one value per person. ${avail.length<2?'Only one device has this measure. ':''}A day is left out of a device's line when fewer than ${TH.k} people have an eligible value; gaps do not say how many did.</p>
   </section>`;
   app.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{location.hash=b.dataset.go});
   app.querySelectorAll('[data-trend]').forEach(b=>b.onclick=()=>{state.trend=b.dataset.trend;const y=window.scrollY;renderOverview();window.scrollTo(0,y)});
@@ -1602,25 +1641,27 @@ function renderOverview(){
 }
 function coverageGrid(){
   const days=range(addDays(NOW.date,-13),NOW.date);
-  return `<table class="cov"><thead><tr><th></th>${days.map(d=>`<th>${Number(d.slice(8))}</th>`).join('')}</tr></thead><tbody>${DATA.map(p=>`<tr><td class="rowh">${codeBtn(p.id)}</td>${days.map(d=>{const r=p.byDay[d];return `<td><button type="button" class="cell" data-cell="${p.id}|${d}" aria-label="${p.id} ${dShort(d)}">${['sleep','heart','activity'].map(g=>`<span class="st s-${covGroup(r,g)}"></span>`).join('')}</button></td>`}).join('')}</tr>`).join('')}</tbody></table>`;
+  return `<table class="cov"><thead><tr><th></th>${days.map(d=>`<th>${Number(d.slice(8))}</th>`).join('')}</tr></thead><tbody>${SHARED.map(p=>`<tr><td class="rowh">${codeBtn(p.id)}</td>${days.map(d=>{const r=p.byDay[d];return `<td><button type="button" class="cell" data-cell="${p.id}|${d}" aria-label="${p.id} ${dShort(d)}">${['sleep','heart','activity'].map(g=>`<span class="st s-${covGroup(r,g)}"></span>`).join('')}</button></td>`}).join('')}</tr>`).join('')}</tbody></table>`;
 }
 
 /* ------- people ------- */
 function renderPeople(){
-  app.innerHTML=`<section class="card"><div class="card-h"><h2>People</h2><span class="sub">Codes in enrollment order. Selecting a code opens the authorized profile.</span></div>
-  <ul class="wl">${DATA.map(p=>{const last=[...p.days].reverse().find(r=>r.sleep!=null||r.rhr!=null);return `<li>${codeBtn(p.id)}<span>${p.share==='individual'?esc(p.name):'<span class="muted">Group figures only</span>'}</span><span class="dev ${p.dev}">${p.dev}</span><span class="muted small num">Latest reading ${last?dShort(last.d):'—'}${DELAYED[p.id]?' · delayed sync':''}</span></li>`}).join('')}</ul></section>`;
+  app.innerHTML=`<section class="card"><div class="card-h"><h2>People</h2><span class="sub">People who share individual data, in enrollment order. People who share group figures only are not listed; they count towards group figures.</span></div>
+  <ul class="wl">${SHARED.map(p=>{const last=[...p.days].reverse().find(r=>r.sleep!=null||r.rhr!=null);return `<li>${codeBtn(p.id)}<span>${esc(p.name)}</span><span class="dev ${p.dev}">${p.dev}</span><span class="muted small num">Latest reading ${last?dShort(last.d):'—'}${DELAYED[p.id]?' · delayed sync':''}</span></li>`}).join('')}</ul></section>`;
 }
 
 /* ------- profile ------- */
+/* Same page for a group-only code and a code that does not exist, so neither is confirmed. */
+function renderUnavailable(){app.innerHTML=`<div class="crumb"><button class="back" data-back>← Back to overview</button></div><div class="empty">No individual profile is available for this code.</div>`;bindBack()}
 function renderProfile(p){
-  if(p.share!=='individual'){app.innerHTML=`<div class="crumb"><button class="back" data-back>← Back to overview</button></div><div class="empty">${p.id} shares group figures only, so no individual profile is available.</div>`;bindBack();return}
+  if(!p||!visible(p.id)){renderUnavailable();return}
   const end=NOW.date;const start=state.range===30?addDays(NOW.latest,-29):START;
   const days=range(start,end);const fit=p.dev==='Fitbit';
   const today=p.byDay[NOW.date];
   const latestTime=fit?(DELAYED[p.id]?'23 Nov 18:10':'15:32 today'):(today&&today.sleep!=null?'07:14 today (sleep and recovery)':'—');
   const base=m=>days.map(d=>{const b=p.byDay[d]&&p.byDay[d][m]!=null?baseline(p,m,d):null;return b?b.med:null});
   const vals=m=>days.map(d=>p.byDay[d]?p.byDay[d][m]??null:null);
-  const shortCol=(i,v)=>v<TH.short?'var(--amber)':'var(--accent)';
+  const shortCol=(i,v)=>v<TH.short?'var(--amber)':'url(#barGrad)';
   const workouts=days.flatMap(d=>p.byDay[d].workouts.map(w=>({...w,d})));
   const sec=(title,body,metric,extra='')=>`<section class="card"><div class="card-h"><h2>${title}</h2>${extra}</div>${body}${metric?`<div class="small muted" style="margin-top:6px">Coverage · ${MLABEL[metric]}</div>`+strip(p,metric,days):''}</section>`;
   app.innerHTML=`
@@ -1631,9 +1672,9 @@ function renderProfile(p){
   <div class="status"><b>Today so far</b>${fit?(today&&today.steps!=null?`<span class="num">${fmt(today.steps)} steps (partial)</span>`:'<span class="muted">No readings yet today</span>'):'<span class="muted">WHOOP supplies no intraday steps or heart rate</span>'}<span class="muted">Latest reading ${latestTime}</span>${fit&&!DELAYED[p.id]?`<button class="entry-link back" data-go="${p.id}-day-${NOW.date}">Open today →</button>`:''}</div>
   <div class="sections">
    ${sec('Sleep',svgBars(days,vals('sleep'),{label:'Asleep minutes',refLine:base('sleep'),color:shortCol,yfmt:v=>(v/60).toFixed(0)+'h',tip:hm,click:'night'})+`<p class="note">Bars: asleep time by wake date. Line: usual (previous 28 days). Amber: under 6 hours. Select a bar to open that night.</p>`,'sleep')}
-   ${sec('Heart rate and HRV',svgLine([{points:vals('rhr'),color:'var(--red)'},{points:base('rhr'),color:'var(--red)',dash:1}],{x:days,label:'Resting heart rate'})+svgLine([{points:vals('hrv'),color:'var(--accent)'},{points:base('hrv'),color:'var(--accent)',dash:1}],{x:days,h:140,label:'HRV'})+`<p class="note">Solid: resting heart rate (bpm, red) and HRV (ms, teal). Dashed: usual.</p><div class="entry">${fit?`<button data-go="${p.id}-day-${NOW.latest}">Minute heart rate, ${dShort(NOW.latest)}</button>`:''}</div>`,'rhr')}
+   ${sec('Heart rate and HRV',svgLine([{points:vals('rhr'),color:'var(--red)'},{points:base('rhr'),color:'var(--red)',dash:1}],{x:days,label:'Resting heart rate'})+svgLine([{points:vals('hrv'),color:'var(--accent)'},{points:base('hrv'),color:'var(--accent)',dash:1}],{x:days,h:140,label:'HRV'})+`<p class="note">Solid: resting heart rate (bpm, red) and HRV (ms, violet). Dashed: usual.</p><div class="entry">${fit?`<button data-go="${p.id}-day-${NOW.latest}">Minute heart rate, ${dShort(NOW.latest)}</button>`:''}</div>`,'rhr')}
    ${sec('Activity',fit?svgBars(days,vals('steps'),{label:'Steps',tip:v=>fmt(v)+' steps',click:'day'})+`<p class="note">Steps from minute rollups (the board's source). Select a bar to open the day's minute steps.</p>`:svgBars(days,vals('strain'),{label:'Strain',tip:v=>fmt(v,1),yfmt:v=>v.toFixed(0),click:'day'})+`<p class="note">WHOOP day strain per cycle. WHOOP steps are not available in Sentra.</p>`,fit?'steps':'strain')}
-   ${sec('Workouts',workouts.length?`<table><thead><tr><th>Date</th><th>Type</th><th>Duration</th><th>Avg HR</th>${fit?'<th>Calories</th>':'<th>Strain</th>'}</tr></thead><tbody>${workouts.slice(-10).reverse().map(w=>`<tr><td class="num"><a href="#${p.id}-${fit?'ex':'wo'}-${w.d}">${dShort(w.d)}</a></td><td>${w.type}</td><td class="num">${w.dur} min</td><td class="num">${w.avghr} bpm</td><td class="num">${fit?w.cal+' kcal':fmt(w.strain,1)}</td></tr>`).join('')}</tbody></table><p class="note">${workouts.length} sessions in this period; latest 10 shown.</p>`:'<p class="muted">No sessions in this period.</p>',null)}
+   ${sec('Workouts',workouts.length?`<div class="tablewrap"><table><thead><tr><th>Date</th><th>Type</th><th>Duration</th><th>Avg HR</th>${fit?'<th>Calories</th>':'<th>Strain</th>'}</tr></thead><tbody>${workouts.slice(-10).reverse().map(w=>`<tr><td class="num"><a href="#${p.id}-${fit?'ex':'wo'}-${w.d}">${dShort(w.d)}</a></td><td>${w.type}</td><td class="num">${w.dur} min</td><td class="num">${w.avghr} bpm</td><td class="num">${fit?w.cal+' kcal':fmt(w.strain,1)}</td></tr>`).join('')}</tbody></table></div><p class="note">${workouts.length} sessions in this period; latest 10 shown.</p>`:'<p class="muted">No sessions in this period.</p>',null)}
    ${sec('Other vitals',svgLine([{points:vals('br'),color:'var(--accent)'}],{x:days,h:120,label:'Breathing rate'})+`<div class="tiles" style="margin-top:8px"><div class="tile"><div class="k">Skin temperature, latest</div><div class="v num">${valueText('temp',[...days].reverse().map(d=>p.byDay[d].temp).find(v=>v!=null))}</div></div><div class="tile ${fit?'dim':''}"><div class="k">Blood oxygen, latest</div><div class="v num">${fit?'No readings returned':valueText('spo2',[...days].reverse().map(d=>p.byDay[d].spo2).find(v=>v!=null))}</div>${fit?'<div class="n">Requested; Google returned no records</div>':''}</div>${fit?'<div class="tile dim"><div class="k">VO2 max</div><div class="v">No readings returned</div></div>':''}</div><p class="note">Line: breathing rate (breaths/min).</p>`,'br')}
    ${sec('Vendor scores',fit?'<div class="unsupported">Fitbit returns no recovery or strain score in the collected data.</div>':svgBars(days,vals('rec'),{label:'Recovery',tip:v=>v+' %',yfmt:v=>Math.round(v)+'%',color:(i,v)=>v<34?'var(--red)':v<67?'var(--amber)':'var(--ok)'})+`<p class="note">WHOOP recovery score per cycle; colours follow WHOOP's own bands. Score status is shown on each night.</p>`,fit?null:'rec')}
   </div>`;
@@ -1654,7 +1695,7 @@ function navDates(p,kind,d){const prev=addDays(d,-1),next=addDays(d,1);return `<
 
 /* ------- detail ------- */
 function renderDetail(p,kind,d){
-  if(p.share!=='individual'){renderProfile(p);return}
+  if(!p||!visible(p.id)){renderUnavailable();return}
   const r=p.byDay[d];const fit=p.dev==='Fitbit';
   const head=`<div class="crumb"><button class="back" data-back>← Back</button><a class="code" href="#${p.id}">${p.id}</a><span class="muted">${esc(p.name)}</span><span class="dev ${p.dev}">${p.dev}</span>${navDates(p,kind,d)}</div>`;
   if(!r){app.innerHTML=head+'<div class="empty">Outside the collected period.</div>';bindBack();return}
@@ -1717,9 +1758,10 @@ function renderDetail(p,kind,d){
   bindBack();
 }
 function renderWorkout(p,d){
+  if(!p||!visible(p.id)){renderUnavailable();return}
   const r=p.byDay[d];const w=r&&r.workouts[0];const fit=p.dev==='Fitbit';
   const head=`<div class="crumb"><button class="back" data-back>← Back</button><a class="code" href="#${p.id}">${p.id}</a><span class="dev ${p.dev}">${p.dev}</span></div>`;
-  if(!w||p.share!=='individual'){app.innerHTML=head+'<div class="empty">No session recorded on this date.</div>';bindBack();return}
+  if(!w){app.innerHTML=head+'<div class="empty">No session recorded on this date.</div>';bindBack();return}
   const zones=w.zones?`<section class="card"><div class="card-h"><h2>Heart-rate zones</h2><span class="sub">minutes in each WHOOP zone</span></div>${zoneBars(w.zones)}</section>`:'';
   app.innerHTML=head+`<h1 style="margin-bottom:10px">${w.type} · ${dLong(d)}</h1><div class="stack"><section class="card"><div class="tiles"><div class="tile"><div class="k">Start · duration</div><div class="v num">${w.start} · ${w.dur} min</div></div><div class="tile"><div class="k">Average HR</div><div class="v num">${w.avghr} bpm</div></div>${fit?`<div class="tile"><div class="k">Calories</div><div class="v num">${w.cal} kcal</div></div>`:`<div class="tile"><div class="k">Strain · max HR</div><div class="v num">${fmt(w.strain,1)} · ${w.maxhr} bpm</div></div><div class="tile"><div class="k">Energy</div><div class="v num">${w.kj} kJ</div></div>`}</div></section>${zones}
   <section class="card"><div class="card-h"><h2>Source</h2></div>${provenance(fit?[['Provider','Google Health v4 (Fitbit)'],['Dataset','exercise'],['Status','stored in the audit tables; not processed into board values'],['Source reference','raw_response_manifest '+hex8(w.id)+'… · /dataPoints/0']]:[['Provider','WHOOP API v2'],['Dataset','workout'],['Status','stored in the audit tables; not processed. Zone field path to confirm from stored records.'],['Source reference','raw_response_manifest '+hex8(w.id)+'… · /records/0']])}</section></div>`;

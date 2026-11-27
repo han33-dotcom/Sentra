@@ -39,7 +39,11 @@ def app_url(url):
     return url.rstrip('/')
 
 
-def runtime_settings(secrets, folder):
+def viewer_settings(secrets, folder):
+    """Validated read-only viewer database/Storage settings from `[viewer]` alone.
+
+    Never reads `[auth]`, so it never derives the hosted November proof: callers draw on the
+    ordinary viewer allowance. `runtime_settings` adds the hosted sign-in checks on top."""
     try:
         section=secrets['viewer'].to_dict() if hasattr(secrets['viewer'],'to_dict') else dict(secrets['viewer'])
         fields={'db','url','publishable_key','storage_email','storage_password',
@@ -59,6 +63,14 @@ def runtime_settings(secrets, folder):
         limits=Limits(**dict(section['limits']))
         if (limits.database_bytes>400_000_000 or limits.object_bytes>700_000_000
                 or limits.monthly_egress_bytes>MONTHLY_EGRESS_CEILING or limits.reserve_bytes<20_000_000): raise ValueError
+        return credentials,limits,allowed
+    except Exception:
+        raise SentraError('Viewer configuration missing or invalid. Ask the operator to complete viewer-only managed secrets.') from None
+
+
+def runtime_settings(secrets, folder):
+    credentials,limits,allowed=viewer_settings(secrets,folder)
+    try:
         auth=dict(secrets['auth'])
         if (auth.get('server_metadata_url')!='https://accounts.google.com/.well-known/openid-configuration'
                 or len(auth.get('cookie_secret',''))<43

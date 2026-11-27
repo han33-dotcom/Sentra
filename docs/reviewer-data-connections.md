@@ -12,11 +12,29 @@ dataset, field path, board key or rule fails CI.
 
 ## Live verification
 
-`scripts/reviewer_live_check.py` checks which of these sources actually hold data, using the
-read-only viewer configuration (operator only). It prints aggregate counts per device and
-dataset: board fields present and their share of days, catalog rows, detail-dataset person-days,
-requested coverage, recent request failures and consent totals. It never prints participant IDs,
-names or readings, and every read reserves transfer budget as the viewer does.
+`scripts/reviewer_live_check.py` checks which of these sources actually hold data. Not run yet.
+
+```text
+python scripts/reviewer_live_check.py --org ORG_ID --secrets .private/reviewer-live-check.toml
+```
+
+- **Authorization and budget.** Operator only, with a file holding just the read-only `[viewer]`
+  section. The hosted app's secrets (with `[auth]`) are refused, so the November hosted-viewer
+  allowance is never used. Every read reserves the ordinary viewer allowance first. Verify the
+  egress baseline and headroom first (operating guide). The run stops before
+  `--max-transfer-bytes` (default 8 MB).
+- **Scope.** One organization: participants with a current, non-withdrawn consent in an open
+  membership, the same population that may count towards that organization's group figures.
+  Database reads are filtered to them. The published board is a single file, filtered after
+  download. With fewer than five contributors the check stops before reading data.
+- **Output.** Board fields with a non-null value (zero counts, null does not) and their share of
+  days, dataset rows, person-days by each dataset's documented day (sleep by wake day, WHOOP cycles
+  and recoveries by cycle start, vendor daily values by civil date; rows without a day are never
+  counted), requested coverage, request failures in the last 30 days and consent totals. Any count
+  below five prints as "fewer than 5", and every figure derived from such a group is withheld.
+  Dates are those reached by at least five people. No participant IDs, names or readings.
+- **Sharing.** Team private channel or the task owner only, never this public repository or its
+  pull requests and issues. Record only the conclusions here.
 
 ## Status key
 
@@ -35,6 +53,12 @@ own organization, individuals only with `individual` sharing, groups with at lea
 contributors). `board()` keeps only people the user may view individually; `group_board()` keeps
 eligible group contributors. Detail reads call `_permitted()` first. Each read reserves transfer
 budget before rows leave the database, and detail selections stop above 10,000 rows or 20 MB.
+
+The officer views follow the same scope. People who share group figures only never appear in the
+directory, the coverage list or grid, observations or any profile or detail page. A group-only
+code and an unknown code open the same "no individual profile" page, so neither is confirmed. A
+group figure or trend day below five eligible contributors is hidden without saying how many
+contributed. The walkthrough test checks each of these.
 
 **A replacement for Streamlit must keep these checks on a server.** A static page with embedded
 data cannot enforce consent, withdrawal or organization boundaries. The prototype is static only
