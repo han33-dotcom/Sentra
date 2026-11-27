@@ -64,15 +64,15 @@ def _group(group_people, contributors):
     if end is None:
         return {'end': None, 'tiles': [], 'trends': {}}
     tiles = [{'key': r['key'], 'device': r['device'], 'value': r['value'],
-              'contributors': r['contributors'] if r['status'] == 'available' else None}
+              'contributors': r['contributors']}
              for r in group_summary(group_people, contributors, end=end, days=1)
-             if r['key'] in TILE_KEYS and r['device']]
+             if r['key'] in TILE_KEYS and r['device'] and r['status'] == 'available']
     trends = {}
     for key in TREND_KEYS:
         found = group_trend(group_people, contributors, key, end=end, days=TREND_DAYS)
         # Only the value leaves: an empty day and a suppressed day look the same.
         trends[key] = {device: [{'d': row['d'], 'value': row['value']} for row in rows]
-                       for device, rows in found['devices'].items()}
+                       for device, rows in found['devices'].items() if any(row['value'] is not None for row in rows)}
     return {'end': end.isoformat(), 'tiles': tiles, 'trends': trends}
 
 
@@ -83,7 +83,7 @@ def payload(*, board, people, group_people, contributors, catalog, today, viewer
     end = latest_group_day(people)
     first = min((d['d'] for p in shown for d in p['days']), default=None)
     return {'mode': 'live', 'viewer': viewer, 'today': today.isoformat(),
-            'built_at': board.get('built_at'), 'data_through': board.get('data_through'),
+            'built_at': board.get('built_at'),
             'latest_individual_day': end.isoformat() if end else None,
             'first_day': first, 'refresh': REFRESH,
             'assessment_version': board.get('assessment_version'), 'board_version': board.get('board_version'),

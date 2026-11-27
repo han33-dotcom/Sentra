@@ -389,18 +389,12 @@ def reviewer_page():
         st.title('Reviewer')
     decision=current_access()
     reload=st.sidebar.button('Reload reviewer',icon=':material/refresh:')
-    # Refetch when the permitted set changes; filtering a cached copy cannot add newly shared people.
-    if reload or 'audit_board' not in st.session_state or st.session_state.get('audit_board_scope')!=access_scope(decision):
-        with open_reader() as reader:
-            st.session_state['audit_board']=reader.board()
-        st.session_state['audit_board_scope']=access_scope(decision)
-    board=st.session_state['audit_board']
-    _,_,scope,group_people,catalog=organization_data(decision,reload)
-    people=[p for p in board['people'] if decision.can_view_individual(p.get('id')) and p.get('id') in scope]
+    org,_,scope,group_people,catalog=organization_data(decision,reload)
+    people=[p for p in group_people if decision.can_view_individual(p.get('id'))]
     shown={p['id'] for p in people}
     today=datetime.now(timezone.utc).astimezone(BEIRUT).date()
     viewer='Team view' if decision.is_team else f'{decision.org_id} · {decision.role}'
-    data=payload(board=board,people=people,group_people=group_people,contributors=decision.group_contributors(scope),
+    data=payload(board=org['board'],people=people,group_people=group_people,contributors=decision.group_contributors(scope),
                  catalog=[r for r in catalog if r['participant_id'] in shown],today=today,viewer=viewer)
     if not people:
         st.info('No participant with published days has shared individual details with you. Group figures still appear '

@@ -193,6 +193,18 @@ class PrivacyMatrixTests(unittest.TestCase):
         self.assertEqual([e.value for e in app.error], [], page)
         return rendered(app)
 
+    def test_reviewer_reads_one_board_on_first_visit_and_one_on_reload(self):
+        app = self.open('officer@a.test', consents())
+        with patch.object(EveryoneReader, 'group_board', side_effect=board) as group_read, \
+             patch.object(EveryoneReader, 'board', side_effect=AssertionError('duplicate board read')):
+            self.assertEqual(shown_ids(self.visit(app, 'Reviewer')), {'p91'})
+            self.assertEqual(group_read.call_count, 1)
+            app.run()
+            self.assertEqual(group_read.call_count, 1)
+            next(b for b in app.button if b.label == 'Reload reviewer').click().run()
+            self.assertEqual(list(app.error), [])
+            self.assertEqual(group_read.call_count, 2)
+
     def test_organization_users_see_only_permitted_participants_on_every_page(self):
         for email, allowed in CAN_SEE.items():
             app = self.open(email, consents())

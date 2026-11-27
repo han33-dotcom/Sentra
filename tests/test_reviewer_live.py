@@ -73,17 +73,24 @@ class ReviewerPayloadTests(unittest.TestCase):
         self.assertEqual(group['end'], '2026-11-24')
         tiles = {(t['key'], t['device']): t for t in group['tiles']}
         self.assertEqual(tiles['rhr', 'Fitbit'], {'key': 'rhr', 'device': 'Fitbit', 'value': 59, 'contributors': 5})
-        self.assertEqual(tiles['steps', 'Fitbit'], {'key': 'steps', 'device': 'Fitbit', 'value': None, 'contributors': None})
-        self.assertEqual(tiles['rhr', 'WHOOP']['value'], None)  # one WHOOP contributor
+        self.assertNotIn(('steps', 'Fitbit'), tiles)
+        self.assertNotIn(('rhr', 'WHOOP'), tiles)
         for key, devices in group['trends'].items():
             for rows in devices.values():
                 self.assertTrue(all(set(r) == {'d', 'value'} for r in rows), key)  # values only, never counts
-        self.assertTrue(all(r['value'] is None for r in group['trends']['steps']['Fitbit']))
+        self.assertNotIn('Fitbit', group['trends']['steps'])
         # The other organization's person never counts, even when its rows are passed in.
         self.assertEqual(tiles['sleep', 'Fitbit']['contributors'], 5)
 
     def test_no_group_window_without_a_publishable_statistic(self):
         self.assertEqual(build(contributors={'p91'})['group'], {'end': None, 'tiles': [], 'trends': {}})
+
+    def test_unpublishable_device_and_global_cutoff_leave_payload_unchanged(self):
+        fitbit = [p for p in GROUP if p['device'] == 'Fitbit']
+        baseline = build(people=[], group_people=fitbit, contributors=CONTRIBUTORS - {'p101'})
+        whoop = dict(P101, days=P101['days'] + [dict(P101['days'][-1], d='2026-11-25')])
+        self.assertEqual(build(people=[], group_people=fitbit + [whoop],
+                               board=dict(BOARD, data_through='2026-11-25')), baseline)
 
     def test_render_embeds_data_that_cannot_close_the_script(self):
         page = render(build(viewer='</script><b>x</b><!--'))

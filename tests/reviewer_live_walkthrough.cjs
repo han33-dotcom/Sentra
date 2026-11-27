@@ -27,4 +27,11 @@ t.go('p91-night-2026-11-24');
 ok(app.innerHTML.includes('usual 7 h 00 min')&&app.innerHTML.includes('Slept less than 6 hours'),'night shows value, usual and signal');
 ok(app.innerHTML.includes('Load selected data'),'minute detail is offered on request');
 ok(global.location.hash==='#overview','live navigation never changes the address');
+for(const end of ['2026-11-19',null]){
+  const view=require('./reviewer_page_harness.cjs')(process.argv[2],data=>({...data,
+    people:[],first_day:null,latest_individual_day:null,built_at:null,group:{end,tiles:[],trends:{}}}));
+  view.t.renderOverview();
+  ok(view.app.innerHTML.includes(end?'Readings through 19 Nov':'No readings available in this view'),'scoped reading status '+end);
+  ok(!view.app.innerHTML.includes('Board published')&&!view.app.innerHTML.includes('Readings through 25 Nov'),'missing dates stay unknown');
+}
 console.log(out.join('\n'));

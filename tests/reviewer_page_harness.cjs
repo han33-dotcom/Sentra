@@ -1,10 +1,11 @@
 "use strict";
 /* Loads the reviewer page's script in Node with a minimal DOM stand-in; shared by the walkthrough tests. */
 const fs=require('fs');
-module.exports=function load(path){
+module.exports=function load(path, transformData){
   const html=fs.readFileSync(path,'utf8');
   const fm=html.match(/<script id="field-map" type="application\/json">([\s\S]*?)<\/script>/)[1];
-  const data=html.match(/<script id="reviewer-data" type="application\/json">([\s\S]*?)<\/script>/)[1];
+  const source=html.match(/<script id="reviewer-data" type="application\/json">([\s\S]*?)<\/script>/)[1];
+  const data=transformData?JSON.stringify(transformData(JSON.parse(source))):source;
   const js=html.match(/<script>\r?\n([\s\S]*?)<\/script>/)[1];
   const el=()=>({innerHTML:'',textContent:'',classList:{add(){}},set onclick(f){},querySelectorAll:()=>[],addEventListener(){},setAttribute(){},dataset:{}});
   const app=el();const labels={};

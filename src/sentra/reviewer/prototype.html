@@ -1339,8 +1339,9 @@ const FLOOR={sleep:20,rhr:1.5,hrv:3,sleep_hr:1.5};
 /* Live mode: the viewer embeds real, access-filtered data built on the server (sentra.reviewer.live).
    Without it the page runs the synthetic demo. */
 const LIVE=JSON.parse(document.getElementById('reviewer-data').textContent);
-const NOW=LIVE?{date:LIVE.today,refresh:LIVE.refresh,latest:LIVE.latest_individual_day||LIVE.today}:{date:'2026-11-25',time:'15:40',refresh:'15:00',latest:'2026-11-24'};
-const START=LIVE?(LIVE.first_day&&LIVE.first_day<addDays(NOW.latest,-29)?LIVE.first_day:addDays(NOW.latest,-29)):'2026-10-01';
+const NOW=LIVE?{date:LIVE.today,refresh:LIVE.refresh,latest:[LIVE.latest_individual_day,LIVE.group.end].filter(Boolean).sort().pop()||null}:{date:'2026-11-25',time:'15:40',refresh:'15:00',latest:'2026-11-24'};
+const monthStart=addDays(NOW.latest||NOW.date,-29);
+const START=LIVE?(LIVE.first_day&&LIVE.first_day<monthStart?LIVE.first_day:monthStart):'2026-10-01';
 const CODE='p\\d{2,4}';  /* Sentra pseudonyms (sentra.access.PSEUDONYM) */
 const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
@@ -1639,8 +1640,10 @@ function stamp(v){if(!v)return '—';if(/^\d{4}-\d\d-\d\d$/.test(v))return dShor
   return isNaN(t)?'—':t.toLocaleString('en-GB',{timeZone:'Asia/Beirut',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}
 function statusBar(wake){
   if(!LIVE)return `<div class="status"><span class="ok">● Daily update succeeded</span><span class="num">${dLong(NOW.date)}, ${NOW.refresh} Beirut</span><span class="muted">Readings through ${dShort(NOW.latest)}; last night's sleep by wake date ${dShort(wake)}</span><span class="muted small">Target schedule 3:00 p.m.</span></div>`;
-  const old=NOW.latest<addDays(NOW.date,-2);
-  return `<div class="status"><span class="ok">● Board published</span><span class="num">${esc(stamp(LIVE.built_at))} Beirut</span><span class="muted">Readings through ${dShort(NOW.latest)}</span>${old?`<span class="pill amber">No new processed data since ${dShort(NOW.latest)}</span>`:''}<span class="muted small">Scheduled refresh ${esc(LIVE.refresh)} Beirut · thresholds ${esc(LIVE.thresholds_status||'v0')}</span></div>`}
+  const old=NOW.latest&&NOW.latest<addDays(NOW.date,-2);
+  const published=LIVE.built_at?`<span class="ok">● Board published</span><span class="num">${esc(stamp(LIVE.built_at))} Beirut</span>`:'<span class="muted">Board publication time unavailable</span>';
+  const reading=NOW.latest?`Readings through ${dShort(NOW.latest)}`:'No readings available in this view';
+  return `<div class="status">${published}<span class="muted">${reading}</span>${old?`<span class="pill amber">No new processed data since ${dShort(NOW.latest)}</span>`:''}<span class="muted small">Scheduled refresh ${esc(LIVE.refresh)} Beirut · thresholds ${esc(LIVE.thresholds_status||'v0')}</span></div>`}
 function renderOverview(){
   const look=worthALook();const gEnd=LIVE?LIVE.group.end:null;const yesterday=LIVE?gEnd:NOW.latest;const wake=LIVE?gEnd:NOW.date;
   const tile=(dev,metric,d,label,txt)=>{const s=groupStat(dev,metric,d);
@@ -1700,7 +1703,7 @@ function renderPeople(){
 function renderUnavailable(){app.innerHTML=`<div class="crumb"><button class="back" data-back>← Back to overview</button></div><div class="empty">No individual profile is available for this code.</div>`;bindBack()}
 function renderProfile(p){
   if(!p||!visible(p.id)){renderUnavailable();return}
-  const end=NOW.date;const start=state.range===30?addDays(NOW.latest,-29):START;
+  const end=NOW.date;const start=state.range===30?monthStart:START;
   const days=range(start,end);const fit=p.dev==='Fitbit';
   const today=p.byDay[NOW.date];
   const latestTime=LIVE?(Object.entries(p.latest).map(([k,v])=>k+' '+stamp(v)).join(' · ')||'—'):fit?(DELAYED[p.id]?'23 Nov 18:10':'15:32 today'):(today&&today.sleep!=null?'07:14 today (sleep and recovery)':'—');

@@ -95,7 +95,7 @@ because its data is synthetic.
 
 | Element | Source | Status | Notes |
 | --- | --- | --- | --- |
-| Last successful update | board `built_at`, `data_through`, `source_run` via `ViewerReader.board()` | Ready | The wellness refresh is scheduled at 01:30 Beirut (`wellness.yml`); a 3:00 p.m. update is a schedule change (**New data**) |
+| Last successful update | Publication time from board `built_at`. Latest reading from individually visible days and the latest publishable group day. | Ready | Reviewer reuses the group-scoped board for both views and shows an empty status when dates are unavailable. Refresh is scheduled at 01:30 Beirut (`wellness.yml`). |
 | Worth a look, 7 days | board `people[].days[]`: `f` flags, `lvl`, `a`, `m`, values and `*_b` baselines | Ready | Read the last seven board days per person instead of only the latest (`observations.py` explains one day). Board days exist only for usable days, so a non-usable day never produces an observation |
 | Personal comparison | board `sleep_b`, `rhr_b`, `hrv_b`, `sleep_hr_b`, `steps_b` | Ready | Same 28-day, 7-reading baseline as `pipeline.baselines` |
 | Coverage: readings present | measurement rows per dataset and day | Adapter | `catalog()` gives only the latest reading per dataset. A per-day count needs a bounded aggregate query, or (better) a coverage block published by the refresh |
