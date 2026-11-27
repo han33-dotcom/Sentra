@@ -1,0 +1,1863 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sentra Reviewer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: one dark console; a left sidebar of sections beside glass cards on a deep navy ground lit by soft blue and violet glows.
+   Violet marks navigation and selection, sky and violet tell the two devices apart, mint/amber/red are reserved for state. Single dark theme by design. */
+:root{
+  color-scheme:dark;
+  --bg:#050a1c;--glow-a:rgba(37,99,235,.28);--glow-b:rgba(99,102,241,.20);
+  --surface:rgba(17,24,52,.72);--surface-2:rgba(28,36,78,.55);--panel:#0e1430;
+  --ink:#eef1ff;--muted:#9aa4c9;--faint:#6c76a0;--line:rgba(129,140,248,.16);--line2:rgba(129,140,248,.30);
+  --accent:#6d6dff;--accent-ink:#aeb0ff;--accent-soft:rgba(109,109,255,.18);--sky:#4fa8ff;
+  --amber:#f6b74c;--amber-soft:rgba(246,183,76,.14);--red:#f77b7b;--red-soft:rgba(247,123,123,.15);
+  --ok:#5ee6b5;--ok-soft:rgba(94,230,181,.13);--gap:#4b5478;--gap-soft:rgba(75,84,120,.35);
+  --fitbit:#4fa8ff;--whoop:#9d8cff;
+  --display:"Outfit","Plus Jakarta Sans",system-ui,sans-serif;
+  --sans:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);background-image:radial-gradient(900px 520px at 8% -8%,var(--glow-a),transparent 70%),radial-gradient(760px 460px at 92% 4%,var(--glow-b),transparent 70%);background-attachment:fixed;color:var(--ink);font:14px/1.55 var(--sans);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:16px 40px;display:grid;grid-template-columns:236px minmax(0,1fr);gap:20px;align-items:start;min-height:100%}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+a{color:var(--accent-ink)}
+button{font:inherit;color:inherit}
+::selection{background:var(--accent-soft)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1280px;width:100%}
+/* Sidebar */
+aside.side{position:sticky;top:calc(16px + env(safe-area-inset-top,0px));background:linear-gradient(180deg,var(--surface-2),var(--surface));border:1px solid var(--line);border-radius:18px;padding:18px 14px;display:flex;flex-direction:column;gap:18px;backdrop-filter:blur(14px)}
+.brand{font:600 19px var(--display);letter-spacing:.01em;display:flex;align-items:center;gap:10px;padding:2px 6px}
+.brand .mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--accent),var(--sky));display:inline-grid;place-items:center;color:var(--ink);font:700 15px var(--display);box-shadow:0 0 18px var(--accent-soft)}
+.brand small{display:block;font:500 11px var(--sans);color:var(--muted);letter-spacing:.02em}
+.side h4{margin:0 0 6px;padding:0 8px;font:600 11px var(--sans);letter-spacing:.09em;text-transform:uppercase;color:var(--faint)}
+nav.tabs{display:flex;flex-direction:column;gap:2px}
+nav.tabs a{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--muted);padding:9px 10px;border-radius:10px;font-weight:500}
+nav.tabs a svg{width:18px;height:18px;flex:none;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+nav.tabs a:hover{color:var(--ink);background:var(--surface-2)}
+nav.tabs a[aria-current="page"]{background:var(--accent-soft);color:var(--accent-ink);box-shadow:inset 0 0 0 1px var(--line2)}
+.side .foot{margin:0;padding:12px 8px 0;border-top:1px solid var(--line);font-size:11.5px;line-height:1.5;color:var(--faint)}
+/* Top bar */
+.topbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-bottom:18px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 14px;backdrop-filter:blur(14px)}
+.org{font-weight:600}
+.org span{color:var(--muted);font-weight:500}
+.synth.live{color:var(--ok);background:var(--ok-soft);border-color:var(--ok-soft)}
+.synth{margin-left:auto;font:600 11px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--amber);background:var(--amber-soft);border:1px solid var(--amber-soft);border-radius:999px;padding:3px 10px}
+h1{font:600 26px/1.2 var(--display);margin:0;text-wrap:balance}
+h2{font:600 19px/1.3 var(--display);margin:0;text-wrap:balance;letter-spacing:.005em}
+h3{font:600 12px var(--sans);margin:0;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
+.muted{color:var(--muted)} .small{font-size:12.5px} .mono{font-family:var(--mono)}
+.num{font-variant-numeric:tabular-nums}
+.status{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 14px;margin-bottom:18px;backdrop-filter:blur(14px)}
+.status .ok{color:var(--ok);font-weight:600;background:var(--ok-soft);border-radius:999px;padding:2px 10px}
+.grid2{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:18px}
+.card{background:linear-gradient(180deg,var(--surface-2),var(--surface));border:1px solid var(--line);border-radius:18px;padding:20px;min-width:0;backdrop-filter:blur(14px);box-shadow:0 18px 40px -28px rgba(0,0,0,.8)}
+.card-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 12px;margin-bottom:14px}
+.card-h .sub{color:var(--muted);font-size:12.5px}
+.stack{display:flex;flex-direction:column;gap:18px}
+.code{font:500 13px var(--mono);background:var(--accent-soft);color:var(--accent-ink);border:1px solid var(--line2);border-radius:8px;padding:2px 8px;cursor:pointer;text-decoration:none;white-space:nowrap}
+.obs>.code,.issues li>.code{align-self:start}
+.code:hover,.code:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.obs{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 12px;padding:12px 0;border-top:1px solid var(--line)}
+.obs:first-of-type{border-top:0}
+.obs-main{background:none;border:0;padding:0;text-align:left;cursor:pointer;display:block;width:100%}
+.obs-main:hover .obs-val,.obs-main:focus-visible .obs-val{text-decoration:underline}
+.obs-line{display:flex;flex-wrap:wrap;gap:4px 10px;align-items:baseline}
+.obs-val{font:600 15px var(--display)}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:600;border-radius:999px;padding:2px 9px;white-space:nowrap}
+.pill.amber{background:var(--amber-soft);color:var(--amber)} .pill.red{background:var(--red-soft);color:var(--red)}
+.pill.gap{background:var(--gap-soft);color:var(--muted)} .pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.accent{background:var(--accent-soft);color:var(--accent-ink)}
+.dev{font:500 11px var(--mono);border-radius:6px;padding:1px 7px;border:1px solid currentColor}
+.dev.Fitbit{color:var(--fitbit)} .dev.WHOOP{color:var(--whoop)}
+.issues{list-style:none;margin:0;padding:0}
+.issues li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;padding:10px 0;border-top:1px solid var(--line)}
+.issues li:first-child{border-top:0}
+.covwrap{overflow-x:auto;margin-top:12px}
+table{border-collapse:collapse;width:100%}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:600 11px var(--sans);color:var(--muted);text-transform:uppercase;letter-spacing:.07em}
+.cov{border-collapse:separate;border-spacing:3px;width:auto}
+.cov td,.cov th{padding:0;border:0}
+.cov th{font:400 11px var(--mono);color:var(--faint);padding:0 2px 2px;text-align:center;text-transform:none;letter-spacing:0}
+.cov .rowh{padding-right:8px;text-align:left}
+.cell{display:grid;grid-template-rows:repeat(3,7px);gap:1px;width:22px;background:none;border:0;padding:0;cursor:pointer}
+.cell:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.st{display:block;border-radius:2px}
+.s-ok{background:var(--accent)} .s-partial{background:repeating-linear-gradient(90deg,var(--accent) 0 3px,var(--accent-soft) 3px 6px)}
+.s-none{background:var(--panel);box-shadow:inset 0 0 0 1px var(--line2)} .s-failed{background:var(--red)}
+.s-preissue{background:repeating-linear-gradient(135deg,var(--gap) 0 2px,var(--panel) 2px 5px)} .s-notworn{background:var(--gap)}
+.s-delayed{background:var(--amber)} .s-na{background:transparent;box-shadow:inset 0 0 0 1px var(--line)} .s-notreq{background:var(--gap-soft)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--muted);margin-top:10px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:14px;height:8px;border-radius:2px;display:inline-block}
+.covnote{margin-top:10px;font-size:12.5px;min-height:20px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
+.tiles.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.tile{background:var(--surface-2);border:1px solid var(--line);border-radius:14px;padding:12px 14px;min-width:0}
+.tile .k{font-size:12.5px;color:var(--muted)} .tile .v{font:600 26px/1.2 var(--display);margin-top:4px} .tile .n{font-size:12px;color:var(--muted);margin-top:2px}
+.tile.dim{background:transparent;border-style:dashed}
+.tile.dim .v{font:500 15px var(--sans);color:var(--muted)}
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:10px;overflow:hidden;background:var(--panel)}
+.seg button{background:transparent;border:0;padding:6px 12px;cursor:pointer;color:var(--muted)}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent-ink);font-weight:600}
+.chart{width:100%;height:auto;display:block}
+.chart text{fill:var(--muted);font:11px var(--sans)}
+.chart path{filter:drop-shadow(0 0 5px var(--accent-soft))}
+.note{font-size:12.5px;color:var(--muted)}
+.crumb{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+.back{background:none;border:0;color:var(--accent-ink);cursor:pointer;padding:4px 0;font-weight:600}
+.prof-h{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;margin-bottom:18px}
+.bigcode{font:700 30px var(--display);color:var(--ink);background:linear-gradient(135deg,var(--accent),var(--sky));border-radius:14px;padding:4px 14px}
+.kv{display:flex;flex-wrap:wrap;gap:4px 16px;color:var(--muted);font-size:13px}
+.kv b{color:var(--ink);font-weight:600}
+.tag{font-size:11px;color:var(--amber);border:1px dashed var(--amber);border-radius:5px;padding:0 5px;margin-left:4px;white-space:nowrap}
+.sections{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.strip{display:flex;gap:1px;margin-top:6px}
+.strip span{flex:1;height:6px;border-radius:1px}
+.entry{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.entry button{background:var(--panel);border:1px solid var(--line2);border-radius:9px;padding:5px 10px;cursor:pointer;font-size:12.5px}
+.entry button:hover,.entry button:focus-visible{border-color:var(--accent);color:var(--accent-ink)}
+.unsupported{border:1px dashed var(--line2);border-radius:12px;padding:10px 12px;color:var(--muted);font-size:13px}
+.tablewrap{overflow-x:auto}
+.vals{max-height:300px;overflow:auto;border:1px solid var(--line);border-radius:10px}
+.vals table td,.vals table th{font:12px var(--mono);padding:4px 8px;text-transform:none;letter-spacing:0}
+.vals thead th{position:sticky;top:0;background:var(--panel)}
+.prov{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 14px;font-size:12.5px}
+.prov dt{color:var(--muted)} .prov dd{margin:0;font-family:var(--mono);overflow-wrap:anywhere}
+.empty{border:1px dashed var(--line2);border-radius:14px;padding:20px;text-align:center;color:var(--muted)}
+.wl{list-style:none;padding:0;margin:0}
+.wl li{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.wl li:first-child{border-top:0}
+@media (max-width:1100px){.grid2,.sections{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:860px){
+  body{grid-template-columns:minmax(0,1fr);gap:14px}
+  aside.side{position:static;flex-direction:row;flex-wrap:wrap;align-items:center;gap:10px 16px;padding:12px}
+  .side h4{display:none}
+  .side .foot{flex-basis:100%;padding-top:10px}
+  nav.tabs{flex-direction:row;flex-wrap:wrap}
+  .side section{display:contents}
+}
+@media (max-width:640px){.tiles.g3{grid-template-columns:minmax(0,1fr)}.synth{margin-left:0}}
+@media (prefers-reduced-motion:no-preference){.card,nav.tabs a{transition:border-color .15s,background-color .15s}}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+  <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" style="stop-color:var(--accent)"/><stop offset="1" style="stop-color:var(--sky)"/></linearGradient>
+</defs></svg>
+<aside class="side" aria-label="Sentra reviewer">
+  <span class="brand"><span class="mark">S</span><span>Sentra<small>Reviewer</small></span></span>
+  <section>
+    <h4>Review</h4>
+    <nav class="tabs" aria-label="Sections">
+      <a href="#overview" data-nav="overview"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>Overview</a>
+      <a href="#people" data-nav="people"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.7a3.5 3.5 0 0 1 0 6.6M18.5 14.8c1.6.8 2.6 2.5 3 5.2"/></svg>People</a>
+      <a href="#sources" data-nav="sources"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5v13c0 1.6 3.4 2.8 7.5 2.8s7.5-1.2 7.5-2.8v-13M4.5 12c0 1.6 3.4 2.8 7.5 2.8s7.5-1.2 7.5-2.8"/></svg>Data sources</a>
+    </nav>
+  </section>
+  <p class="foot" id="foot-note">Every person, name and reading here is fictional and generated in this page. Field names, dataset names, baselines and the five-contributor rule come from the Sentra repository. Wellness information only, compared with each person's own pattern; not a medical assessment. Signals are provisional (thresholds v0, pending expert sign-off).</p>
+</aside>
+<div class="wrap">
+  <div class="topbar"><span class="org" id="org-label">Example organization <span>· Health and safety</span></span><span class="synth" id="mode-chip">Synthetic prototype</span></div>
+  <main id="app"></main>
+</div>
+
+<script id="field-map" type="application/json">[
+ {
+  "id": "fb_sleep_asleep",
+  "label": "Asleep (sleep session)",
+  "device": "Fitbit",
+  "status": "in_sentra",
+  "dataset": "sleep",
+  "path": "/sleep/summary/minutesAsleep",
+  "canonical": "daily_sleep_min",
+  "board": "sleep",
+  "unit": "min",
+  "resolution": "one value per sleep session, wake date",
+  "checks": [
+   [
+    "mapping",
+    "google_health",
+    "sleep",
+    "/sleep/summary/minutesAsleep",
+    "daily_sleep_min"
+   ],
+   [
+    "board",
+    "sleep"
+   ],
+   [
+    "dataset",
+    "google_health",
+    "sleep"
+   ]
+  ]
+ },
+ {
+  "id": "fb_sleep_inbed",
+  "label": "In bed",
+  "device": "Fitbit",
+  "status": "in_sentra",
+  "dataset": "sleep",
+  "path": "/sleep/summary/minutesInSleepPeriod",
+  "canonical": "daily_in_bed_min",
+  "board": null,
+  "unit": "min",
+  "resolution": "per session",
+  "checks": [
+   [
+    "mapping",
+    "google_health",
+    "sleep",
+    "/sleep/summary/minutesInSleepPeriod",
+    "daily_in_bed_min"
+   ]
+  ]
+ },
+ {
+  "id": "fb_sleep_awake",
+  "label": "Awake during sleep",
+  "device": "Fitbit",
+  "status": "in_sentra",
+  "dataset": "sleep",
+  "path": "/sleep/summary/minutesAwake",
+  "canonical": "daily_awake_min",
+  "board": null,
+  "unit": "min",
+  "resolution": "per session",
+  "checks": [
+   [
+    "mapping",
+    "google_health",
+    "sleep",
+    "/sleep/summary/minutesAwake",
+    "daily_awake_min"
+   ]
+  ]
+ },
+ {
+  "id": "fb_sleep_stages",
+  "label": "Timestamped sleep stages",
+  "device": "Fitbit",
+  "status": "in_sentra",
+  "dataset": "sleep",
+  "path": "/sleep/stages/N/{type,startTime,endTime}",
+  "canonical": "sleep_stage",
+  "board": null,
+  "unit": "stage",
+  "resolution": "timestamped intervals",
+  "checks": [
+   [
+    "stage_codes",
+    "LIGHT",
+    "DEEP",
+    "REM",
+    "AWAKE"
+   ],
+   [
+    "canonical",
+    "sleep_stage"
+   ]
+  ]
+ },
+ {
+  "id": "fb_deep_rem",
+  "label": "Deep and REM minutes",
+  "device": "Fitbit",
+  "status": "in_sentra",
+  "dataset": "sleep",
+  "path": "/sleep/summary/stagesSummary/N/{type,minutes}",
+  "canonical": "daily_deep_sleep_min, daily_rem_sleep_min",
+  "board": "deep, rem",
+  "unit": "min",
+  "resolution": "per session",
+  "checks": [
+   [
+    "board",
+    "deep"
+   ],
+   [
+    "board",
+    "rem"
+   ],
+   [
+    "canonical",
+    "daily_deep_sleep_min"
+   ],
+   [
+    "canonical",
+    "daily_rem_sleep_min"
+   ]
+  ]
+ },
+ {
+  "id": "fb_rhr",
+  "label": "Resting heart rate",
+  "device": "Fitbit",
+  "status": "in_sentra",
+  "dataset": "daily-resting-heart-rate",
+  "path": "/dailyRestingHeartRate/beatsPerMinute",
+  "canonical": "resting_heart_rate",
+  "board": "rhr",
+  "unit": "bpm",
+  "resolution": "one value per civil day",
+  "checks": [
+   [
+    "mapping",
+    "google_health",
+    "daily-resting-heart-rate",
+    "/dailyRestingHeartRate/beatsPerMinute",
+    "resting_heart_rate"
+   ],
+   [
+    "board",
+    "rhr"
+   ],
+   [
+    "board",
+    "rhr_b"
+   ]
+  ]
+ },
+ {
+  "id": "fb_hrv",
+  "label": "Heart rate variability (RMSSD)",
+  "device": "Fitbit",
+  "status": "in_sentra",
+  "dataset": "daily-heart-rate-variability",
+  "path": "/dailyHeartRateVariability/averageHeartRateVariabilityMilliseconds",
+  "canonical": "daily_hrv_rmssd",
+  "board": "hrv",
+  "unit": "ms",
+  "resolution": "one value per civil day",
+  "checks": [
+   [
+    "mapping",
+    "google_health",
+    "daily-heart-rate-variability",
+    "/dailyHeartRateVariability/averageHeartRateVariabilityMilliseconds",
+    "daily_hrv_rmssd"
+   ],
+   [
+    "board",
+    "hrv"
+   ],
+   [
+    "board",
+    "hrv_b"
+   ]
+  ]
+ },
+ {
+  "id": "fb_minute_hr",
+  "label": "Minute heart rate",
+  "device": "Fitbit",
+  "status": "in_sentra",
+  "dataset": "minute_heart-rate",
+  "path": "/heartRate/beatsPerMinuteAvg",
+  "canonical": "heart_rate",
+  "board": null,
+  "unit": "bpm",
+  "resolution": "vendor 60-second aggregation",
+  "checks": [
+   [
+    "mapping",
+    "google_health",
+    "minute_heart-rate",
+    "/heartRate/beatsPerMinuteAvg",
+    "heart_rate"
+   ],
+   [
+    "dataset",
+    "google_health",
+    "minute_heart-rate"
+   ]
+  ],
+  "note": "Initial imports plan minute jobs only for the last 7 days of each window; the November pilot scope collected no minute data. Minute detail on every day needs a retrieval decision."
+ },
+ {
+  "id": "fb_original_hr",
+  "label": "Original-resolution heart rate",
+  "device": "Fitbit",
+  "status": "stored",
+  "dataset": "original_heart-rate",
+  "path": "/heartRate/beatsPerMinute",
+  "canonical": "heart_rate",
+  "board": null,
+  "unit": "bpm",
+  "resolution": "original API resolution",
+  "checks": [
+   [
+    "mapping",
+    "google_health",
+    "original_heart-rate",
+    "/heartRate/beatsPerMinute",
+    "heart_rate"
+   ],
+   [
+    "dataset",
+    "google_health",
+    "original_heart-rate"
+   ]
+  ],
+  "note": "Imports request one representative day; daily runs exclude it. Backfill beyond minute detail is an open decision."
+ },
+ {
+  "id": "fb_sleep_hr",
+  "label": "Sleeping heart rate",
+  "device": "Fitbit",
+  "status": "in_sentra",
+  "dataset": "minute_heart-rate + sleep",
+  "path": "derived: minute HR during asleep stages",
+  "canonical": "sleep_hr",
+  "board": "sleep_hr",
+  "unit": "bpm",
+  "resolution": "per night",
+  "checks": [
+   [
+    "board",
+    "sleep_hr"
+   ],
+   [
+    "board",
+    "sleep_hr_b"
+   ]
+  ]
+ },
+ {
+  "id": "fb_steps",
+  "label": "Steps (board value)",
+  "device": "Fitbit",
+  "status": "in_sentra",
+  "dataset": "minute_steps",
+  "path": "/steps/countSum",
+  "canonical": "steps",
+  "board": "steps",
+  "unit": "steps",
+  "resolution": "sum of vendor minute rollups",
+  "checks": [
+   [
+    "mapping",
+    "google_health",
+    "minute_steps",
+    "/steps/countSum",
+    "steps"
+   ],
+   [
+    "board",
+    "steps"
+   ]
+  ]
+ },
+ {
+  "id": "fb_steps_daily",
+  "label": "Steps (vendor daily total)",
+  "device": "Fitbit",
+  "status": "stored",
+  "dataset": "daily_steps",
+  "path": "daily rollup",
+  "canonical": null,
+  "board": null,
+  "unit": "steps",
+  "resolution": "vendor civil-day aggregation",
+  "checks": [
+   [
+    "unmapped",
+    "google_health",
+    "daily_steps"
+   ],
+   [
+    "dataset",
+    "google_health",
+    "daily_steps"
+   ]
+  ],
+  "note": "Collected but deliberately not processed; the board sums minute steps instead. The viewer must say which source each step value uses."
+ },
+ {
+  "id": "fb_activity",
+  "label": "Distance, calories, active and active-zone minutes",
+  "device": "Fitbit",
+  "status": "stored",
+  "dataset": "daily_distance, daily_total-calories, daily_active-minutes, daily_active-zone-minutes",
+  "path": "daily rollups",
+  "canonical": null,
+  "board": null,
+  "unit": "m, kcal, min",
+  "resolution": "vendor civil-day aggregation",
+  "checks": [
+   [
+    "dataset",
+    "google_health",
+    "daily_distance"
+   ],
+   [
+    "dataset",
+    "google_health",
+    "daily_total-calories"
+   ],
+   [
+    "dataset",
+    "google_health",
+    "daily_active-minutes"
+   ],
+   [
+    "dataset",
+    "google_health",
+    "daily_active-zone-minutes"
+   ]
+  ],
+  "note": "Stored in the audit tables; no processed (canonical) value yet."
+ },
+ {
+  "id": "fb_exercise",
+  "label": "Exercise sessions",
+  "device": "Fitbit",
+  "status": "stored",
+  "dataset": "exercise",
+  "path": "exercise records",
+  "canonical": null,
+  "board": null,
+  "unit": "session",
+  "resolution": "per session",
+  "checks": [
+   [
+    "unmapped",
+    "google_health",
+    "exercise"
+   ],
+   [
+    "dataset",
+    "google_health",
+    "exercise"
+   ]
+  ]
+ },
+ {
+  "id": "fb_sedentary",
+  "label": "Sedentary periods",
+  "device": "Fitbit",
+  "status": "stored",
+  "dataset": "sedentary-period",
+  "path": "interval records",
+  "canonical": null,
+  "board": null,
+  "unit": "interval",
+  "resolution": "interval",
+  "checks": [
+   [
+    "unmapped",
+    "google_health",
+    "sedentary-period"
+   ],
+   [
+    "dataset",
+    "google_health",
+    "sedentary-period"
+   ]
+  ]
+ },
+ {
+  "id": "fb_br",
+  "label": "Breathing rate",
+  "device": "Fitbit",
+  "status": "in_sentra",
+  "dataset": "daily-respiratory-rate",
+  "path": "/dailyRespiratoryRate/breathsPerMinute",
+  "canonical": "daily_respiratory_rate",
+  "board": "br",
+  "unit": "breaths/min",
+  "resolution": "one value per civil day",
+  "checks": [
+   [
+    "mapping",
+    "google_health",
+    "daily-respiratory-rate",
+    "/dailyRespiratoryRate/breathsPerMinute",
+    "daily_respiratory_rate"
+   ],
+   [
+    "board",
+    "br"
+   ]
+  ]
+ },
+ {
+  "id": "fb_sleep_br",
+  "label": "Sleep breathing summary",
+  "device": "Fitbit",
+  "status": "in_sentra",
+  "dataset": "respiratory-rate-sleep-summary",
+  "path": "/respiratoryRateSleepSummary/fullSleepStats/breathsPerMinute",
+  "canonical": "sleep_respiratory_rate",
+  "board": null,
+  "unit": "breaths/min",
+  "resolution": "per night",
+  "checks": [
+   [
+    "mapping",
+    "google_health",
+    "respiratory-rate-sleep-summary",
+    "/respiratoryRateSleepSummary/fullSleepStats/breathsPerMinute",
+    "sleep_respiratory_rate"
+   ]
+  ]
+ },
+ {
+  "id": "fb_temp",
+  "label": "Nightly skin temperature",
+  "device": "Fitbit",
+  "status": "in_sentra",
+  "dataset": "daily-sleep-temperature-derivations",
+  "path": "/dailySleepTemperatureDerivations/nightlyTemperatureCelsius",
+  "canonical": "nightly_skin_temp_c",
+  "board": "temp",
+  "unit": "°C",
+  "resolution": "per night",
+  "checks": [
+   [
+    "mapping",
+    "google_health",
+    "daily-sleep-temperature-derivations",
+    "/dailySleepTemperatureDerivations/nightlyTemperatureCelsius",
+    "nightly_skin_temp_c"
+   ],
+   [
+    "board",
+    "temp"
+   ]
+  ]
+ },
+ {
+  "id": "fb_spo2",
+  "label": "Blood oxygen (SpO2)",
+  "device": "Fitbit",
+  "status": "stored",
+  "dataset": "daily-oxygen-saturation",
+  "path": "unverified",
+  "canonical": null,
+  "board": null,
+  "unit": "%",
+  "resolution": "per day",
+  "checks": [
+   [
+    "unmapped",
+    "google_health",
+    "daily-oxygen-saturation"
+   ],
+   [
+    "dataset",
+    "google_health",
+    "daily-oxygen-saturation"
+   ]
+  ],
+  "note": "Requested, but no records returned so far; field path unverified."
+ },
+ {
+  "id": "fb_vo2",
+  "label": "VO2 max",
+  "device": "Fitbit",
+  "status": "stored",
+  "dataset": "daily-vo2-max",
+  "path": "unverified",
+  "canonical": null,
+  "board": null,
+  "unit": "mL/kg/min",
+  "resolution": "per day",
+  "checks": [
+   [
+    "unmapped",
+    "google_health",
+    "daily-vo2-max"
+   ],
+   [
+    "dataset",
+    "google_health",
+    "daily-vo2-max"
+   ]
+  ],
+  "note": "Requested, but no records returned so far."
+ },
+ {
+  "id": "fb_activity_level",
+  "label": "Detailed activity levels",
+  "device": "Fitbit",
+  "status": "stored",
+  "dataset": "activity-level",
+  "path": "interval records",
+  "canonical": null,
+  "board": null,
+  "unit": "level",
+  "resolution": "interval",
+  "checks": [
+   [
+    "on_request",
+    "activity-level"
+   ]
+  ],
+  "note": "On request only (about 22.9 MB per participant-day in the October probe)."
+ },
+ {
+  "id": "fb_wear",
+  "label": "Wear time (non-wear evidence)",
+  "device": "Fitbit",
+  "status": "in_sentra",
+  "dataset": "minute_heart-rate",
+  "path": "derived: worn minutes",
+  "canonical": "wear_min",
+  "board": "wear",
+  "unit": "min",
+  "resolution": "per day",
+  "checks": [
+   [
+    "board",
+    "wear"
+   ]
+  ],
+  "note": "Supports the label Device not worn for Fitbit. WHOOP has no equivalent field in Sentra."
+ },
+ {
+  "id": "fb_daytime_hr",
+  "label": "Daytime average heart rate",
+  "device": "Fitbit",
+  "status": "derive",
+  "dataset": "minute_heart-rate",
+  "path": "derived: mean of minute HR, 08:00-20:00 Beirut",
+  "canonical": null,
+  "board": null,
+  "unit": "bpm",
+  "resolution": "per day",
+  "checks": [
+   [
+    "mapping",
+    "google_health",
+    "minute_heart-rate",
+    "/heartRate/beatsPerMinuteAvg",
+    "heart_rate"
+   ]
+  ],
+  "note": "Proposed trend option. No Sentra calculation exists yet; the daytime window needs agreement."
+ },
+ {
+  "id": "wh_asleep",
+  "label": "Asleep (light + slow-wave + REM)",
+  "device": "WHOOP",
+  "status": "in_sentra",
+  "dataset": "sleep",
+  "path": "/score/stage_summary/total_{light,slow_wave,rem}_sleep_time_milli",
+  "canonical": "sleep_min (derived)",
+  "board": "sleep",
+  "unit": "min",
+  "resolution": "per sleep record, wake date",
+  "checks": [
+   [
+    "whoop_part",
+    "/score/stage_summary/total_light_sleep_time_milli"
+   ],
+   [
+    "whoop_part",
+    "/score/stage_summary/total_slow_wave_sleep_time_milli"
+   ],
+   [
+    "whoop_part",
+    "/score/stage_summary/total_rem_sleep_time_milli"
+   ],
+   [
+    "board",
+    "sleep"
+   ]
+  ]
+ },
+ {
+  "id": "wh_stage_totals",
+  "label": "Stage totals (deep, REM, awake, in bed)",
+  "device": "WHOOP",
+  "status": "in_sentra",
+  "dataset": "sleep",
+  "path": "/score/stage_summary/total_*_time_milli",
+  "canonical": "daily_deep_sleep_min, daily_rem_sleep_min, daily_awake_min, daily_in_bed_min",
+  "board": "deep, rem",
+  "unit": "min (from ms)",
+  "resolution": "per sleep record",
+  "checks": [
+   [
+    "mapping",
+    "whoop",
+    "sleep",
+    "/score/stage_summary/total_slow_wave_sleep_time_milli",
+    "daily_deep_sleep_min"
+   ],
+   [
+    "mapping",
+    "whoop",
+    "sleep",
+    "/score/stage_summary/total_rem_sleep_time_milli",
+    "daily_rem_sleep_min"
+   ],
+   [
+    "mapping",
+    "whoop",
+    "sleep",
+    "/score/stage_summary/total_awake_time_milli",
+    "daily_awake_min"
+   ],
+   [
+    "mapping",
+    "whoop",
+    "sleep",
+    "/score/stage_summary/total_in_bed_time_milli",
+    "daily_in_bed_min"
+   ]
+  ]
+ },
+ {
+  "id": "wh_perf",
+  "label": "Sleep performance",
+  "device": "WHOOP",
+  "status": "in_sentra",
+  "dataset": "sleep",
+  "path": "/score/sleep_performance_percentage",
+  "canonical": "whoop_sleep_performance_pct",
+  "board": null,
+  "unit": "%",
+  "resolution": "per sleep record",
+  "checks": [
+   [
+    "mapping",
+    "whoop",
+    "sleep",
+    "/score/sleep_performance_percentage",
+    "whoop_sleep_performance_pct"
+   ]
+  ]
+ },
+ {
+  "id": "wh_br",
+  "label": "Breathing rate",
+  "device": "WHOOP",
+  "status": "in_sentra",
+  "dataset": "sleep",
+  "path": "/score/respiratory_rate",
+  "canonical": "daily_respiratory_rate",
+  "board": "br",
+  "unit": "breaths/min",
+  "resolution": "per sleep record",
+  "checks": [
+   [
+    "mapping",
+    "whoop",
+    "sleep",
+    "/score/respiratory_rate",
+    "daily_respiratory_rate"
+   ],
+   [
+    "board",
+    "br"
+   ]
+  ]
+ },
+ {
+  "id": "wh_recovery",
+  "label": "Recovery score",
+  "device": "WHOOP",
+  "status": "in_sentra",
+  "dataset": "recovery",
+  "path": "/score/recovery_score",
+  "canonical": "whoop_recovery_score",
+  "board": "rec",
+  "unit": "%",
+  "resolution": "per cycle",
+  "checks": [
+   [
+    "mapping",
+    "whoop",
+    "recovery",
+    "/score/recovery_score",
+    "whoop_recovery_score"
+   ],
+   [
+    "board",
+    "rec"
+   ]
+  ]
+ },
+ {
+  "id": "wh_rhr",
+  "label": "Resting heart rate",
+  "device": "WHOOP",
+  "status": "in_sentra",
+  "dataset": "recovery",
+  "path": "/score/resting_heart_rate",
+  "canonical": "resting_heart_rate",
+  "board": "rhr",
+  "unit": "bpm",
+  "resolution": "per cycle",
+  "checks": [
+   [
+    "mapping",
+    "whoop",
+    "recovery",
+    "/score/resting_heart_rate",
+    "resting_heart_rate"
+   ],
+   [
+    "board",
+    "rhr"
+   ]
+  ]
+ },
+ {
+  "id": "wh_hrv",
+  "label": "Heart rate variability (RMSSD)",
+  "device": "WHOOP",
+  "status": "in_sentra",
+  "dataset": "recovery",
+  "path": "/score/hrv_rmssd_milli",
+  "canonical": "daily_hrv_rmssd",
+  "board": "hrv",
+  "unit": "ms",
+  "resolution": "per cycle",
+  "checks": [
+   [
+    "mapping",
+    "whoop",
+    "recovery",
+    "/score/hrv_rmssd_milli",
+    "daily_hrv_rmssd"
+   ],
+   [
+    "board",
+    "hrv"
+   ]
+  ]
+ },
+ {
+  "id": "wh_spo2",
+  "label": "Blood oxygen (SpO2)",
+  "device": "WHOOP",
+  "status": "in_sentra",
+  "dataset": "recovery",
+  "path": "/score/spo2_percentage",
+  "canonical": "daily_spo2",
+  "board": "spo2",
+  "unit": "%",
+  "resolution": "per cycle",
+  "checks": [
+   [
+    "mapping",
+    "whoop",
+    "recovery",
+    "/score/spo2_percentage",
+    "daily_spo2"
+   ],
+   [
+    "board",
+    "spo2"
+   ]
+  ]
+ },
+ {
+  "id": "wh_temp",
+  "label": "Skin temperature",
+  "device": "WHOOP",
+  "status": "in_sentra",
+  "dataset": "recovery",
+  "path": "/score/skin_temp_celsius",
+  "canonical": "nightly_skin_temp_c",
+  "board": "temp",
+  "unit": "°C",
+  "resolution": "per cycle",
+  "checks": [
+   [
+    "mapping",
+    "whoop",
+    "recovery",
+    "/score/skin_temp_celsius",
+    "nightly_skin_temp_c"
+   ],
+   [
+    "board",
+    "temp"
+   ]
+  ]
+ },
+ {
+  "id": "wh_strain",
+  "label": "Day strain",
+  "device": "WHOOP",
+  "status": "in_sentra",
+  "dataset": "cycle",
+  "path": "/score/strain",
+  "canonical": "whoop_strain",
+  "board": "strain",
+  "unit": "score 0-21",
+  "resolution": "per cycle",
+  "checks": [
+   [
+    "mapping",
+    "whoop",
+    "cycle",
+    "/score/strain",
+    "whoop_strain"
+   ],
+   [
+    "board",
+    "strain"
+   ]
+  ]
+ },
+ {
+  "id": "wh_cycle_hr",
+  "label": "Cycle average and maximum HR, energy",
+  "device": "WHOOP",
+  "status": "in_sentra",
+  "dataset": "cycle",
+  "path": "/score/{average_heart_rate,max_heart_rate,kilojoule}",
+  "canonical": "daily_avg_hr, daily_max_hr, daily_kilojoule",
+  "board": null,
+  "unit": "bpm, kJ",
+  "resolution": "per cycle (physiological day)",
+  "checks": [
+   [
+    "mapping",
+    "whoop",
+    "cycle",
+    "/score/average_heart_rate",
+    "daily_avg_hr"
+   ],
+   [
+    "mapping",
+    "whoop",
+    "cycle",
+    "/score/max_heart_rate",
+    "daily_max_hr"
+   ],
+   [
+    "mapping",
+    "whoop",
+    "cycle",
+    "/score/kilojoule",
+    "daily_kilojoule"
+   ]
+  ],
+  "note": "A cycle average covers the whole physiological day, so it is not a daytime average."
+ },
+ {
+  "id": "wh_workout",
+  "label": "Workouts (strain, HR, zones)",
+  "device": "WHOOP",
+  "status": "stored",
+  "dataset": "workout",
+  "path": "workout records; zone field path to confirm from stored records",
+  "canonical": null,
+  "board": null,
+  "unit": "session",
+  "resolution": "per workout",
+  "checks": [
+   [
+    "unmapped",
+    "whoop",
+    "workout"
+   ],
+   [
+    "dataset",
+    "whoop",
+    "workout"
+   ]
+  ]
+ },
+ {
+  "id": "wh_score_state",
+  "label": "Score status",
+  "device": "WHOOP",
+  "status": "in_sentra",
+  "dataset": "cycle, recovery, sleep, workout",
+  "path": "score_state",
+  "canonical": null,
+  "board": null,
+  "unit": "SCORED / PENDING_SCORE / UNSCORABLE",
+  "resolution": "per record",
+  "checks": [
+   [
+    "source_text",
+    "src/sentra/normalize.py",
+    "score_state"
+   ]
+  ]
+ },
+ {
+  "id": "wh_cycle_steps",
+  "label": "Steps",
+  "device": "WHOOP",
+  "status": "not_provided",
+  "dataset": "cycle",
+  "path": "optional cycle step count",
+  "canonical": null,
+  "board": null,
+  "unit": "steps",
+  "resolution": "per cycle",
+  "checks": [],
+  "note": "No mapping to the board's step series; WHOOP group steps stay unavailable."
+ },
+ {
+  "id": "wh_intraday",
+  "label": "Continuous HR and timestamped stages",
+  "device": "WHOOP",
+  "status": "not_provided",
+  "dataset": null,
+  "path": null,
+  "canonical": null,
+  "board": null,
+  "unit": null,
+  "resolution": null,
+  "checks": [],
+  "note": "WHOOP's public API supplies neither; the viewer marks these resolutions as unsupported."
+ },
+ {
+  "id": "cov_intervals",
+  "label": "Requested coverage per dataset",
+  "device": "Both",
+  "status": "in_sentra",
+  "dataset": "audit.connection_state",
+  "path": "covered_intervals, last_success_at, authorization_status",
+  "canonical": null,
+  "board": null,
+  "unit": null,
+  "resolution": "per participant, provider, dataset",
+  "checks": [
+   [
+    "sql",
+    "audit.connection_state",
+    "covered_intervals"
+   ],
+   [
+    "sql",
+    "audit.connection_state",
+    "last_success_at"
+   ]
+  ],
+  "note": "Separates Not requested from No readings returned."
+ },
+ {
+  "id": "cov_failures",
+  "label": "Request failures",
+  "device": "Both",
+  "status": "in_sentra",
+  "dataset": "audit.collection_runs",
+  "path": "details.failures",
+  "canonical": null,
+  "board": null,
+  "unit": null,
+  "resolution": "per run",
+  "checks": [
+   [
+    "sql",
+    "audit.collection_runs",
+    "details"
+   ]
+  ],
+  "note": "Supports the label Request failed."
+ },
+ {
+  "id": "latest_reading",
+  "label": "Latest reading time",
+  "device": "Both",
+  "status": "in_sentra",
+  "dataset": "viewer catalog",
+  "path": "latest_point_time, latest_interval_end",
+  "canonical": null,
+  "board": null,
+  "unit": "timestamp",
+  "resolution": "per dataset",
+  "checks": [
+   [
+    "source_text",
+    "src/sentra/viewer_data.py",
+    "latest_point_time"
+   ]
+  ]
+ },
+ {
+  "id": "board_meta",
+  "label": "Last successful update",
+  "device": "Both",
+  "status": "in_sentra",
+  "dataset": "board/board.json",
+  "path": "built_at, source_run, data_through",
+  "canonical": null,
+  "board": null,
+  "unit": "timestamp",
+  "resolution": "per refresh",
+  "checks": [
+   [
+    "source_text",
+    "src/sentra/processing/board.py",
+    "built_at"
+   ],
+   [
+    "source_text",
+    "src/sentra/processing/board.py",
+    "data_through"
+   ]
+  ],
+  "note": "The refresh is scheduled at 01:30 Beirut today; a 3:00 p.m. update is a schedule change."
+ },
+ {
+  "id": "assessment",
+  "label": "Provisional signals and assessment state",
+  "device": "Both",
+  "status": "in_sentra",
+  "dataset": "board/board.json",
+  "path": "lvl, f, a, m",
+  "canonical": null,
+  "board": "lvl, f, a, m",
+  "unit": null,
+  "resolution": "per day",
+  "checks": [
+   [
+    "source_text",
+    "src/sentra/processing/board.py",
+    "'lvl'"
+   ],
+   [
+    "flags",
+    "short_sleep",
+    "rhr_up",
+    "hrv_down",
+    "sleep_hr_up"
+   ]
+  ]
+ },
+ {
+  "id": "sharing",
+  "label": "Sharing and demonstration consent",
+  "device": "Both",
+  "status": "in_sentra",
+  "dataset": "org.current_consent",
+  "path": "sharing, demonstration, withdrawn, membership_open",
+  "canonical": null,
+  "board": null,
+  "unit": null,
+  "resolution": "per participant",
+  "checks": [
+   [
+    "sql",
+    "org.current_consent",
+    "sharing"
+   ],
+   [
+    "sql",
+    "org.current_consent",
+    "demonstration"
+   ],
+   [
+    "sql",
+    "org.current_consent",
+    "withdrawn"
+   ],
+   [
+    "sql",
+    "org.current_consent",
+    "membership_open"
+   ]
+  ]
+ },
+ {
+  "id": "group_rule",
+  "label": "Group statistics (5 per device, date and statistic)",
+  "device": "Both",
+  "status": "in_sentra",
+  "dataset": "sentra.organization.group_summary",
+  "path": "median of per-person medians, per device",
+  "canonical": null,
+  "board": null,
+  "unit": null,
+  "resolution": "per device and date",
+  "checks": [
+   [
+    "k",
+    5
+   ],
+   [
+    "source_text",
+    "src/sentra/organization.py",
+    "def group_summary"
+   ]
+  ],
+  "note": "The handoff proposes an average; Sentra computes a median today. The prototype shows the average and flags the choice."
+ },
+ {
+  "id": "profile_name",
+  "label": "Participant name",
+  "device": "Both",
+  "status": "no_source",
+  "dataset": null,
+  "path": null,
+  "canonical": null,
+  "board": null,
+  "unit": null,
+  "resolution": null,
+  "checks": [
+   [
+    "source_text",
+    "sql/007_organization_access.sql",
+    "No location, routes, names or contact details"
+   ]
+  ],
+  "note": "Sentra stores no participant names. An authorized name source must be chosen."
+ },
+ {
+  "id": "device_issued",
+  "label": "Device issue date",
+  "device": "Both",
+  "status": "no_source",
+  "dataset": null,
+  "path": null,
+  "canonical": null,
+  "board": null,
+  "unit": "date",
+  "resolution": "per participant",
+  "checks": [
+   [
+    "source_text",
+    "sql/007_organization_access.sql",
+    "joined_on date not null"
+   ]
+  ],
+  "note": "No issue date exists. Membership joined_on is the closest field; Before device issued needs a recorded issue date."
+ }
+]</script>
+<script id="reviewer-data" type="application/json">null</script>
+<script>
+"use strict";
+const FIELD_MAP=JSON.parse(document.getElementById('field-map').textContent);
+const TH={short:360,z:2,baseDays:28,baseMin:7,k:5};
+const FLOOR={sleep:20,rhr:1.5,hrv:3,sleep_hr:1.5};
+/* Live mode: the viewer embeds real, access-filtered data built on the server (sentra.reviewer.live).
+   Without it the page runs the synthetic demo. */
+const LIVE=JSON.parse(document.getElementById('reviewer-data').textContent);
+const NOW=LIVE?{date:LIVE.today,refresh:LIVE.refresh,latest:[LIVE.latest_individual_day,LIVE.group.end].filter(Boolean).sort().pop()||null}:{date:'2026-11-25',time:'15:40',refresh:'15:00',latest:'2026-11-24'};
+const monthStart=addDays(NOW.latest||NOW.date,-29);
+const START=LIVE?(LIVE.first_day&&LIVE.first_day<monthStart?LIVE.first_day:monthStart):'2026-10-01';
+const CODE='p\\d{2,4}';  /* Sentra pseudonyms (sentra.access.PSEUDONYM) */
+const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function addDays(s,n){const d=new Date(s+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)}
+function range(a,b){const out=[];for(let d=a;d<=b;d=addDays(d,1))out.push(d);return out}
+function dShort(s){return Number(s.slice(8))+' '+MON[Number(s.slice(5,7))-1]}
+function dLong(s){return dShort(s)+' '+s.slice(0,4)}
+function hm(m){if(m==null)return '—';m=Math.round(m);return m<60?m+' min':Math.floor(m/60)+' h '+String(m%60).padStart(2,'0')+' min'}
+function fmt(v,dec=0){return v==null?'—':Number(v).toLocaleString('en-GB',{minimumFractionDigits:dec,maximumFractionDigits:dec})}
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function seedOf(s){let h=2166136261;for(const c of s){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0}
+function gauss(r){let u=0,v=0;while(!u)u=r();while(!v)v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
+function clampN(r,k=1.8){return Math.max(-k,Math.min(k,gauss(r)))}
+function hex8(s){return seedOf(s).toString(16).padStart(8,'0')}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+const DAYS=range(START,NOW.date);
+
+/* People: codes in enrollment order. Names are fictional; Sentra stores no names (see Data sources).
+   Group-only people carry no name and appear only inside group statistics. */
+const PEOPLE=[
+ {id:'p01',name:'Lina Haddad',dev:'Fitbit',joined:'2026-10-01',share:'individual'},
+ {id:'p02',name:'Omar Khalil',dev:'Fitbit',joined:'2026-10-01',share:'individual'},
+ {id:'p03',name:'Rami Saade',dev:'Fitbit',joined:'2026-10-02',share:'individual'},
+ {id:'p04',dev:'Fitbit',joined:'2026-10-02',share:'group_only'},
+ {id:'p05',name:'Karim Aoun',dev:'Fitbit',joined:'2026-10-03',share:'individual'},
+ {id:'p06',name:'Maya Daher',dev:'Fitbit',joined:'2026-10-05',share:'individual'},
+ {id:'p07',name:'Ziad Mansour',dev:'Fitbit',joined:'2026-10-06',share:'individual'},
+ {id:'p08',name:'Sara Nassar',dev:'WHOOP',joined:'2026-10-01',share:'individual'},
+ {id:'p09',name:'Hadi Rizk',dev:'WHOOP',joined:'2026-10-01',share:'individual'},
+ {id:'p10',dev:'WHOOP',joined:'2026-10-03',share:'group_only'},
+ {id:'p11',name:'Tarek Abboud',dev:'WHOOP',joined:'2026-10-20',share:'individual',issued:'2026-10-20'},
+ {id:'p12',name:'Dana Younes',dev:'WHOOP',joined:'2026-10-04',share:'individual'},
+ {id:'p13',name:'Jad Habib',dev:'WHOOP',joined:'2026-10-07',share:'individual'},
+];
+const BY=Object.fromEntries(PEOPLE.map(p=>[p.id,p]));
+const DELAYED=LIVE?{}:{p07:{since:'2026-11-24',lastSync:'2026-11-23 18:10'}};
+/* Scripted observations and imperfect data for the walkthrough. */
+const EPISODES=LIVE?{}:{
+ p03:{'2026-11-25':{sleep:252}},
+ p02:{'2026-11-21':{sleep:320}},
+ p09:{'2026-11-24':{rhr:66}},
+ p12:{'2026-11-23':{hrv:31}},
+};
+const GAPS=LIVE?{}:{
+ p05:{'2026-11-22':{sleep:'none'}},
+ p06:{'2026-11-03':{hrv:'failed'}},
+ p02:{'2026-10-12':{all:'notworn'}},
+ p08:{'2026-11-12':{all:'none'},'2026-11-13':{all:'none'},'2026-11-14':{all:'none'}},
+ p13:{'2026-11-13':{sleep:'none'}},
+};
+const MEASURES=['sleep','rhr','hrv','steps','br','temp','spo2','strain','rec'];
+
+function buildPerson(p){
+  const r=mulberry(seedOf(p.id));
+  const fit=p.dev==='Fitbit';
+  const base={sleep:fit?405+r()*45:395+r()*45,rhr:52+r()*12,hrv:32+r()*38,steps:5200+r()*5600,br:14+r()*2.5,temp:33.6+r()*.8,spo2:95.5+r()*2,strain:8+r()*6,rec:55+r()*25,perf:78+r()*14};
+  if(p.id==='p03'){base.sleep=410;base.rhr=58;base.hrv=44}
+  if(p.id==='p02')base.sleep=425;
+  if(p.id==='p09')base.rhr=57;
+  if(p.id==='p12')base.hrv=52;
+  const sym=[-10,10,-6,6,-2,2,0];
+  const days=DAYS.map((d,i)=>{
+    const g=(GAPS[p.id]||{})[d]||{};
+    const cov={};
+    const before=p.issued&&d<p.issued;
+    const delayed=DELAYED[p.id]&&d>=DELAYED[p.id].since;
+    const today=d===NOW.date;
+    for(const m of MEASURES){
+      let s='ok';
+      if(before)s='preissue';else if(delayed)s='delayed';else if(g.all)s=g.all;else if(g[m])s=g[m];
+      if(s==='ok'){
+        if(fit&&(m==='spo2'))s='none';
+        if(fit&&(m==='strain'||m==='rec'))s='na';
+        if(!fit&&m==='steps')s='na';
+        if(today&&(m==='steps'))s=fit?'partial':'na';
+        if(today&&fit&&(m==='rhr'||m==='hrv'||m==='br'||m==='temp'))s='notyet';
+        if(today&&!fit&&m==='strain')s='partial';
+      }
+      cov[m]=s;
+    }
+    const row={d,cov,workouts:[]};
+    const ok=m=>cov[m]==='ok'||cov[m]==='partial';
+    const ep=(EPISODES[p.id]||{})[d]||{};
+    if(ok('sleep')){
+      const v=p.id==='p03'?410+sym[i%7]:base.sleep+18*clampN(r);
+      row.sleep=Math.round(ep.sleep??v);
+      row.awake=Math.round(22+r()*28);row.inbed=row.sleep+row.awake;
+      row.deep=Math.round(row.sleep*(.14+r()*.05));row.rem=Math.round(row.sleep*(.2+r()*.05));row.light=row.sleep-row.deep-row.rem;
+      row.bedStart=(22*60+50)+Math.round(r()*70)-(ep.sleep?60:0);
+      if(!fit){row.perf=Math.round(Math.min(100,base.perf+(row.sleep-base.sleep)/6+4*clampN(r)));row.score_state=today?'SCORED':'SCORED'}
+    }
+    if(ok('rhr'))row.rhr=Math.round(ep.rhr??(base.rhr+1.1*clampN(r)));
+    if(ok('hrv'))row.hrv=Math.round((ep.hrv??(base.hrv*(1+.04*clampN(r))))*10)/10;
+    if(ok('br'))row.br=Math.round((base.br+.3*clampN(r))*10)/10;
+    if(ok('temp'))row.temp=Math.round((base.temp+.12*clampN(r))*100)/100;
+    if(ok('spo2'))row.spo2=Math.round((base.spo2+.6*clampN(r))*10)/10;
+    if(ok('rec'))row.rec=Math.round(Math.max(5,Math.min(99,base.rec+(row.hrv&&base.hrv?(row.hrv-base.hrv)*1.1:0)+6*clampN(r))));
+    if(fit&&ok('steps')){const full=Math.round(base.steps*(i%7===5||i%7===6?.75:1)+1200*clampN(r));row.steps=today?Math.round(full*.43):full;row.steps_daily=today?null:full+Math.round(40*r())}
+    if(fit&&cov.steps==='ok'){row.dist=Math.round(row.steps*.74);row.cal=Math.round(1700+row.steps*.045+r()*150);row.azm=Math.round(8+r()*40);row.wear=Math.round(1280+r()*120)}
+    if(!fit&&ok('strain')){row.strain=Math.round((base.strain+2*clampN(r))*(today?.45:1)*10)/10;row.kj=Math.round(7200+row.strain*260+r()*400);row.avghr=Math.round(base.rhr+13+2*clampN(r));row.maxhr=Math.round(118+row.strain*3.2+6*r());row.cycleStart=d+' 0'+(6+Math.floor(r()*2))+':'+String(Math.floor(r()*60)).padStart(2,'0')}
+    if(fit&&cov.steps==='ok'&&i%4===1)row.workouts.push({id:p.id+'-ex-'+d,kind:'exercise',type:['Walk','Run','Bike'][i%3],start:'18:'+String(10+Math.floor(r()*40)).padStart(2,'0'),dur:Math.round(28+r()*35),avghr:Math.round(base.rhr+52+8*r()),cal:Math.round(180+r()*220)});
+    if(!fit&&cov.strain==='ok'&&i%3===0)row.workouts.push({id:p.id+'-wo-'+d,kind:'workout',type:['Running','Functional fitness','Cycling'][i%3===0?(i%2):2],start:'17:'+String(5+Math.floor(r()*50)).padStart(2,'0'),dur:Math.round(35+r()*40),strain:Math.round((9+r()*6)*10)/10,avghr:Math.round(base.rhr+60+8*r()),maxhr:Math.round(160+r()*18),kj:Math.round(900+r()*900),zones:[2,8,22,30,25,13].map(z=>Math.max(0,Math.round(z+6*clampN(r))))});
+    return row;
+  });
+  return {...p,base,days,byDay:Object.fromEntries(days.map(x=>[x.d,x]))};
+}
+/* Live rows: board days as published; missing stays missing and a day without a published row has no processed value. */
+const LIVE_BASE={sleep:'sleep_b',rhr:'rhr_b',hrv:'hrv_b',steps:'steps_b',sleep_hr:'sleep_hr_b',br:'br_b',temp:'temp_b'};
+const FLAG_TEXT={short_sleep:['sleep','Slept less than 6 hours'],rhr_up:['rhr','Resting heart rate above usual'],hrv_down:['hrv','Heart rate variability below usual'],sleep_hr_up:['sleep_hr','Sleeping heart rate above usual']};
+function livePerson(p){
+  const fit=p.dev==='Fitbit',whoop=p.dev==='WHOOP';
+  const board=Object.fromEntries(p.days.map(d=>[d.d,d]));
+  const days=DAYS.map(d=>{const b=board[d];const cov={};
+    for(const m of MEASURES)cov[m]=(fit&&(m==='strain'||m==='rec'))||(whoop&&m==='steps')?'na':b&&b[m]!=null?'ok':'none';
+    return {...(b||{}),d,cov,workouts:[],published:!!b}});
+  return {id:p.id,name:null,dev:p.dev,share:'individual',latest:p.latest||{},base:{},days,byDay:Object.fromEntries(days.map(x=>[x.d,x]))};
+}
+const DATA=LIVE?LIVE.people.map(livePerson):PEOPLE.map(buildPerson);
+const P=Object.fromEntries(DATA.map(p=>[p.id,p]));
+/* Officer scope: only people who share individual data are listed, linked or shown per person anywhere. */
+const SHARED=DATA.filter(p=>p.share==='individual');
+function visible(id){return !!(P[id]&&P[id].share==='individual')}
+
+/* Baselines exactly as the indicator contract: previous 28 calendar days, today excluded, >= 7 readings, median, MAD x 1.4826 with metric floors. */
+function median(a){const s=[...a].sort((x,y)=>x-y),n=s.length;return n?(n%2?s[(n-1)/2]:(s[n/2-1]+s[n/2])/2):null}
+function baseline(p,metric,d){
+  if(LIVE){const r=p.byDay[d];const k=LIVE_BASE[metric];return r&&k&&r[k]!=null?{med:r[k]}:null}
+  const vals=[];for(let k=1;k<=TH.baseDays;k++){const r=p.byDay[addDays(d,-k)];if(r&&r[metric]!=null)vals.push(r[metric])}
+  if(vals.length<TH.baseMin)return null;
+  const med=median(vals),mad=median(vals.map(v=>Math.abs(v-med)));
+  return {med,scale:Math.max(1.4826*mad,FLOOR[metric]||1e-9),n:vals.length};
+}
+function signals(p,d){
+  if(LIVE){const r=p.byDay[d];if(!r||!r.published)return {list:[],state:'none'};
+    const list=(r.f||[]).filter(c=>FLAG_TEXT[c]).map(c=>({key:c,metric:FLAG_TEXT[c][0],label:FLAG_TEXT[c][1]}));
+    return {list,state:r.a||(r.lvl?'complete':'not assessed'),lvl:r.lvl}}
+  const r=p.byDay[d];if(!r)return {list:[],state:'none'};
+  const out=[];let assessed=0;
+  if(r.sleep!=null){assessed++;if(r.sleep<TH.short)out.push({key:'short_sleep',metric:'sleep',label:'Slept less than 6 hours'})}
+  for(const [m,dir,label] of [['rhr',1,'Resting heart rate above usual'],['hrv',-1,'Heart rate variability below usual']]){
+    if(r[m]==null)continue;const b=baseline(p,m,d);if(!b)continue;assessed++;
+    const z=(r[m]-b.med)/b.scale;if(dir*z>=TH.z)out.push({key:m==='rhr'?'rhr_up':'hrv_down',metric:m,label,z})}
+  const state=assessed>=3?'complete':assessed>0?'partial':'insufficient';
+  const lvl=out.length>=2?'red':out.length===1?'amber':state==='complete'?'green':null;
+  return {list:out,state,lvl};
+}
+const MLABEL={sleep_hr:'Sleeping heart rate',sleep:'Sleep',rhr:'Resting heart rate',hrv:'Heart rate variability',steps:'Steps',br:'Breathing rate',temp:'Skin temperature',spo2:'Blood oxygen',strain:'Day strain',rec:'Recovery'};
+function valueText(m,v){if(v==null)return '—';return m==='sleep'?hm(v):m==='rhr'?fmt(v)+' bpm':m==='hrv'?fmt(v,1)+' ms':m==='steps'?fmt(v)+' steps':m==='br'?fmt(v,1)+' br/min':m==='temp'?fmt(v,2)+' °C':m==='spo2'?fmt(v,1)+' %':m==='strain'?fmt(v,1):m==='rec'?fmt(v)+' %':m==='sleep_hr'?fmt(v)+' bpm':fmt(v)}
+
+/* Worth a look: previous seven days including the latest day; lead with code, date, measurement and personal comparison. */
+function worthALook(){
+  const out=[];const days=range(addDays(NOW.date,-6),NOW.date);
+  for(const p of SHARED){
+    for(const d of days){const s=signals(p,d);for(const sig of s.list){const b=baseline(p,sig.metric,d);out.push({p,d,sig,lvl:s.lvl,state:s.state,value:p.byDay[d][sig.metric],usual:b?b.med:null})}}}
+  return out.sort((a,b)=>a.d<b.d?1:a.d>b.d?-1:a.p.id.localeCompare(b.p.id));
+}
+function reasonText(s){const [m,why]=String(s).split(':');return (MLABEL[m]||m)+(why?' '+why.replace(/_/g,' '):'')}
+function coverageIssues(){
+  if(LIVE){const out=[];
+    for(const p of SHARED){const pub=p.days.filter(r=>r.published);const last=pub[pub.length-1];
+      if(!last){out.push({id:p.id,when:'—',text:'No processed day in this period.',pill:['gap','No processed data']});continue}
+      if(last.d<NOW.latest)out.push({id:p.id,when:'since '+dShort(addDays(last.d,1)),text:`Latest processed day ${dShort(last.d)}. Later days have no processed readings yet.`,pill:['amber','No recent data']});
+      if(last.a)out.push({id:p.id,when:dShort(last.d),text:esc('Assessment '+last.a+(last.m&&last.m.length?': '+last.m.map(reasonText).join(', '):'')+'.'),pill:['gap','Partly assessed']})}
+    return out}
+  return [
+   {id:'p07',when:'since 24 Nov',text:'Delayed sync. Latest readings 23 Nov 18:10; nothing newer has arrived.',pill:['amber','Delayed sync']},
+   {id:'p05',when:'22 Nov',text:'No sleep record returned. Heart rate and steps are present that day.',pill:['gap','No readings returned']},
+   {id:'p08',when:'12–14 Nov',text:'No readings returned for any WHOOP dataset. The reason is not established.',pill:['gap','No readings returned']},
+   {id:'p06',when:'3 Nov',text:'The heart rate variability request failed; other measures arrived.',pill:['red','Request failed']},
+   {id:'p11',when:'1–19 Oct',text:'Before device issued (issued 20 Oct, synthetic issue date).',pill:['gap','Before device issued']},
+   {id:'p02',when:'12 Oct',text:'Device not worn: zero worn minutes recorded that day.',pill:['gap','Device not worn']},
+  ].filter(c=>visible(c.id));
+}
+const STATE_LABEL={ok:'Readings present',partial:'Partial (today so far)',none:'No readings returned',failed:'Request failed',preissue:'Before device issued',notworn:'Device not worn',delayed:'Not yet synced',na:'Not provided by this device in Sentra',notreq:'Not requested',notyet:'Not available yet today'};
+if(LIVE)STATE_LABEL.none='No processed value';
+function covGroup(r,group){
+  const order=['failed','delayed','preissue','notworn','none','partial','notyet','ok','na'];
+  const ms={sleep:['sleep'],heart:['rhr','hrv'],activity:['steps','strain']}[group];
+  const states=ms.map(m=>r.cov[m]).filter(s=>s!=='na');
+  if(!states.length)return 'na';
+  for(const s of order)if(states.includes(s))return s==='notyet'?'partial':s;
+  return 'ok';
+}
+
+/* Group statistics: one value per person per date, per device, shown only with >= 5 eligible contributors for that statistic. */
+function groupStat(dev,metric,d){
+  if(LIVE){const g=LIVE.group;if(!g.end||metric==='dayhr')return {value:null};
+    if(d===g.end){const t=g.tiles.find(x=>x.key===metric&&x.device===dev);if(t)return {value:t.value,n:t.contributors}}
+    const row=((g.trends[metric]||{})[dev]||[]).find(x=>x.d===d);return {value:row?row.value:null}}
+  const vals=[];
+  for(const p of DATA){if(p.dev!==dev)continue;const r=p.byDay[d];if(!r)continue;
+    let v=metric==='dayhr'?daytimeHR(p,d):r[metric];if(v!=null)vals.push(v)}
+  if(vals.length<TH.k)return {n:vals.length,value:null};
+  return {n:vals.length,value:vals.reduce((a,b)=>a+b,0)/vals.length};
+}
+function daytimeHR(p,d){if(p.dev!=='Fitbit')return null;const r=p.byDay[d];if(!r||r.cov.rhr!=='ok'&&r.cov.rhr!=='notyet')return null;if(r.cov.steps!=='ok')return null;const mins=dayMinutes(p,d);const sel=mins.filter(x=>x.t>=480&&x.t<1200&&x.hr!=null);return sel.length?sel.reduce((a,b)=>a+b.hr,0)/sel.length:null}
+
+/* Minute-level synthetic detail in the provider's own shape. */
+function nightDetail(p,d){
+  const r=p.byDay[d];if(!r||r.sleep==null)return null;
+  const rnd=mulberry(seedOf(p.id+'night'+d));
+  const segs=[];let t=r.bedStart;const cycles=Math.max(3,Math.round(r.inbed/95));
+  const per={deep:r.deep/cycles,rem:r.rem/cycles,light:r.light/cycles,awake:r.awake/cycles};
+  for(let c=0;c<cycles;c++){
+    const order=c<2?['light','deep','light','rem','awake']:['light','rem','light','deep','awake'];
+    for(const st of order){let dur=st==='light'?per.light/2:per[st];dur=Math.max(1,Math.round(dur*(0.85+rnd()*.3)));segs.push({type:st,start:t,end:t+dur});t+=dur}
+  }
+  const scale=r.inbed/(t-r.bedStart);let cur=r.bedStart;
+  for(const s of segs){const dur=Math.max(1,Math.round((s.end-s.start)*scale));s.start=cur;s.end=cur+dur;cur+=dur}
+  const hr=[];const sbase=(r.rhr||p.base.rhr)-2;
+  for(const s of segs)for(let m=s.start;m<s.end;m++){const adj=s.type==='deep'?-4:s.type==='rem'?3:s.type==='awake'?9:0;hr.push({t:m,hr:Math.round(sbase+adj+2*gauss(rnd)),stage:s.type})}
+  const asleep=hr.filter(x=>x.stage!=='awake');
+  return {segs,hr,sleepHR:asleep.length?Math.round(asleep.reduce((a,b)=>a+b.hr,0)/asleep.length):null};
+}
+function dayMinutes(p,d){
+  const r=p.byDay[d];const rnd=mulberry(seedOf(p.id+'day'+d));const out=[];
+  const end=d===NOW.date?15*60+32:1440;const target=r&&r.steps!=null?r.steps:0;
+  const bouts=[[7*60+40,25],[12*60+30,20],[17*60+50,45],[9*60+10,10],[15*60,15]];
+  let raw=[];for(let t=0;t<end;t++){let s=0;for(const [b,len] of bouts)if(t>=b&&t<b+len)s=60+rnd()*50;if(!s&&t>420&&t<1320&&rnd()<.25)s=rnd()*30;raw.push(s)}
+  const sum=raw.reduce((a,b)=>a+b,0)||1;const k=target/sum;
+  for(let t=0;t<end;t++){const steps=Math.round(raw[t]*k);const act=raw[t]>40?28:raw[t]>5?10:0;const asleep=t<6*60+30||t>23*60+15;out.push({t,steps,hr:r&&r.cov.steps!=='none'?Math.round((p.base.rhr+(asleep?-1:12))+act+2*gauss(rnd)):null})}
+  return out;
+}
+function tmm(m){m=((m%1440)+1440)%1440;return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0')}
+
+/* ------- charts ------- */
+function svgLine(series,opt){
+  const W=opt.w||640,H=opt.h||180,L=40,R=12,T=12,B=26;
+  const xs=opt.x;const n=xs.length;
+  const vals=series.flatMap(s=>s.points.filter(v=>v!=null));
+  if(opt.extra)vals.push(...opt.extra);
+  let lo=Math.min(...vals),hi=Math.max(...vals);if(!isFinite(lo)){lo=0;hi=1}
+  const pad=(hi-lo)*.12||1;lo-=pad;hi+=pad;if(opt.zero)lo=Math.min(0,lo);
+  const X=i=>L+(n<=1?0:i*(W-L-R)/(n-1)),Y=v=>T+(hi-v)*(H-T-B)/(hi-lo);
+  let g='';const ticks=4;
+  for(let t=0;t<=ticks;t++){const v=lo+(hi-lo)*t/ticks;g+=`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end">${opt.yfmt?opt.yfmt(v):Math.round(v)}</text>`}
+  const step=Math.max(1,Math.ceil(n/7));
+  for(let i=0;i<n;i+=step)g+=`<text x="${X(i)}" y="${H-8}" text-anchor="middle">${dShort(xs[i])}</text>`;
+  if(opt.shade)for(const i of opt.shade)g+=`<rect x="${X(i)-3}" y="${T}" width="6" height="${H-T-B}" fill="var(--gap-soft)"/>`;
+  for(const s of series){
+    let path='',on=false;
+    s.points.forEach((v,i)=>{if(v==null){on=false;return}path+=(on?'L':'M')+X(i).toFixed(1)+' '+Y(v).toFixed(1)+' ';on=true});
+    g+=`<path d="${path}" fill="none" stroke="${s.color}" stroke-width="${s.dash?1.2:2}" ${s.dash?'stroke-dasharray="4 4"':''}/>`;
+    if(!s.dash)s.points.forEach((v,i)=>{if(v!=null&&(i===n-1||s.points[i+1]==null||s.points[i-1]==null))g+=`<circle cx="${X(i)}" cy="${Y(v)}" r="2.6" fill="${s.color}"/>`});
+  }
+  if(opt.marks)for(const mk of opt.marks)g+=`<circle cx="${X(mk.i)}" cy="${Y(mk.v)}" r="4.5" fill="none" stroke="var(--amber)" stroke-width="2"/>`;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opt.label||'chart')}">${g}</svg>`;
+}
+function svgBars(xs,vals,opt){
+  const W=opt.w||640,H=opt.h||170,L=40,R=12,T=12,B=26;const n=xs.length;
+  const present=vals.filter(v=>v!=null);let hi=Math.max(...present,opt.ref||0,1)*1.12;
+  const bw=(W-L-R)/n;const Y=v=>T+(hi-v)*(H-T-B)/hi;
+  let g='';for(let t=0;t<=4;t++){const v=hi*t/4;g+=`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end">${opt.yfmt?opt.yfmt(v):Math.round(v)}</text>`}
+  const step=Math.max(1,Math.ceil(n/7));
+  xs.forEach((d,i)=>{const x=L+i*bw;
+    if(i%step===0)g+=`<text x="${x+bw/2}" y="${H-8}" text-anchor="middle">${dShort(d)}</text>`;
+    const v=vals[i];if(v==null){g+=`<rect x="${x+bw*.2}" y="${H-B-3}" width="${bw*.6}" height="3" fill="var(--gap)" opacity=".5"/>`;return}
+    const col=opt.color?opt.color(i,v):'url(#barGrad)';
+    g+=`<rect data-i="${i}" x="${x+bw*.15}" y="${Y(v)}" width="${Math.max(1,bw*.7)}" height="${H-B-Y(v)}" rx="1.5" fill="${col}" ${opt.click?'style="cursor:pointer"':''}><title>${dShort(d)}: ${esc(opt.tip?opt.tip(v):v)}</title></rect>`});
+  if(opt.refLine)g+=`<path d="${opt.refLine.map((v,i)=>v==null?'':(`M${L+i*bw+bw*.1} ${Y(v)}L${L+i*bw+bw*.9} ${Y(v)}`)).join('')}" stroke="var(--ink)" stroke-width="1.2" opacity=".55"/>`;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(opt.label||'chart')}" ${opt.click?`data-click="${opt.click}"`:''}>${g}</svg>`;
+}
+function strip(p,metric,days){return `<div class="strip" aria-hidden="true">${days.map(d=>{const r=p.byDay[d];const s=r?r.cov[metric]:'none';return `<span class="s-${s==='notyet'?'partial':s}" title="${dShort(d)}: ${STATE_LABEL[s]}"></span>`}).join('')}</div>`}
+
+/* ------- router ------- */
+const app=document.getElementById('app');
+const state={range:30,trend:'rhr',scroll:{},covNote:''};
+function codeBtn(id){return visible(id)?`<a class="code" href="#${id}">${id}</a>`:''}
+/* Navigation. The public demo routes on the address hash. Live mode runs inside the viewer's embedded
+   frame, where '#…' links resolve against the viewer's own address, so it keeps the view in the page
+   and never changes the address or the frame's history. */
+let HASH='overview';const TRAIL=[];
+function go(h){h=String(h).replace(/^#/,'');if(!LIVE){location.hash=h;return}if(h!==HASH)TRAIL.push(HASH);HASH=h;route()}
+function goBack(){if(LIVE){HASH=TRAIL.pop()||'overview';route();return}if(history.length>1&&state.cameFrom)history.back();else location.hash='overview'}
+document.addEventListener('click',e=>{if(!LIVE)return;const a=e.target&&e.target.closest&&e.target.closest('a[href^="#"]');if(!a)return;e.preventDefault();go(a.getAttribute('href'))});
+function route(){
+  const h=LIVE?HASH:(location.hash||'#overview').slice(1);
+  const prev=state.view;state.view=h;
+  document.querySelectorAll('[data-nav]').forEach(a=>a.setAttribute('aria-current',(h===a.dataset.nav||(a.dataset.nav==='people'&&/^p\d/.test(h)))?'page':'false'));
+  let m;
+  if(h==='overview')renderOverview();
+  else if(h==='people')renderPeople();
+  else if(h==='sources')renderSources();
+  else if((m=h.match(new RegExp(`^(${CODE})(?:-(?:night|day|ex|wo)-\\d{4}-\\d\\d-\\d\\d)?$`)))&&!visible(m[1]))renderUnavailable();
+  else if((m=h.match(new RegExp(`^(${CODE})$`))))renderProfile(P[m[1]]);
+  else if((m=h.match(new RegExp(`^(${CODE})-(night|day)-(\\d{4}-\\d\\d-\\d\\d)$`))))renderDetail(P[m[1]],m[2],m[3]);
+  else if((m=h.match(new RegExp(`^(${CODE})-(ex|wo)-(\\d{4}-\\d\\d-\\d\\d)$`))))renderWorkout(P[m[1]],m[3]);
+  else{if(LIVE){HASH='overview';route()}else location.hash='overview';return}
+  const y=state.scroll[h];window.scrollTo(0,y!=null&&h==='overview'?y:0);
+}
+window.addEventListener('hashchange',route);
+window.addEventListener('scroll',()=>{if(state.view)state.scroll[state.view]=window.scrollY},{passive:true});
+
+/* ------- overview ------- */
+function stamp(v){if(!v)return '—';if(/^\d{4}-\d\d-\d\d$/.test(v))return dShort(v);const t=new Date(v);
+  return isNaN(t)?'—':t.toLocaleString('en-GB',{timeZone:'Asia/Beirut',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}
+function statusBar(wake){
+  if(!LIVE)return `<div class="status"><span class="ok">● Daily update succeeded</span><span class="num">${dLong(NOW.date)}, ${NOW.refresh} Beirut</span><span class="muted">Readings through ${dShort(NOW.latest)}; last night's sleep by wake date ${dShort(wake)}</span><span class="muted small">Target schedule 3:00 p.m.</span></div>`;
+  const old=NOW.latest&&NOW.latest<addDays(NOW.date,-2);
+  const published=LIVE.built_at?`<span class="ok">● Board published</span><span class="num">${esc(stamp(LIVE.built_at))} Beirut</span>`:'<span class="muted">Board publication time unavailable</span>';
+  const reading=NOW.latest?`Readings through ${dShort(NOW.latest)}`:'No readings available in this view';
+  return `<div class="status">${published}<span class="muted">${reading}</span>${old?`<span class="pill amber">No new processed data since ${dShort(NOW.latest)}</span>`:''}<span class="muted small">Scheduled refresh ${esc(LIVE.refresh)} Beirut · thresholds ${esc(LIVE.thresholds_status||'v0')}</span></div>`}
+function renderOverview(){
+  const look=worthALook();const gEnd=LIVE?LIVE.group.end:null;const yesterday=LIVE?gEnd:NOW.latest;const wake=LIVE?gEnd:NOW.date;
+  const tile=(dev,metric,d,label,txt)=>{const s=groupStat(dev,metric,d);
+    if(dev==='WHOOP'&&metric==='steps')return `<div class="tile dim"><div class="k">${label} · WHOOP</div><div class="v">Not available</div><div class="n">WHOOP cycle steps have no mapping in Sentra</div></div>`;
+    return s.value==null?`<div class="tile dim"><div class="k">${label} · ${dev}</div><div class="v">Not shown</div><div class="n">Fewer than ${TH.k} eligible contributors</div></div>`
+    :`<div class="tile"><div class="k">${label} · <span class="dev ${dev}">${dev}</span></div><div class="v num">${txt(s.value)}</div><div class="n">${LIVE?`Median of ${s.n} people · ${dShort(d)}`:`Average of ${s.n} people, one value each`}</div></div>`};
+  const trendDays=LIVE?(gEnd?range(addDays(gEnd,-29),gEnd):[]):range(addDays(NOW.latest,-29),NOW.latest);
+  const tm=state.trend;
+  const series=['Fitbit','WHOOP'].map(dev=>({dev,points:trendDays.map(d=>groupStat(dev,tm,d)),color:dev==='Fitbit'?'var(--fitbit)':'var(--whoop)'}));
+  const avail=series.filter(s=>s.points.some(p=>p.value!=null));
+  const notes={rhr:'Resting heart rate: Fitbit daily value; WHOOP recovery value.',dayhr:'Daytime average HR (proposed): Fitbit minute heart rate, 08:00–20:00. WHOOP has no daytime series; its cycle average covers the whole physiological day.',sleep:'Asleep minutes by wake date.',steps:'Fitbit steps from minute rollups. WHOOP steps are not available.'};
+  app.innerHTML=`
+  ${statusBar(wake)}
+  <div class="grid2">
+    <section class="card" aria-labelledby="wl"><div class="card-h"><h2 id="wl">Worth a look</h2><span class="sub">${dShort(addDays(NOW.date,-6))}–${dShort(NOW.date)} · compared with each person's usual</span></div>
+      ${look.length?look.map(o=>`<div class="obs">${codeBtn(o.p.id)}<button class="obs-main" data-go="${o.p.id}-${o.sig.metric==='sleep'||o.p.dev==='WHOOP'?'night':'day'}-${o.d}">
+        <span class="obs-line"><span class="num muted">${dShort(o.d)}</span><span>${MLABEL[o.sig.metric]}</span><span class="obs-val num">${valueText(o.sig.metric,o.value)}</span><span class="muted num">usual ${valueText(o.sig.metric,o.usual)}</span></span>
+        <span class="obs-line small"><span class="pill ${o.lvl==='red'?'red':'amber'}">${o.sig.label}</span><span class="muted">Provisional signal · ${o.state} assessment · <span class="dev ${o.p.dev}">${o.p.dev}</span></span></span></button></div>`).join(''):'<p class="muted">No observations in the last seven days.</p>'}
+    </section>
+    <section class="card" aria-labelledby="dc"><div class="card-h"><h2 id="dc">Data coverage</h2><span class="sub">Which dates and measures have usable readings</span></div>
+      <ul class="issues">${coverageIssues().map(c=>`<li>${codeBtn(c.id)}<div><div class="obs-line"><span class="num muted">${c.when}</span><span class="pill ${c.pill[0]}">${c.pill[1]}</span></div><div class="small">${c.text}</div></div></li>`).join('')}</ul>
+      <div class="covwrap">${coverageGrid()}</div>
+      <div class="legend">${(LIVE?[['ok','Processed value'],['none','No processed value'],['na','Not provided']]:[['ok','Readings'],['partial','Partial / today'],['none','No readings returned'],['failed','Request failed'],['delayed','Not yet synced'],['preissue','Before device issued'],['notworn','Not worn'],['na','Not provided']]).map(([s,l])=>`<span><i class="s-${s}"></i>${l}</span>`).join('')}</div>
+      <div class="legend"><span>Rows in each cell: sleep · heart · activity</span></div>
+      <div class="covnote" id="covnote" aria-live="polite">${state.covNote||'Select a cell to see what was recorded.'}</div>
+    </section>
+  </div>
+  <section class="card" style="margin-top:16px" aria-labelledby="gm"><div class="card-h"><h2 id="gm">Group</h2><span class="sub">Each device separately; a figure needs at least ${TH.k} eligible contributors for that device, date and statistic. People who share group figures only are counted here.</span></div>
+    <div class="tiles g3">
+      ${['Fitbit','WHOOP'].map(dev=>tile(dev,'sleep',wake,LIVE?'Sleep':"Last night's sleep",hm)+tile(dev,'steps',yesterday,LIVE?'Steps':'Steps yesterday',v=>fmt(v))+tile(dev,'rhr',yesterday,'Resting heart rate',v=>fmt(v,1)+' bpm')).join('')}
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:16px 0 6px"><h3>Last 30 days</h3>
+      <div class="seg" role="group" aria-label="Trend measure">${[['rhr','Resting HR'],['dayhr','Daytime HR'],['sleep','Sleep'],['steps','Steps']].filter(([k])=>!LIVE||k!=='dayhr').map(([k,l])=>`<button type="button" data-trend="${k}" aria-pressed="${tm===k}">${l}</button>`).join('')}</div>
+      <span class="legend" style="margin:0"><span><i style="background:var(--fitbit)"></i>Fitbit</span><span><i style="background:var(--whoop)"></i>WHOOP</span></span></div>
+    ${LIVE&&!gEnd?`<p class="muted">No group figure has ${TH.k} eligible contributors yet.</p>`:svgLine(avail.map(s=>({points:s.points.map(p=>p.value),color:s.color})),{x:trendDays,label:'Group trend',yfmt:tm==='sleep'?(v=>(v/60).toFixed(1)+'h'):null})}
+    <p class="note">${notes[tm]} ${LIVE?'Median':'Average'} of one value per person. ${avail.length<2?'Only one device has this measure. ':''}A day is left out of a device's line when fewer than ${TH.k} people have an eligible value; gaps do not say how many did.</p>
+  </section>`;
+  app.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
+  app.querySelectorAll('[data-trend]').forEach(b=>b.onclick=()=>{state.trend=b.dataset.trend;const y=window.scrollY;renderOverview();window.scrollTo(0,y)});
+  app.querySelectorAll('[data-cell]').forEach(b=>b.onclick=()=>{const [id,d]=b.dataset.cell.split('|');const r=P[id].byDay[d];
+    state.covNote=`<b class="mono">${id}</b> · ${dLong(d)} · Sleep: ${STATE_LABEL[covGroup(r,'sleep')]} · Heart: ${STATE_LABEL[covGroup(r,'heart')]} · Activity: ${STATE_LABEL[covGroup(r,'activity')]}`;
+    document.getElementById('covnote').innerHTML=state.covNote});
+}
+function coverageGrid(){
+  const days=range(addDays(NOW.date,-13),NOW.date);
+  return `<table class="cov"><thead><tr><th></th>${days.map(d=>`<th>${Number(d.slice(8))}</th>`).join('')}</tr></thead><tbody>${SHARED.map(p=>`<tr><td class="rowh">${codeBtn(p.id)}</td>${days.map(d=>{const r=p.byDay[d];return `<td><button type="button" class="cell" data-cell="${p.id}|${d}" aria-label="${p.id} ${dShort(d)}">${['sleep','heart','activity'].map(g=>`<span class="st s-${covGroup(r,g)}"></span>`).join('')}</button></td>`}).join('')}</tr>`).join('')}</tbody></table>`;
+}
+
+/* ------- people ------- */
+function renderPeople(){
+  app.innerHTML=`<section class="card"><div class="card-h"><h2>People</h2><span class="sub">People who share individual data, in enrollment order. People who share group figures only are not listed; they count towards group figures.</span></div>
+  <ul class="wl">${SHARED.map(p=>{const last=[...p.days].reverse().find(r=>r.sleep!=null||r.rhr!=null);return `<li>${codeBtn(p.id)}${p.name?`<span>${esc(p.name)}</span>`:''}<span class="dev ${p.dev}">${p.dev}</span><span class="muted small num">${LIVE?'Latest processed day':'Latest reading'} ${last?dShort(last.d):'—'}${DELAYED[p.id]?' · delayed sync':''}</span></li>`}).join('')}</ul></section>`;
+}
+
+/* ------- profile ------- */
+/* Same page for a group-only code and a code that does not exist, so neither is confirmed. */
+function renderUnavailable(){app.innerHTML=`<div class="crumb"><button class="back" data-back>← Back to overview</button></div><div class="empty">No individual profile is available for this code.</div>`;bindBack()}
+function renderProfile(p){
+  if(!p||!visible(p.id)){renderUnavailable();return}
+  const end=NOW.date;const start=state.range===30?monthStart:START;
+  const days=range(start,end);const fit=p.dev==='Fitbit';
+  const today=p.byDay[NOW.date];
+  const latestTime=LIVE?(Object.entries(p.latest).map(([k,v])=>k+' '+stamp(v)).join(' · ')||'—'):fit?(DELAYED[p.id]?'23 Nov 18:10':'15:32 today'):(today&&today.sleep!=null?'07:14 today (sleep and recovery)':'—');
+  const base=m=>days.map(d=>{const b=p.byDay[d]&&p.byDay[d][m]!=null?baseline(p,m,d):null;return b?b.med:null});
+  const vals=m=>days.map(d=>p.byDay[d]?p.byDay[d][m]??null:null);
+  const shortCol=(i,v)=>v<TH.short?'var(--amber)':'url(#barGrad)';
+  const workouts=days.flatMap(d=>(p.byDay[d]?p.byDay[d].workouts:[]).map(w=>({...w,d})));
+  const sec=(title,body,metric,extra='')=>`<section class="card"><div class="card-h"><h2>${title}</h2>${extra}</div>${body}${metric?`<div class="small muted" style="margin-top:6px">Coverage · ${MLABEL[metric]}</div>`+strip(p,metric,days):''}</section>`;
+  app.innerHTML=`
+  <div class="crumb"><button class="back" data-back>← Back to overview</button></div>
+  <div class="prof-h"><span class="bigcode">${p.id}</span><div><div style="font-size:18px;font-weight:600">${LIVE?'<span class="muted small">Pseudonymous code; Sentra stores no names</span>':esc(p.name)+'<span class="tag">name source to confirm</span>'}</div>
+    <div class="kv">${LIVE?`<span><span class="dev ${p.dev}">${p.dev}</span> ${fit?'Google Health':'WHOOP API'}</span><span>Sharing <b>individual</b></span>`:`<span><span class="dev ${p.dev}">${p.dev}</span> ${fit?'Google Health':'WHOOP API'}</span><span>Enrolled <b>${dLong(p.joined)}</b></span><span>Device issued <b>${p.issued?dLong(p.issued):'not recorded'}</b><span class="tag">no source yet</span></span><span>Sharing <b>individual</b></span>`}</div></div>
+    <div class="seg" role="group" aria-label="Period" style="margin-left:auto"><button type="button" data-range="30" aria-pressed="${state.range===30}">30 days</button><button type="button" data-range="all" aria-pressed="${state.range!==30}">Since ${dShort(START)}</button></div></div>
+  ${LIVE?`<div class="status"><b>Latest readings</b><span class="muted num">${esc(latestTime)}</span><span class="muted small">Processed values appear after the daily refresh; partial-day readings are not collected.</span></div>`:`<div class="status"><b>Today so far</b>${fit?(today&&today.steps!=null?`<span class="num">${fmt(today.steps)} steps (partial)</span>`:'<span class="muted">No readings yet today</span>'):'<span class="muted">WHOOP supplies no intraday steps or heart rate</span>'}<span class="muted">Latest reading ${latestTime}</span>${fit&&!DELAYED[p.id]?`<button class="entry-link back" data-go="${p.id}-day-${NOW.date}">Open today →</button>`:''}</div>`}
+  <div class="sections">
+   ${sec('Sleep',svgBars(days,vals('sleep'),{label:'Asleep minutes',refLine:base('sleep'),color:shortCol,yfmt:v=>(v/60).toFixed(0)+'h',tip:hm,click:'night'})+`<p class="note">Bars: asleep time by wake date. Line: usual (previous 28 days). Amber: under 6 hours. Select a bar to open that night.</p>`,'sleep')}
+   ${sec('Heart rate and HRV',svgLine([{points:vals('rhr'),color:'var(--red)'},{points:base('rhr'),color:'var(--red)',dash:1}],{x:days,label:'Resting heart rate'})+svgLine([{points:vals('hrv'),color:'var(--accent)'},{points:base('hrv'),color:'var(--accent)',dash:1}],{x:days,h:140,label:'HRV'})+`<p class="note">Solid: resting heart rate (bpm, red) and HRV (ms, violet). Dashed: usual.</p><div class="entry">${fit&&!LIVE?`<button data-go="${p.id}-day-${NOW.latest}">Minute heart rate, ${dShort(NOW.latest)}</button>`:''}</div>`,'rhr')}
+   ${sec('Activity',fit?svgBars(days,vals('steps'),{label:'Steps',tip:v=>fmt(v)+' steps',click:'day'})+`<p class="note">Steps from minute rollups (the board's source). Select a bar to open the day's minute steps.</p>`:svgBars(days,vals('strain'),{label:'Strain',tip:v=>fmt(v,1),yfmt:v=>v.toFixed(0),click:'day'})+`<p class="note">WHOOP day strain per cycle. WHOOP steps are not available in Sentra.</p>`,fit?'steps':'strain')}
+   ${sec('Workouts',LIVE?'<p class="muted">Workout sessions are stored but not processed yet. Open Workouts in the sidebar to see them for this person.</p>':workouts.length?`<div class="tablewrap"><table><thead><tr><th>Date</th><th>Type</th><th>Duration</th><th>Avg HR</th>${fit?'<th>Calories</th>':'<th>Strain</th>'}</tr></thead><tbody>${workouts.slice(-10).reverse().map(w=>`<tr><td class="num"><a href="#${p.id}-${fit?'ex':'wo'}-${w.d}">${dShort(w.d)}</a></td><td>${w.type}</td><td class="num">${w.dur} min</td><td class="num">${w.avghr} bpm</td><td class="num">${fit?w.cal+' kcal':fmt(w.strain,1)}</td></tr>`).join('')}</tbody></table></div><p class="note">${workouts.length} sessions in this period; latest 10 shown.</p>`:'<p class="muted">No sessions in this period.</p>',null)}
+   ${sec('Other vitals',svgLine([{points:vals('br'),color:'var(--accent)'}],{x:days,h:120,label:'Breathing rate'})+`<div class="tiles" style="margin-top:8px"><div class="tile"><div class="k">Skin temperature, latest</div><div class="v num">${valueText('temp',[...days].reverse().map(d=>p.byDay[d].temp).find(v=>v!=null))}</div></div><div class="tile ${fit?'dim':''}"><div class="k">Blood oxygen, latest</div><div class="v num">${fit?(LIVE?'No processed value':'No readings returned'):valueText('spo2',[...days].reverse().map(d=>p.byDay[d].spo2).find(v=>v!=null))}</div>${fit&&!LIVE?'<div class="n">Requested; Google returned no records</div>':''}</div>${fit&&!LIVE?'<div class="tile dim"><div class="k">VO2 max</div><div class="v">No readings returned</div></div>':''}</div><p class="note">Line: breathing rate (breaths/min).</p>`,'br')}
+   ${sec('Vendor scores',fit?'<div class="unsupported">Fitbit returns no recovery or strain score in the collected data.</div>':svgBars(days,vals('rec'),{label:'Recovery',tip:v=>v+' %',yfmt:v=>Math.round(v)+'%',color:(i,v)=>v<34?'var(--red)':v<67?'var(--amber)':'var(--ok)'})+`<p class="note">WHOOP recovery score per cycle; colours follow WHOOP's own bands. Score status is shown on each night.</p>`,fit?null:'rec')}
+  </div>`;
+  bindBack();
+  app.querySelectorAll('[data-range]').forEach(b=>b.onclick=()=>{state.range=b.dataset.range==='30'?30:'all';renderProfile(p)});
+  app.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
+  app.querySelectorAll('svg[data-click]').forEach(svg=>svg.addEventListener('click',e=>{const i=e.target.dataset&&e.target.dataset.i;if(i==null)return;const d=days[Number(i)];go(`${p.id}-${svg.dataset.click}-${d}`)}));
+}
+function bindBack(){app.querySelectorAll('[data-back]').forEach(b=>b.onclick=goBack)}
+window.addEventListener('hashchange',()=>{state.cameFrom=true});
+
+function zoneBars(z){const W=640,H=150,L=40,B=24,T=10,hi=Math.max(...z,1)*1.15,bw=(W-L-12)/z.length,Y=v=>T+(hi-v)*(H-T-B)/hi;
+  let g='';for(let t=0;t<=3;t++){const v=hi*t/3;g+=`<line x1="${L}" x2="${W-12}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${L-6}" y="${Y(v)+4}" text-anchor="end">${Math.round(v)}</text>`}
+  z.forEach((v,i)=>{const x=L+i*bw;g+=`<rect x="${x+bw*.2}" y="${Y(v)}" width="${bw*.6}" height="${H-B-Y(v)}" rx="2" fill="var(--whoop)"><title>Zone ${i}: ${v} min</title></rect><text x="${x+bw/2}" y="${H-8}" text-anchor="middle">Zone ${i}</text>`});
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Minutes per heart-rate zone">${g}</svg>`}
+function provenance(rows){return `<dl class="prov">${rows.map(([k,v])=>`<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`}
+function navDates(p,kind,d){const prev=addDays(d,-1),next=addDays(d,1);return `<span style="display:inline-flex;gap:8px">${prev>=START?`<a class="back" href="#${p.id}-${kind}-${prev}">← ${dShort(prev)}</a>`:''}${next<=NOW.date?`<a class="back" href="#${p.id}-${kind}-${next}">${dShort(next)} →</a>`:''}</span>`}
+
+/* ------- detail ------- */
+function renderDetail(p,kind,d){
+  if(!p||!visible(p.id)){renderUnavailable();return}
+  if(LIVE){liveDetail(p,kind,d);return}
+  const r=p.byDay[d];const fit=p.dev==='Fitbit';
+  const head=`<div class="crumb"><button class="back" data-back>← Back</button><a class="code" href="#${p.id}">${p.id}</a><span class="muted">${esc(p.name)}</span><span class="dev ${p.dev}">${p.dev}</span>${navDates(p,kind,d)}</div>`;
+  if(!r){app.innerHTML=head+'<div class="empty">Outside the collected period.</div>';bindBack();return}
+  const why=m=>STATE_LABEL[r.cov[m]]+(r.cov[m]==='none'&&m==='sleep'&&r.rhr!=null?' (heart rate and steps are present this day)':'');
+  if(kind==='night'){
+    const b=baseline(p,'sleep',d);const sig=signals(p,d);
+    if(r.sleep==null){app.innerHTML=head+`<h1 style="margin-bottom:10px">Night ending ${dLong(d)}</h1><div class="empty">${why('sleep')}. Empty periods are left empty; nothing is estimated.</div>`;bindBack();return}
+    const tiles=`<div class="tiles"><div class="tile"><div class="k">Asleep</div><div class="v num">${hm(r.sleep)}</div><div class="n">usual ${b?hm(b.med):'not yet established'}</div></div><div class="tile"><div class="k">In bed</div><div class="v num">${hm(r.inbed)}</div></div><div class="tile"><div class="k">Deep</div><div class="v num">${hm(r.deep)}</div></div><div class="tile"><div class="k">REM</div><div class="v num">${hm(r.rem)}</div></div><div class="tile"><div class="k">Awake</div><div class="v num">${hm(r.awake)}</div></div>${r.br!=null?`<div class="tile"><div class="k">Breathing rate</div><div class="v num">${fmt(r.br,1)}</div><div class="n">breaths/min</div></div>`:''}</div>`;
+    const sigs=sig.list.length?`<p>${sig.list.map(s=>`<span class="pill ${sig.lvl==='red'?'red':'amber'}">${s.label}</span>`).join(' ')} <span class="muted small">Provisional signal; ${sig.state} assessment</span></p>`:'';
+    if(fit){
+      const n=nightDetail(p,d);const t0=n.segs[0].start,t1=n.segs[n.segs.length-1].end;const W=640,L=56,R=12;const X=t=>L+(t-t0)*(W-L-R)/(t1-t0);
+      const lanes={awake:0,rem:1,light:2,deep:3},laneY=k=>12+lanes[k]*18,col={awake:'var(--amber)',rem:'var(--whoop)',light:'var(--fitbit)',deep:'var(--accent-ink)'};
+      let hyp=Object.keys(lanes).map(k=>`<text x="${L-6}" y="${laneY(k)+11}" text-anchor="end">${k[0].toUpperCase()+k.slice(1)}</text>`).join('');
+      hyp+=n.segs.map(s=>`<rect x="${X(s.start)}" y="${laneY(s.type)}" width="${Math.max(1,X(s.end)-X(s.start))}" height="14" rx="2" fill="${col[s.type]}"><title>${s.type} ${tmm(s.start)}–${tmm(s.end)}</title></rect>`).join('');
+      const hrs=n.hr.map(x=>x.hr),lo=Math.min(...hrs)-3,hi=Math.max(...hrs)+3,Yh=v=>100+(hi-v)*70/(hi-lo);
+      hyp+=`<line x1="${L}" x2="${W-R}" y1="${Yh(lo)}" y2="${Yh(lo)}" stroke="var(--line)"/><text x="${L-6}" y="${Yh(hi)+8}" text-anchor="end">${Math.round(hi)}</text><text x="${L-6}" y="${Yh(lo)}" text-anchor="end">${Math.round(lo)}</text>`;
+      hyp+=`<path d="${n.hr.map((x,i)=>(i?'L':'M')+X(x.t).toFixed(1)+' '+Yh(x.hr).toFixed(1)).join('')}" fill="none" stroke="var(--red)" stroke-width="1.2"/>`;
+      for(let t=Math.ceil(t0/60)*60;t<t1;t+=60)hyp+=`<text x="${X(t)}" y="190" text-anchor="middle">${tmm(t)}</text>`;
+      app.innerHTML=head+`<h1 style="margin-bottom:10px">Night ending ${dLong(d)}</h1>${sigs}
+      <div class="stack"><section class="card">${tiles}</section>
+      <section class="card"><div class="card-h"><h2>Stages and minute heart rate</h2><span class="sub">${tmm(t0)}–${tmm(t1)} · sleeping heart rate ${n.sleepHR} bpm (derived from minute HR during asleep stages)</span></div>
+      <svg class="chart" viewBox="0 0 ${W} 200" role="img" aria-label="Sleep stages and minute heart rate">${hyp}</svg>
+      <div class="vals" style="margin-top:10px"><table><thead><tr><th>Time (Beirut)</th><th>Stage</th><th>HR bpm (1-min avg)</th></tr></thead><tbody>${n.hr.map(x=>`<tr><td>${tmm(x.t)}</td><td>${x.stage}</td><td>${x.hr}</td></tr>`).join('')}</tbody></table></div></section>
+      <section class="card"><div class="card-h"><h2>Source</h2></div>${provenance([['Provider','Google Health v4 (Fitbit)'],['Datasets','sleep · minute_heart-rate'],['Fields','/sleep/summary/minutesAsleep · /sleep/stages/N/{type,startTime,endTime} · /heartRate/beatsPerMinuteAvg'],['Units','min · stage · bpm'],['Resolution','timestamped stage intervals · vendor 60-second HR aggregation'],['Date basis','sleep belongs to its wake date (Asia/Beirut)'],['Source reference','raw_response_manifest '+hex8(p.id+d+'sleep')+'… · /dataPoints/0'],['Board keys','sleep, deep, rem, sleep_hr, br']])}</section></div>`;
+    }else{
+      const tot=r.light+r.deep+r.rem+r.awake;const seg=[['Light',r.light,'var(--fitbit)'],['Slow-wave (deep)',r.deep,'var(--accent-ink)'],['REM',r.rem,'var(--whoop)'],['Awake',r.awake,'var(--amber)']];let x=0;
+      const bar=seg.map(([l,v,c])=>{const w=v/tot*620;const s=`<rect x="${10+x}" y="10" width="${w}" height="26" fill="${c}"><title>${l}: ${hm(v)}</title></rect>`;x+=w;return s}).join('');
+      app.innerHTML=head+`<h1 style="margin-bottom:10px">Night ending ${dLong(d)}</h1>${sigs}
+      <div class="stack"><section class="card">${tiles}<div class="tiles" style="margin-top:12px"><div class="tile"><div class="k">Sleep performance</div><div class="v num">${r.perf} %</div><div class="n">score status ${r.score_state}</div></div>${r.rec!=null?`<div class="tile"><div class="k">Recovery</div><div class="v num">${r.rec} %</div><div class="n">RHR ${r.rhr} bpm · HRV ${fmt(r.hrv,1)} ms</div></div>`:''}${r.spo2!=null?`<div class="tile"><div class="k">SpO2 · skin temp</div><div class="v num">${fmt(r.spo2,1)} % · ${fmt(r.temp,2)} °C</div></div>`:''}</div></section>
+      <section class="card"><div class="card-h"><h2>Stage totals</h2></div><svg class="chart" viewBox="0 0 640 46" role="img" aria-label="WHOOP stage totals">${bar}</svg>
+      <div class="legend">${seg.map(([l,v,c])=>`<span><i style="background:${c}"></i>${l} ${hm(v)}</span>`).join('')}</div>
+      <div class="unsupported" style="margin-top:12px">Not provided by WHOOP's public API: a timestamped stage timeline and a continuous heart-rate trace. Only totals and summary values exist for this night.</div></section>
+      <section class="card"><div class="card-h"><h2>Source</h2></div>${provenance([['Provider','WHOOP API v2'],['Datasets','sleep · recovery'],['Fields','/score/stage_summary/total_{light,slow_wave,rem,awake,in_bed}_time_milli · /score/respiratory_rate · /score/sleep_performance_percentage · /score/recovery_score · /score/hrv_rmssd_milli'],['Units','milliseconds (shown as minutes) · breaths/min · % · ms'],['Resolution','one record per sleep; one per cycle for recovery'],['Asleep','derived: light + slow-wave + REM, only when all three are present'],['Source reference','raw_response_manifest '+hex8(p.id+d+'whoop')+'… · /records/0'],['Board keys','sleep, deep, rem, br, rec, rhr, hrv, spo2, temp']])}</section></div>`;
+    }
+  }else{
+    if(fit){
+      if(r.cov.steps==='delayed'||r.cov.steps==='none'||r.cov.steps==='preissue'||r.cov.steps==='notworn'){app.innerHTML=head+`<h1 style="margin-bottom:10px">${dLong(d)}</h1><div class="empty">${STATE_LABEL[r.cov.steps]}.</div>`;bindBack();return}
+      const mins=dayMinutes(p,d);const isToday=d===NOW.date;const W=640,L=44,R=12,X=t=>L+t*(W-L-R)/1440;
+      const smax=Math.max(...mins.map(m=>m.steps),1);let g='';
+      g+=mins.map(m=>m.steps?`<rect x="${X(m.t)}" y="${70-m.steps/smax*60}" width="1" height="${m.steps/smax*60}" fill="var(--accent)"/>`:'').join('');
+      const hrv=mins.filter(m=>m.hr!=null);const lo=Math.min(...hrv.map(m=>m.hr))-3,hi=Math.max(...hrv.map(m=>m.hr))+3,Y=v=>90+(hi-v)*80/(hi-lo);
+      g+=`<path d="${hrv.map((m,i)=>(i?'L':'M')+X(m.t).toFixed(1)+' '+Y(m.hr).toFixed(1)).join('')}" fill="none" stroke="var(--red)" stroke-width="1"/>`;
+      g+=`<text x="${L-6}" y="14" text-anchor="end">${Math.round(smax)}</text><text x="${L-6}" y="70" text-anchor="end">0</text><text x="${L-6}" y="${Y(hi)+8}" text-anchor="end">${Math.round(hi)}</text><text x="${L-6}" y="${Y(lo)}" text-anchor="end">${Math.round(lo)}</text>`;
+      for(let t=0;t<=1440;t+=180)g+=`<text x="${X(t)}" y="190" text-anchor="middle">${tmm(t)}</text>`;
+      if(isToday)g+=`<line x1="${X(mins.length)}" x2="${X(mins.length)}" y1="0" y2="172" stroke="var(--amber)" stroke-dasharray="3 3"/>`;
+      const dh=daytimeHR(p,d);
+      app.innerHTML=head+`<h1 style="margin-bottom:10px">${dLong(d)}${isToday?' <span class="pill amber">Partial day</span>':''}</h1>
+      <div class="stack"><section class="card"><div class="tiles"><div class="tile"><div class="k">Steps (minute sum, board source)</div><div class="v num">${fmt(r.steps)}</div>${isToday?'<div class="n">so far, latest reading 15:32</div>':''}</div><div class="tile"><div class="k">Steps (vendor daily total)</div><div class="v num">${r.steps_daily!=null?fmt(r.steps_daily):'—'}</div><div class="n">${r.steps_daily!=null?'separate source; not used by the board':'not available until the day ends'}</div></div>${!isToday?`<div class="tile"><div class="k">Distance · calories</div><div class="v num">${fmt(r.dist/1000,1)} km · ${fmt(r.cal)} kcal</div><div class="n">stored, not processed</div></div><div class="tile"><div class="k">Active-zone minutes</div><div class="v num">${r.azm}</div><div class="n">stored, not processed</div></div>`:''}${r.rhr!=null?`<div class="tile"><div class="k">Resting HR · HRV</div><div class="v num">${r.rhr} bpm · ${fmt(r.hrv,1)} ms</div></div>`:''}${dh?`<div class="tile"><div class="k">Daytime average HR</div><div class="v num">${fmt(dh)} bpm</div><div class="n">proposed derivation, 08:00–20:00</div></div>`:''}</div></section>
+      <section class="card"><div class="card-h"><h2>Minute steps and heart rate</h2><span class="sub">Bars: steps per minute · line: heart rate (bpm)</span></div><svg class="chart" viewBox="0 0 ${W} 200" role="img" aria-label="Minute steps and heart rate">${g}</svg>
+      <div class="vals" style="margin-top:10px"><table><thead><tr><th>Time (Beirut)</th><th>Steps</th><th>HR bpm</th></tr></thead><tbody>${mins.filter(m=>m.steps||m.t%15===0).map(m=>`<tr><td>${tmm(m.t)}</td><td>${m.steps}</td><td>${m.hr??'—'}</td></tr>`).join('')}</tbody></table></div><p class="note">Minutes with steps, plus every 15th minute.</p></section>
+      <section class="card"><div class="card-h"><h2>Source</h2></div>${provenance([['Provider','Google Health v4 (Fitbit)'],['Datasets','minute_steps · minute_heart-rate · daily_steps · daily_distance · daily_total-calories · daily_active-zone-minutes'],['Fields','/steps/countSum · /heartRate/beatsPerMinuteAvg'],['Units','steps · bpm'],['Resolution','vendor 60-second aggregation (not original sensor resolution)'],['Source reference','raw_response_manifest '+hex8(p.id+d+'minute')+'… · /rollupDataPoints'],['Board keys','steps, wear']])}</section></div>`;
+    }else{
+      if(r.strain==null){app.innerHTML=head+`<h1 style="margin-bottom:10px">${dLong(d)}</h1><div class="empty">${STATE_LABEL[r.cov.strain]}.</div>`;bindBack();return}
+      app.innerHTML=head+`<h1 style="margin-bottom:10px">Cycle starting ${dLong(d)}${d===NOW.date?' <span class="pill amber">Cycle in progress</span>':''}</h1>
+      <div class="stack"><section class="card"><div class="tiles"><div class="tile"><div class="k">Day strain</div><div class="v num">${fmt(r.strain,1)}</div><div class="n">0–21 scale</div></div><div class="tile"><div class="k">Average · max HR</div><div class="v num">${r.avghr} · ${r.maxhr} bpm</div><div class="n">whole cycle, not daytime</div></div><div class="tile"><div class="k">Energy</div><div class="v num">${fmt(r.kj)} kJ</div></div><div class="tile"><div class="k">Cycle start</div><div class="v num">${r.cycleStart.slice(11)}</div><div class="n">physiological day, not a calendar day</div></div></div></section>
+      <div class="unsupported">Not provided by WHOOP's public API: minute heart rate and steps. This cycle has summary values only.</div>
+      <section class="card"><div class="card-h"><h2>Source</h2></div>${provenance([['Provider','WHOOP API v2'],['Dataset','cycle'],['Fields','/score/strain · /score/average_heart_rate · /score/max_heart_rate · /score/kilojoule'],['Units','score · bpm · kJ'],['Resolution','one record per cycle'],['Source reference','raw_response_manifest '+hex8(p.id+d+'cycle')+'… · /records/0'],['Board key','strain']])}</section></div>`;
+    }
+  }
+  bindBack();
+}
+/* Live day: every published value with its usual, the day's signals and assessment; minute detail loads on request. */
+function liveDetail(p,kind,d){
+  const r=p.byDay[d];
+  const head=`<div class="crumb"><button class="back" data-back>← Back</button><a class="code" href="#${p.id}">${p.id}</a><span class="dev ${p.dev}">${p.dev}</span>${navDates(p,kind,d)}</div><h1 style="margin-bottom:10px">${kind==='night'?'Night ending ':''}${dLong(d)}</h1>`;
+  if(!r||!r.published){app.innerHTML=head+'<div class="empty">No processed values for this day. Empty days are left empty; nothing is estimated.</div>';bindBack();return}
+  const sig=signals(p,d);
+  const keys=[['sleep','Asleep'],['deep','Deep sleep'],['rem','REM sleep'],['sleep_hr','Sleeping heart rate'],['rhr','Resting heart rate'],['hrv','Heart rate variability'],['br','Breathing rate'],['temp','Skin temperature'],['spo2','Blood oxygen'],['steps','Steps'],['wear','Worn time'],['rec','Recovery'],['strain','Day strain']].filter(([k])=>r[k]!=null);
+  const show=(k,v)=>k==='deep'||k==='rem'||k==='wear'?hm(v):valueText(k,v);
+  const tiles=keys.map(([k,l])=>`<div class="tile"><div class="k">${l}</div><div class="v num">${show(k,r[k])}</div>${LIVE_BASE[k]&&r[LIVE_BASE[k]]!=null?`<div class="n">usual ${show(k,r[LIVE_BASE[k]])}</div>`:''}</div>`).join('');
+  const sigs=sig.list.length?`<p>${sig.list.map(s=>`<span class="pill ${sig.lvl==='red'?'red':'amber'}">${s.label}</span>`).join(' ')} <span class="muted small">Provisional signal; ${esc(sig.state)} assessment</span></p>`:`<p class="muted small">No provisional signal; ${esc(sig.state)} assessment${r.m&&r.m.length?' ('+esc(r.m.map(reasonText).join(', '))+')':''}.</p>`;
+  app.innerHTML=head+sigs+`<div class="stack"><section class="card"><div class="tiles">${tiles}</div></section>
+    <section class="card"><div class="card-h"><h2>Source</h2></div>${provenance([['Source','Published wellness board (board/board.json), '+stamp(LIVE.built_at)+' Beirut'],['Date basis','sleep by wake date; WHOOP recovery and strain by cycle start; Fitbit daily values by civil date (Asia/Beirut)'],['Missing values','left empty; nothing is estimated'],['Minute-level detail','On request: open Sleep or Daily activity in the sidebar, choose '+p.id+' and '+dLong(d)+', then Load selected data.']])}</section></div>`;
+  bindBack();
+}
+function renderWorkout(p,d){
+  if(!p||!visible(p.id)){renderUnavailable();return}
+  if(LIVE){app.innerHTML=`<div class="crumb"><button class="back" data-back>← Back</button></div><div class="empty">Workout sessions are not processed yet. Open Workouts in the sidebar to see them.</div>`;bindBack();return}
+  const r=p.byDay[d];const w=r&&r.workouts[0];const fit=p.dev==='Fitbit';
+  const head=`<div class="crumb"><button class="back" data-back>← Back</button><a class="code" href="#${p.id}">${p.id}</a><span class="dev ${p.dev}">${p.dev}</span></div>`;
+  if(!w){app.innerHTML=head+'<div class="empty">No session recorded on this date.</div>';bindBack();return}
+  const zones=w.zones?`<section class="card"><div class="card-h"><h2>Heart-rate zones</h2><span class="sub">minutes in each WHOOP zone</span></div>${zoneBars(w.zones)}</section>`:'';
+  app.innerHTML=head+`<h1 style="margin-bottom:10px">${w.type} · ${dLong(d)}</h1><div class="stack"><section class="card"><div class="tiles"><div class="tile"><div class="k">Start · duration</div><div class="v num">${w.start} · ${w.dur} min</div></div><div class="tile"><div class="k">Average HR</div><div class="v num">${w.avghr} bpm</div></div>${fit?`<div class="tile"><div class="k">Calories</div><div class="v num">${w.cal} kcal</div></div>`:`<div class="tile"><div class="k">Strain · max HR</div><div class="v num">${fmt(w.strain,1)} · ${w.maxhr} bpm</div></div><div class="tile"><div class="k">Energy</div><div class="v num">${w.kj} kJ</div></div>`}</div></section>${zones}
+  <section class="card"><div class="card-h"><h2>Source</h2></div>${provenance(fit?[['Provider','Google Health v4 (Fitbit)'],['Dataset','exercise'],['Status','stored in the audit tables; not processed into board values'],['Source reference','raw_response_manifest '+hex8(w.id)+'… · /dataPoints/0']]:[['Provider','WHOOP API v2'],['Dataset','workout'],['Status','stored in the audit tables; not processed. Zone field path to confirm from stored records.'],['Source reference','raw_response_manifest '+hex8(w.id)+'… · /records/0']])}</section></div>`;
+  bindBack();
+}
+
+/* ------- data sources ------- */
+function renderSources(){
+  const S={in_sentra:['ok','In Sentra today'],stored:['gap','Stored, not processed'],derive:['amber','Needs a new calculation'],not_provided:['gap','Not provided by device'],no_source:['red','No source yet']};
+  const count=k=>FIELD_MAP.filter(f=>f.status===k).length;
+  const decisions=[
+   ['Participant names','Sentra stores no names (sql/007). Choose an authorized source before names appear.'],
+   ['Device issue dates','No field exists; membership joined_on is the closest. Needed for Before device issued.'],
+   ['Group average or median','The handoff proposes an average; sentra.organization uses the median of per-person medians.'],
+   ['Update time','The refresh runs at 01:30 Beirut today; the target is 3:00 p.m.'],
+   ['Minute detail on every day','Imports plan minute data only for the last 7 days of each window, and the November pilot collected none. Needs a retrieval decision and a cost estimate.'],
+   ['History since 1 Oct','Imports are bounded to 1–30 days per run; October retrieval needs batched, authorized runs.'],
+   ['Daytime heart rate','No calculation exists; the window (08:00–20:00 here) needs agreement. WHOOP has no daytime series.'],
+   ['Gap wording','Before device issued and Device not worn need recorded evidence; other gaps use Not requested, Request failed or No readings returned.'],
+  ];
+  app.innerHTML=`<section class="card"><div class="card-h"><h2>Data sources</h2><span class="sub">Every field this prototype shows, traced to the Sentra repository. Checked against the code by tests/test_reviewer_prototype.py; the mapping to real readers is in docs/reviewer-data-connections.md.</span></div>
+  <div class="tiles" style="margin-bottom:14px">${Object.entries(S).map(([k,[c,l]])=>`<div class="tile"><div class="k"><span class="pill ${c}">${l}</span></div><div class="v num">${count(k)}</div></div>`).join('')}</div>
+  <div style="overflow-x:auto"><table><thead><tr><th>Field</th><th>Device</th><th>Status</th><th>Dataset · field path</th><th>Board key</th><th>Unit · resolution</th></tr></thead><tbody>${FIELD_MAP.map(f=>`<tr><td>${esc(f.label)}${f.note?`<div class="small muted">${esc(f.note)}</div>`:''}</td><td>${f.device}</td><td><span class="pill ${S[f.status][0]}">${S[f.status][1]}</span></td><td class="mono small">${esc(f.dataset||'—')}<br>${esc(f.path||'')}</td><td class="mono small">${esc(f.board||'—')}</td><td class="small">${esc(f.unit||'—')}<br><span class="muted">${esc(f.resolution||'')}</span></td></tr>`).join('')}</tbody></table></div></section>
+  <section class="card" style="margin-top:16px"><div class="card-h"><h2>Decisions to bring back to the owner</h2></div><ul class="wl">${decisions.map(([t,x])=>`<li><b>${t}</b><span class="muted">${x}</span></li>`).join('')}</ul></section>`;
+}
+
+if(LIVE){
+  document.getElementById('org-label').textContent=LIVE.viewer||'Signed in';
+  const chip=document.getElementById('mode-chip');chip.textContent='Live data · private';chip.classList.add('live');
+  document.getElementById('foot-note').textContent='Readings from the published wellness board for people who share individual details with you. '
+    +'Group figures are computed on the server and need at least '+TH.k+' eligible contributors per device, date and statistic. '
+    +"Wellness information only, compared with each person's own pattern; not a medical assessment. Signals are provisional.";
+}
+route();
+</script>

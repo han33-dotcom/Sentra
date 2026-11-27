@@ -376,6 +376,34 @@ def readable_view(selection,result,name):
         private_download(st.session_state['audit_readable_csv'],f'{selection.participant}-{selection.provider}-{selection.start}-{selection.end}-readable.csv','text/csv')
 
 
+def reviewer_page():
+    """Reviewer redesign (#169) with real data: the signed-in user's own scope, built on the server.
+
+    Individual rows are only people this user may see individually (and, for the team, people in the
+    team scope, so withdrawn consent is left out). Group figures are computed here from group
+    contributors and leave as suppressed-below-k values only (`sentra.reviewer.live`)."""
+    from .reviewer.live import payload, render
+    principal()
+    with st.container(key='page-heading'):
+        st.caption('ORGANIZATION')
+        st.title('Reviewer')
+    decision=current_access()
+    reload=st.sidebar.button('Reload reviewer',icon=':material/refresh:')
+    org,_,scope,group_people,catalog=organization_data(decision,reload)
+    people=[p for p in group_people if decision.can_view_individual(p.get('id'))]
+    shown={p['id'] for p in people}
+    today=datetime.now(timezone.utc).astimezone(BEIRUT).date()
+    viewer='Team view' if decision.is_team else f'{decision.org_id} · {decision.role}'
+    data=payload(board=org['board'],people=people,group_people=group_people,contributors=decision.group_contributors(scope),
+                 catalog=[r for r in catalog if r['participant_id'] in shown],today=today,viewer=viewer)
+    if not people:
+        st.info('No participant with published days has shared individual details with you. Group figures still appear '
+                'when enough people contribute.')
+    components.html(render(data),height=1900,scrolling=True)
+    st.caption('Minute-level detail loads on request: open Sleep or Daily activity, choose the person and day, '
+               'then Load selected data.')
+
+
 def group_scope(decision):
     """What cached group data was fetched for: the team, or a specific contributor set."""
     return 'team' if decision.is_team else tuple(sorted(decision.contributors))
@@ -831,10 +859,13 @@ def main():
                 st.session_state['audit_access']=decision
             st.session_state['audit_owner']=identity
         page=st.sidebar.radio('Explore',('Daily activity','Sleep','Workouts','Data availability','Wellness board',
-            'Organization overview','Profiles','Trends','Follow-ups','Reports'),key='explore',label_visibility='collapsed',width='stretch')
+            'Reviewer','Organization overview','Profiles','Trends','Follow-ups','Reports'),key='explore',label_visibility='collapsed',width='stretch')
         st.sidebar.divider()
         if page=='Wellness board':
             wellness_board()
+            return
+        if page=='Reviewer':
+            reviewer_page()
             return
         if page=='Organization overview':
             organization_overview()
