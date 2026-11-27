@@ -57,7 +57,9 @@ python scripts/reviewer_live_check.py --org ORG_ID --secrets .private/reviewer-l
   and recoveries by cycle start, vendor daily values by civil date; rows without a day are never
   counted), requested coverage, request failures in the last 30 days and consent totals. Any count
   below five prints as "fewer than 5", and every figure derived from such a group is withheld.
-  Dates are those reached by at least five people. No participant IDs, names or readings.
+  Detail coverage counts distinct people with undated rows. A dataset appears in the detail
+  section once at least one of its counts reaches five. Reading dates are those reached by at
+  least five people in the organization. Board publication time is reported separately.
 - **Sharing.** Team private channel or the task owner only, never this public repository or its
   pull requests and issues. Record only the conclusions here.
 
