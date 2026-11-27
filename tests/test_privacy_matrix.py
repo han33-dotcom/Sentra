@@ -24,7 +24,7 @@ from test_viewer_app import FakeReader
 
 TEAM = ['team@example.test']
 # 'Page · View' also selects a view inside the page.
-PAGES = ('Daily activity', 'Sleep', 'Workouts', 'Data availability', 'Wellness board',
+PAGES = ('Daily activity', 'Sleep', 'Workouts', 'Data availability', 'Wellness board', 'Reviewer',
          'Organization overview', 'Profiles', 'Trends · One person', 'Trends · Group', 'Follow-ups', 'Reports')
 USERS = [{'org_id': 'org-a', 'email': 'officer@a.test', 'role': 'officer', 'active': True},
          {'org_id': 'org-a', 'email': 'reviewer@a.test', 'role': 'reviewer', 'active': True},
@@ -40,7 +40,7 @@ EVERYONE = [f'p9{i}' for i in range(1, 9)]
 CAN_SEE = {'officer@a.test': {'p91'}, 'reviewer@a.test': {'p91'}, 'officer@b.test': {'p96'}}
 # Pages that list permitted individuals: the permitted person must appear there, so an empty page
 # cannot pass the "only permitted participants" check by showing nobody.
-INDIVIDUAL_PAGES = ('Daily activity', 'Sleep', 'Workouts', 'Data availability', 'Wellness board', 'Profiles',
+INDIVIDUAL_PAGES = ('Daily activity', 'Sleep', 'Workouts', 'Data availability', 'Wellness board', 'Reviewer', 'Profiles',
                     'Trends · One person', 'Follow-ups', 'Reports')  # Reports: every offered person selected
 FOLLOW_UP_NOTES = {pid: f'Individual note marker {i}' for i, pid in enumerate(EVERYONE)}
 FOLLOW_UP_HISTORY = {pid: f'History note marker {i}' for i, pid in enumerate(EVERYONE)}

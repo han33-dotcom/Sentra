@@ -1,18 +1,6 @@
 "use strict";
 /* Synthetic reviewer prototype: walkthrough scenarios from the redesign handoff (run by tests/test_reviewer_prototype.py). */
-const fs=require('fs');
-const html=fs.readFileSync(process.argv[2],'utf8');
-const fm=html.match(/<script id="field-map" type="application\/json">([\s\S]*?)<\/script>/)[1];
-const js=html.match(/<script>\r?\n([\s\S]*?)<\/script>/)[1];
-const el=()=>({innerHTML:'',textContent:'',set onclick(f){},querySelectorAll:()=>[],addEventListener(){},setAttribute(){},dataset:{}});
-const app=el();
-global.document={getElementById:id=>id==='field-map'?{textContent:fm}:id==='app'?app:el(),querySelectorAll:()=>[]};
-global.window={addEventListener(){},scrollTo(){},scrollY:0};global.history={length:1,back(){}};
-global.location={hash:'#overview'};
-const exportNames='DATA,P,worthALook,groupStat,signals,baseline,coverageIssues,covGroup,renderOverview,renderProfile,renderDetail,renderWorkout,renderSources,renderPeople,renderUnavailable,route,SHARED,nightDetail,dayMinutes,daytimeHR,hm,state,NOW,FIELD_MAP';
-const f=new Function(js+`\nreturn {${exportNames}};`);
-const t=f();
-const out=[];const ok=(c,m)=>{out.push((c?'PASS ':'FAIL ')+m);if(!c)process.exitCode=1};
+const {t,app,out,ok}=require('./reviewer_page_harness.cjs')(process.argv[2]);
 const look=t.worthALook();
 const show=look.map(o=>`${o.p.id} ${o.d} ${o.sig.metric} ${o.value} usual ${o.usual} ${o.lvl}/${o.state}`);
 console.log('Worth a look:\n  '+show.join('\n  '));

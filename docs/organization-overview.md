@@ -15,6 +15,9 @@ medical assessment.
 | Organization officer or reviewer | Their organization: current, non-withdrawn consent in an open membership (`group_only` or `individual`) | Only `individual` sharing |
 | Anyone else | Denied | Denied |
 
+The **Reviewer** page ([reviewer data connections](reviewer-data-connections.md)) uses the same
+two scopes and the same group functions in the redesigned layout.
+
 `group_only` participants contribute to group statistics but never appear individually.
 The reader keeps the two scopes apart: `group_catalog()` and `group_board()` serve totals
 only, while `catalog()` and `board()` stay limited to individual sharing.

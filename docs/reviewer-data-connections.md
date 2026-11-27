@@ -10,6 +10,31 @@ displayed field with its dataset, provider field path, canonical metric and boar
 `tests/test_reviewer_prototype.py` checks each reference against the code, so a renamed
 dataset, field path, board key or rule fails CI.
 
+## Reviewer page with real data
+
+The private viewer has a **Reviewer** page (`sentra.viewer_app.reviewer_page`). It shows this
+design with the signed-in user's real data, behind the viewer's Google sign-in, access decision and
+transfer reservations. The page is never published as a public link. The static prototype stays the
+public demo.
+
+- **Server side** (`sentra.reviewer.live`): individual rows are the published board days of people the
+  user may see individually (for the team, people in the team scope; withdrawn consent is left out).
+  Board values pass through unchanged and missing stays missing. Group figures are computed on the
+  server from group contributors with `organization.group_summary` and `trends.group_trend` over the
+  `trends.publishable_end` window. Only values leave the server: a statistic below five contributors
+  is empty and carries no count, and an empty day looks the same as a hidden one. Codes and device
+  labels must match Sentra's formats, and every `<` in the embedded data is escaped.
+- **Page**: the same file runs in live mode when the viewer fills its data slot. Personal comparisons,
+  signals and assessment states come from the board (`*_b`, `f`, `lvl`, `a`, `m`); the browser
+  recomputes nothing. Coverage shows processed values per day. Minute-level detail loads on request on
+  the Sleep and Daily activity pages.
+- **Decisions applied for now** (owner may change them): codes only, no names; the group median; the
+  configured refresh time (01:30 Beirut, paused with collection); no device issue date or "Before
+  device issued"; no daytime heart rate; workouts open on the Workouts page.
+- **Checks**: `tests/test_reviewer_live.py` (payload scope, suppression without counts, escaping, and a
+  live walkthrough) and the Reviewer row in `tests/test_privacy_matrix.py` (every user type,
+  withdrawal and sharing reduced to group-only).
+
 ## Live verification
 
 `scripts/reviewer_live_check.py` checks which of these sources actually hold data. Not run yet.

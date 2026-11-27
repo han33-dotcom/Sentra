@@ -77,7 +77,10 @@ fixtures; record those separately from hosted results.
 | 9 | Officer, org 1 | Sign out | Back to the sign-in page; no data tables or embedded board remain |
 | 10 | Any | Check the published board download, if offered | Only pseudonyms; no names, emails, provider IDs or location |
 
-Include both Trends views and Follow-ups in checks 2–4 and 6–7. Add Reports when released.
+Include both Trends views, Reviewer and Follow-ups in checks 2–4 and 6–7. Add Reports when released.
+On Reviewer, also check that the People list, coverage grid, observations and every profile show
+only A and B, that a group-only code typed into the page address shows "No individual profile is
+available for this code", and that hidden group figures show no count.
 To repeat the checks, reset the synthetic fixture with new participants A and B, individual
 sharing, fresh synthetic Follow-ups notes and an active org 1 officer.
 

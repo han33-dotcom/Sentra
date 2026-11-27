@@ -44,6 +44,7 @@ nav.tabs a[aria-current="page"]{background:var(--accent-soft);color:var(--accent
 .topbar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin-bottom:18px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:10px 14px;backdrop-filter:blur(14px)}
 .org{font-weight:600}
 .org span{color:var(--muted);font-weight:500}
+.synth.live{color:var(--ok);background:var(--ok-soft);border-color:var(--ok-soft)}
 .synth{margin-left:auto;font:600 11px var(--mono);letter-spacing:.07em;text-transform:uppercase;color:var(--amber);background:var(--amber-soft);border:1px solid var(--amber-soft);border-radius:999px;padding:3px 10px}
 h1{font:600 26px/1.2 var(--display);margin:0;text-wrap:balance}
 h2{font:600 19px/1.3 var(--display);margin:0;text-wrap:balance;letter-spacing:.005em}
@@ -157,10 +158,10 @@ th{font:600 11px var(--sans);color:var(--muted);text-transform:uppercase;letter-
       <a href="#sources" data-nav="sources"><svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5v13c0 1.6 3.4 2.8 7.5 2.8s7.5-1.2 7.5-2.8v-13M4.5 12c0 1.6 3.4 2.8 7.5 2.8s7.5-1.2 7.5-2.8"/></svg>Data sources</a>
     </nav>
   </section>
-  <p class="foot">Every person, name and reading here is fictional and generated in this page. Field names, dataset names, baselines and the five-contributor rule come from the Sentra repository. Wellness information only, compared with each person's own pattern; not a medical assessment. Signals are provisional (thresholds v0, pending expert sign-off).</p>
+  <p class="foot" id="foot-note">Every person, name and reading here is fictional and generated in this page. Field names, dataset names, baselines and the five-contributor rule come from the Sentra repository. Wellness information only, compared with each person's own pattern; not a medical assessment. Signals are provisional (thresholds v0, pending expert sign-off).</p>
 </aside>
 <div class="wrap">
-  <div class="topbar"><span class="org">Example organization <span>· Health and safety</span></span><span class="synth">Synthetic prototype</span></div>
+  <div class="topbar"><span class="org" id="org-label">Example organization <span>· Health and safety</span></span><span class="synth" id="mode-chip">Synthetic prototype</span></div>
   <main id="app"></main>
 </div>
 
@@ -1329,13 +1330,18 @@ th{font:600 11px var(--sans);color:var(--muted);text-transform:uppercase;letter-
   "note": "No issue date exists. Membership joined_on is the closest field; Before device issued needs a recorded issue date."
  }
 ]</script>
+<script id="reviewer-data" type="application/json">null</script>
 <script>
 "use strict";
 const FIELD_MAP=JSON.parse(document.getElementById('field-map').textContent);
 const TH={short:360,z:2,baseDays:28,baseMin:7,k:5};
 const FLOOR={sleep:20,rhr:1.5,hrv:3,sleep_hr:1.5};
-const NOW={date:'2026-11-25',time:'15:40',refresh:'15:00',latest:'2026-11-24'};
-const START='2026-10-01';
+/* Live mode: the viewer embeds real, access-filtered data built on the server (sentra.reviewer.live).
+   Without it the page runs the synthetic demo. */
+const LIVE=JSON.parse(document.getElementById('reviewer-data').textContent);
+const NOW=LIVE?{date:LIVE.today,refresh:LIVE.refresh,latest:LIVE.latest_individual_day||LIVE.today}:{date:'2026-11-25',time:'15:40',refresh:'15:00',latest:'2026-11-24'};
+const START=LIVE?(LIVE.first_day&&LIVE.first_day<addDays(NOW.latest,-29)?LIVE.first_day:addDays(NOW.latest,-29)):'2026-10-01';
+const CODE='p\\d{2,4}';  /* Sentra pseudonyms (sentra.access.PSEUDONYM) */
 const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function addDays(s,n){const d=new Date(s+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)}
@@ -1370,15 +1376,15 @@ const PEOPLE=[
  {id:'p13',name:'Jad Habib',dev:'WHOOP',joined:'2026-10-07',share:'individual'},
 ];
 const BY=Object.fromEntries(PEOPLE.map(p=>[p.id,p]));
-const DELAYED={p07:{since:'2026-11-24',lastSync:'2026-11-23 18:10'}};
+const DELAYED=LIVE?{}:{p07:{since:'2026-11-24',lastSync:'2026-11-23 18:10'}};
 /* Scripted observations and imperfect data for the walkthrough. */
-const EPISODES={
+const EPISODES=LIVE?{}:{
  p03:{'2026-11-25':{sleep:252}},
  p02:{'2026-11-21':{sleep:320}},
  p09:{'2026-11-24':{rhr:66}},
  p12:{'2026-11-23':{hrv:31}},
 };
-const GAPS={
+const GAPS=LIVE?{}:{
  p05:{'2026-11-22':{sleep:'none'}},
  p06:{'2026-11-03':{hrv:'failed'}},
  p02:{'2026-10-12':{all:'notworn'}},
@@ -1441,7 +1447,18 @@ function buildPerson(p){
   });
   return {...p,base,days,byDay:Object.fromEntries(days.map(x=>[x.d,x]))};
 }
-const DATA=PEOPLE.map(buildPerson);
+/* Live rows: board days as published; missing stays missing and a day without a published row has no processed value. */
+const LIVE_BASE={sleep:'sleep_b',rhr:'rhr_b',hrv:'hrv_b',steps:'steps_b',sleep_hr:'sleep_hr_b',br:'br_b',temp:'temp_b'};
+const FLAG_TEXT={short_sleep:['sleep','Slept less than 6 hours'],rhr_up:['rhr','Resting heart rate above usual'],hrv_down:['hrv','Heart rate variability below usual'],sleep_hr_up:['sleep_hr','Sleeping heart rate above usual']};
+function livePerson(p){
+  const fit=p.dev==='Fitbit',whoop=p.dev==='WHOOP';
+  const board=Object.fromEntries(p.days.map(d=>[d.d,d]));
+  const days=DAYS.map(d=>{const b=board[d];const cov={};
+    for(const m of MEASURES)cov[m]=(fit&&(m==='strain'||m==='rec'))||(whoop&&m==='steps')?'na':b&&b[m]!=null?'ok':'none';
+    return {...(b||{}),d,cov,workouts:[],published:!!b}});
+  return {id:p.id,name:null,dev:p.dev,share:'individual',latest:p.latest||{},base:{},days,byDay:Object.fromEntries(days.map(x=>[x.d,x]))};
+}
+const DATA=LIVE?LIVE.people.map(livePerson):PEOPLE.map(buildPerson);
 const P=Object.fromEntries(DATA.map(p=>[p.id,p]));
 /* Officer scope: only people who share individual data are listed, linked or shown per person anywhere. */
 const SHARED=DATA.filter(p=>p.share==='individual');
@@ -1450,12 +1467,16 @@ function visible(id){return !!(P[id]&&P[id].share==='individual')}
 /* Baselines exactly as the indicator contract: previous 28 calendar days, today excluded, >= 7 readings, median, MAD x 1.4826 with metric floors. */
 function median(a){const s=[...a].sort((x,y)=>x-y),n=s.length;return n?(n%2?s[(n-1)/2]:(s[n/2-1]+s[n/2])/2):null}
 function baseline(p,metric,d){
+  if(LIVE){const r=p.byDay[d];const k=LIVE_BASE[metric];return r&&k&&r[k]!=null?{med:r[k]}:null}
   const vals=[];for(let k=1;k<=TH.baseDays;k++){const r=p.byDay[addDays(d,-k)];if(r&&r[metric]!=null)vals.push(r[metric])}
   if(vals.length<TH.baseMin)return null;
   const med=median(vals),mad=median(vals.map(v=>Math.abs(v-med)));
   return {med,scale:Math.max(1.4826*mad,FLOOR[metric]||1e-9),n:vals.length};
 }
 function signals(p,d){
+  if(LIVE){const r=p.byDay[d];if(!r||!r.published)return {list:[],state:'none'};
+    const list=(r.f||[]).filter(c=>FLAG_TEXT[c]).map(c=>({key:c,metric:FLAG_TEXT[c][0],label:FLAG_TEXT[c][1]}));
+    return {list,state:r.a||(r.lvl?'complete':'not assessed'),lvl:r.lvl}}
   const r=p.byDay[d];if(!r)return {list:[],state:'none'};
   const out=[];let assessed=0;
   if(r.sleep!=null){assessed++;if(r.sleep<TH.short)out.push({key:'short_sleep',metric:'sleep',label:'Slept less than 6 hours'})}
@@ -1466,8 +1487,8 @@ function signals(p,d){
   const lvl=out.length>=2?'red':out.length===1?'amber':state==='complete'?'green':null;
   return {list:out,state,lvl};
 }
-const MLABEL={sleep:'Sleep',rhr:'Resting heart rate',hrv:'Heart rate variability',steps:'Steps',br:'Breathing rate',temp:'Skin temperature',spo2:'Blood oxygen',strain:'Day strain',rec:'Recovery'};
-function valueText(m,v){if(v==null)return '—';return m==='sleep'?hm(v):m==='rhr'?fmt(v)+' bpm':m==='hrv'?fmt(v,1)+' ms':m==='steps'?fmt(v)+' steps':m==='br'?fmt(v,1)+' br/min':m==='temp'?fmt(v,2)+' °C':m==='spo2'?fmt(v,1)+' %':m==='strain'?fmt(v,1):m==='rec'?fmt(v)+' %':fmt(v)}
+const MLABEL={sleep_hr:'Sleeping heart rate',sleep:'Sleep',rhr:'Resting heart rate',hrv:'Heart rate variability',steps:'Steps',br:'Breathing rate',temp:'Skin temperature',spo2:'Blood oxygen',strain:'Day strain',rec:'Recovery'};
+function valueText(m,v){if(v==null)return '—';return m==='sleep'?hm(v):m==='rhr'?fmt(v)+' bpm':m==='hrv'?fmt(v,1)+' ms':m==='steps'?fmt(v)+' steps':m==='br'?fmt(v,1)+' br/min':m==='temp'?fmt(v,2)+' °C':m==='spo2'?fmt(v,1)+' %':m==='strain'?fmt(v,1):m==='rec'?fmt(v)+' %':m==='sleep_hr'?fmt(v)+' bpm':fmt(v)}
 
 /* Worth a look: previous seven days including the latest day; lead with code, date, measurement and personal comparison. */
 function worthALook(){
@@ -1476,7 +1497,14 @@ function worthALook(){
     for(const d of days){const s=signals(p,d);for(const sig of s.list){const b=baseline(p,sig.metric,d);out.push({p,d,sig,lvl:s.lvl,state:s.state,value:p.byDay[d][sig.metric],usual:b?b.med:null})}}}
   return out.sort((a,b)=>a.d<b.d?1:a.d>b.d?-1:a.p.id.localeCompare(b.p.id));
 }
+function reasonText(s){const [m,why]=String(s).split(':');return (MLABEL[m]||m)+(why?' '+why.replace(/_/g,' '):'')}
 function coverageIssues(){
+  if(LIVE){const out=[];
+    for(const p of SHARED){const pub=p.days.filter(r=>r.published);const last=pub[pub.length-1];
+      if(!last){out.push({id:p.id,when:'—',text:'No processed day in this period.',pill:['gap','No processed data']});continue}
+      if(last.d<NOW.latest)out.push({id:p.id,when:'since '+dShort(addDays(last.d,1)),text:`Latest processed day ${dShort(last.d)}. Later days have no processed readings yet.`,pill:['amber','No recent data']});
+      if(last.a)out.push({id:p.id,when:dShort(last.d),text:esc('Assessment '+last.a+(last.m&&last.m.length?': '+last.m.map(reasonText).join(', '):'')+'.'),pill:['gap','Partly assessed']})}
+    return out}
   return [
    {id:'p07',when:'since 24 Nov',text:'Delayed sync. Latest readings 23 Nov 18:10; nothing newer has arrived.',pill:['amber','Delayed sync']},
    {id:'p05',when:'22 Nov',text:'No sleep record returned. Heart rate and steps are present that day.',pill:['gap','No readings returned']},
@@ -1487,6 +1515,7 @@ function coverageIssues(){
   ].filter(c=>visible(c.id));
 }
 const STATE_LABEL={ok:'Readings present',partial:'Partial (today so far)',none:'No readings returned',failed:'Request failed',preissue:'Before device issued',notworn:'Device not worn',delayed:'Not yet synced',na:'Not provided by this device in Sentra',notreq:'Not requested',notyet:'Not available yet today'};
+if(LIVE)STATE_LABEL.none='No processed value';
 function covGroup(r,group){
   const order=['failed','delayed','preissue','notworn','none','partial','notyet','ok','na'];
   const ms={sleep:['sleep'],heart:['rhr','hrv'],activity:['steps','strain']}[group];
@@ -1498,6 +1527,9 @@ function covGroup(r,group){
 
 /* Group statistics: one value per person per date, per device, shown only with >= 5 eligible contributors for that statistic. */
 function groupStat(dev,metric,d){
+  if(LIVE){const g=LIVE.group;if(!g.end||metric==='dayhr')return {value:null};
+    if(d===g.end){const t=g.tiles.find(x=>x.key===metric&&x.device===dev);if(t)return {value:t.value,n:t.contributors}}
+    const row=((g.trends[metric]||{})[dev]||[]).find(x=>x.d===d);return {value:row?row.value:null}}
   const vals=[];
   for(const p of DATA){if(p.dev!==dev)continue;const r=p.byDay[d];if(!r)continue;
     let v=metric==='dayhr'?daytimeHR(p,d):r[metric];if(v!=null)vals.push(v)}
@@ -1577,38 +1609,51 @@ function strip(p,metric,days){return `<div class="strip" aria-hidden="true">${da
 const app=document.getElementById('app');
 const state={range:30,trend:'rhr',scroll:{},covNote:''};
 function codeBtn(id){return visible(id)?`<a class="code" href="#${id}">${id}</a>`:''}
+/* Navigation. The public demo routes on the address hash. Live mode runs inside the viewer's embedded
+   frame, where '#…' links resolve against the viewer's own address, so it keeps the view in the page
+   and never changes the address or the frame's history. */
+let HASH='overview';const TRAIL=[];
+function go(h){h=String(h).replace(/^#/,'');if(!LIVE){location.hash=h;return}if(h!==HASH)TRAIL.push(HASH);HASH=h;route()}
+function goBack(){if(LIVE){HASH=TRAIL.pop()||'overview';route();return}if(history.length>1&&state.cameFrom)history.back();else location.hash='overview'}
+document.addEventListener('click',e=>{if(!LIVE)return;const a=e.target&&e.target.closest&&e.target.closest('a[href^="#"]');if(!a)return;e.preventDefault();go(a.getAttribute('href'))});
 function route(){
-  const h=(location.hash||'#overview').slice(1);
+  const h=LIVE?HASH:(location.hash||'#overview').slice(1);
   const prev=state.view;state.view=h;
   document.querySelectorAll('[data-nav]').forEach(a=>a.setAttribute('aria-current',(h===a.dataset.nav||(a.dataset.nav==='people'&&/^p\d/.test(h)))?'page':'false'));
   let m;
   if(h==='overview')renderOverview();
   else if(h==='people')renderPeople();
   else if(h==='sources')renderSources();
-  else if((m=h.match(/^(p\d\d)(?:-(?:night|day|ex|wo)-\d{4}-\d\d-\d\d)?$/))&&!visible(m[1]))renderUnavailable();
-  else if((m=h.match(/^(p\d\d)$/)))renderProfile(P[m[1]]);
-  else if((m=h.match(/^(p\d\d)-(night|day)-(\d{4}-\d\d-\d\d)$/)))renderDetail(P[m[1]],m[2],m[3]);
-  else if((m=h.match(/^(p\d\d)-(ex|wo)-(\d{4}-\d\d-\d\d)$/)))renderWorkout(P[m[1]],m[3]);
-  else{location.hash='overview';return}
+  else if((m=h.match(new RegExp(`^(${CODE})(?:-(?:night|day|ex|wo)-\\d{4}-\\d\\d-\\d\\d)?$`)))&&!visible(m[1]))renderUnavailable();
+  else if((m=h.match(new RegExp(`^(${CODE})$`))))renderProfile(P[m[1]]);
+  else if((m=h.match(new RegExp(`^(${CODE})-(night|day)-(\\d{4}-\\d\\d-\\d\\d)$`))))renderDetail(P[m[1]],m[2],m[3]);
+  else if((m=h.match(new RegExp(`^(${CODE})-(ex|wo)-(\\d{4}-\\d\\d-\\d\\d)$`))))renderWorkout(P[m[1]],m[3]);
+  else{if(LIVE){HASH='overview';route()}else location.hash='overview';return}
   const y=state.scroll[h];window.scrollTo(0,y!=null&&h==='overview'?y:0);
 }
 window.addEventListener('hashchange',route);
 window.addEventListener('scroll',()=>{if(state.view)state.scroll[state.view]=window.scrollY},{passive:true});
 
 /* ------- overview ------- */
+function stamp(v){if(!v)return '—';if(/^\d{4}-\d\d-\d\d$/.test(v))return dShort(v);const t=new Date(v);
+  return isNaN(t)?'—':t.toLocaleString('en-GB',{timeZone:'Asia/Beirut',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}
+function statusBar(wake){
+  if(!LIVE)return `<div class="status"><span class="ok">● Daily update succeeded</span><span class="num">${dLong(NOW.date)}, ${NOW.refresh} Beirut</span><span class="muted">Readings through ${dShort(NOW.latest)}; last night's sleep by wake date ${dShort(wake)}</span><span class="muted small">Target schedule 3:00 p.m.</span></div>`;
+  const old=NOW.latest<addDays(NOW.date,-2);
+  return `<div class="status"><span class="ok">● Board published</span><span class="num">${esc(stamp(LIVE.built_at))} Beirut</span><span class="muted">Readings through ${dShort(NOW.latest)}</span>${old?`<span class="pill amber">No new processed data since ${dShort(NOW.latest)}</span>`:''}<span class="muted small">Scheduled refresh ${esc(LIVE.refresh)} Beirut · thresholds ${esc(LIVE.thresholds_status||'v0')}</span></div>`}
 function renderOverview(){
-  const look=worthALook();const yesterday=NOW.latest;const wake=NOW.date;
+  const look=worthALook();const gEnd=LIVE?LIVE.group.end:null;const yesterday=LIVE?gEnd:NOW.latest;const wake=LIVE?gEnd:NOW.date;
   const tile=(dev,metric,d,label,txt)=>{const s=groupStat(dev,metric,d);
     if(dev==='WHOOP'&&metric==='steps')return `<div class="tile dim"><div class="k">${label} · WHOOP</div><div class="v">Not available</div><div class="n">WHOOP cycle steps have no mapping in Sentra</div></div>`;
     return s.value==null?`<div class="tile dim"><div class="k">${label} · ${dev}</div><div class="v">Not shown</div><div class="n">Fewer than ${TH.k} eligible contributors</div></div>`
-    :`<div class="tile"><div class="k">${label} · <span class="dev ${dev}">${dev}</span></div><div class="v num">${txt(s.value)}</div><div class="n">Average of ${s.n} people, one value each</div></div>`};
-  const trendDays=range(addDays(NOW.latest,-29),NOW.latest);
+    :`<div class="tile"><div class="k">${label} · <span class="dev ${dev}">${dev}</span></div><div class="v num">${txt(s.value)}</div><div class="n">${LIVE?`Median of ${s.n} people · ${dShort(d)}`:`Average of ${s.n} people, one value each`}</div></div>`};
+  const trendDays=LIVE?(gEnd?range(addDays(gEnd,-29),gEnd):[]):range(addDays(NOW.latest,-29),NOW.latest);
   const tm=state.trend;
   const series=['Fitbit','WHOOP'].map(dev=>({dev,points:trendDays.map(d=>groupStat(dev,tm,d)),color:dev==='Fitbit'?'var(--fitbit)':'var(--whoop)'}));
   const avail=series.filter(s=>s.points.some(p=>p.value!=null));
   const notes={rhr:'Resting heart rate: Fitbit daily value; WHOOP recovery value.',dayhr:'Daytime average HR (proposed): Fitbit minute heart rate, 08:00–20:00. WHOOP has no daytime series; its cycle average covers the whole physiological day.',sleep:'Asleep minutes by wake date.',steps:'Fitbit steps from minute rollups. WHOOP steps are not available.'};
   app.innerHTML=`
-  <div class="status"><span class="ok">● Daily update succeeded</span><span class="num">${dLong(NOW.date)}, ${NOW.refresh} Beirut</span><span class="muted">Readings through ${dShort(NOW.latest)}; last night's sleep by wake date ${dShort(wake)}</span><span class="muted small">Target schedule 3:00 p.m.</span></div>
+  ${statusBar(wake)}
   <div class="grid2">
     <section class="card" aria-labelledby="wl"><div class="card-h"><h2 id="wl">Worth a look</h2><span class="sub">${dShort(addDays(NOW.date,-6))}–${dShort(NOW.date)} · compared with each person's usual</span></div>
       ${look.length?look.map(o=>`<div class="obs">${codeBtn(o.p.id)}<button class="obs-main" data-go="${o.p.id}-${o.sig.metric==='sleep'||o.p.dev==='WHOOP'?'night':'day'}-${o.d}">
@@ -1618,22 +1663,22 @@ function renderOverview(){
     <section class="card" aria-labelledby="dc"><div class="card-h"><h2 id="dc">Data coverage</h2><span class="sub">Which dates and measures have usable readings</span></div>
       <ul class="issues">${coverageIssues().map(c=>`<li>${codeBtn(c.id)}<div><div class="obs-line"><span class="num muted">${c.when}</span><span class="pill ${c.pill[0]}">${c.pill[1]}</span></div><div class="small">${c.text}</div></div></li>`).join('')}</ul>
       <div class="covwrap">${coverageGrid()}</div>
-      <div class="legend">${[['ok','Readings'],['partial','Partial / today'],['none','No readings returned'],['failed','Request failed'],['delayed','Not yet synced'],['preissue','Before device issued'],['notworn','Not worn'],['na','Not provided']].map(([s,l])=>`<span><i class="s-${s}"></i>${l}</span>`).join('')}</div>
+      <div class="legend">${(LIVE?[['ok','Processed value'],['none','No processed value'],['na','Not provided']]:[['ok','Readings'],['partial','Partial / today'],['none','No readings returned'],['failed','Request failed'],['delayed','Not yet synced'],['preissue','Before device issued'],['notworn','Not worn'],['na','Not provided']]).map(([s,l])=>`<span><i class="s-${s}"></i>${l}</span>`).join('')}</div>
       <div class="legend"><span>Rows in each cell: sleep · heart · activity</span></div>
       <div class="covnote" id="covnote" aria-live="polite">${state.covNote||'Select a cell to see what was recorded.'}</div>
     </section>
   </div>
   <section class="card" style="margin-top:16px" aria-labelledby="gm"><div class="card-h"><h2 id="gm">Group</h2><span class="sub">Each device separately; a figure needs at least ${TH.k} eligible contributors for that device, date and statistic. People who share group figures only are counted here.</span></div>
     <div class="tiles g3">
-      ${['Fitbit','WHOOP'].map(dev=>tile(dev,'sleep',wake,"Last night's sleep",hm)+tile(dev,'steps',yesterday,'Steps yesterday',v=>fmt(v))+tile(dev,'rhr',yesterday,'Resting heart rate',v=>fmt(v,1)+' bpm')).join('')}
+      ${['Fitbit','WHOOP'].map(dev=>tile(dev,'sleep',wake,LIVE?'Sleep':"Last night's sleep",hm)+tile(dev,'steps',yesterday,LIVE?'Steps':'Steps yesterday',v=>fmt(v))+tile(dev,'rhr',yesterday,'Resting heart rate',v=>fmt(v,1)+' bpm')).join('')}
     </div>
     <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:16px 0 6px"><h3>Last 30 days</h3>
-      <div class="seg" role="group" aria-label="Trend measure">${[['rhr','Resting HR'],['dayhr','Daytime HR'],['sleep','Sleep'],['steps','Steps']].map(([k,l])=>`<button type="button" data-trend="${k}" aria-pressed="${tm===k}">${l}</button>`).join('')}</div>
+      <div class="seg" role="group" aria-label="Trend measure">${[['rhr','Resting HR'],['dayhr','Daytime HR'],['sleep','Sleep'],['steps','Steps']].filter(([k])=>!LIVE||k!=='dayhr').map(([k,l])=>`<button type="button" data-trend="${k}" aria-pressed="${tm===k}">${l}</button>`).join('')}</div>
       <span class="legend" style="margin:0"><span><i style="background:var(--fitbit)"></i>Fitbit</span><span><i style="background:var(--whoop)"></i>WHOOP</span></span></div>
-    ${svgLine(avail.map(s=>({points:s.points.map(p=>p.value),color:s.color})),{x:trendDays,label:'Group trend',yfmt:tm==='sleep'?(v=>(v/60).toFixed(1)+'h'):null})}
-    <p class="note">${notes[tm]} Average of one value per person. ${avail.length<2?'Only one device has this measure. ':''}A day is left out of a device's line when fewer than ${TH.k} people have an eligible value; gaps do not say how many did.</p>
+    ${LIVE&&!gEnd?`<p class="muted">No group figure has ${TH.k} eligible contributors yet.</p>`:svgLine(avail.map(s=>({points:s.points.map(p=>p.value),color:s.color})),{x:trendDays,label:'Group trend',yfmt:tm==='sleep'?(v=>(v/60).toFixed(1)+'h'):null})}
+    <p class="note">${notes[tm]} ${LIVE?'Median':'Average'} of one value per person. ${avail.length<2?'Only one device has this measure. ':''}A day is left out of a device's line when fewer than ${TH.k} people have an eligible value; gaps do not say how many did.</p>
   </section>`;
-  app.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{location.hash=b.dataset.go});
+  app.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
   app.querySelectorAll('[data-trend]').forEach(b=>b.onclick=()=>{state.trend=b.dataset.trend;const y=window.scrollY;renderOverview();window.scrollTo(0,y)});
   app.querySelectorAll('[data-cell]').forEach(b=>b.onclick=()=>{const [id,d]=b.dataset.cell.split('|');const r=P[id].byDay[d];
     state.covNote=`<b class="mono">${id}</b> · ${dLong(d)} · Sleep: ${STATE_LABEL[covGroup(r,'sleep')]} · Heart: ${STATE_LABEL[covGroup(r,'heart')]} · Activity: ${STATE_LABEL[covGroup(r,'activity')]}`;
@@ -1647,7 +1692,7 @@ function coverageGrid(){
 /* ------- people ------- */
 function renderPeople(){
   app.innerHTML=`<section class="card"><div class="card-h"><h2>People</h2><span class="sub">People who share individual data, in enrollment order. People who share group figures only are not listed; they count towards group figures.</span></div>
-  <ul class="wl">${SHARED.map(p=>{const last=[...p.days].reverse().find(r=>r.sleep!=null||r.rhr!=null);return `<li>${codeBtn(p.id)}<span>${esc(p.name)}</span><span class="dev ${p.dev}">${p.dev}</span><span class="muted small num">Latest reading ${last?dShort(last.d):'—'}${DELAYED[p.id]?' · delayed sync':''}</span></li>`}).join('')}</ul></section>`;
+  <ul class="wl">${SHARED.map(p=>{const last=[...p.days].reverse().find(r=>r.sleep!=null||r.rhr!=null);return `<li>${codeBtn(p.id)}${p.name?`<span>${esc(p.name)}</span>`:''}<span class="dev ${p.dev}">${p.dev}</span><span class="muted small num">${LIVE?'Latest processed day':'Latest reading'} ${last?dShort(last.d):'—'}${DELAYED[p.id]?' · delayed sync':''}</span></li>`}).join('')}</ul></section>`;
 }
 
 /* ------- profile ------- */
@@ -1658,32 +1703,32 @@ function renderProfile(p){
   const end=NOW.date;const start=state.range===30?addDays(NOW.latest,-29):START;
   const days=range(start,end);const fit=p.dev==='Fitbit';
   const today=p.byDay[NOW.date];
-  const latestTime=fit?(DELAYED[p.id]?'23 Nov 18:10':'15:32 today'):(today&&today.sleep!=null?'07:14 today (sleep and recovery)':'—');
+  const latestTime=LIVE?(Object.entries(p.latest).map(([k,v])=>k+' '+stamp(v)).join(' · ')||'—'):fit?(DELAYED[p.id]?'23 Nov 18:10':'15:32 today'):(today&&today.sleep!=null?'07:14 today (sleep and recovery)':'—');
   const base=m=>days.map(d=>{const b=p.byDay[d]&&p.byDay[d][m]!=null?baseline(p,m,d):null;return b?b.med:null});
   const vals=m=>days.map(d=>p.byDay[d]?p.byDay[d][m]??null:null);
   const shortCol=(i,v)=>v<TH.short?'var(--amber)':'url(#barGrad)';
-  const workouts=days.flatMap(d=>p.byDay[d].workouts.map(w=>({...w,d})));
+  const workouts=days.flatMap(d=>(p.byDay[d]?p.byDay[d].workouts:[]).map(w=>({...w,d})));
   const sec=(title,body,metric,extra='')=>`<section class="card"><div class="card-h"><h2>${title}</h2>${extra}</div>${body}${metric?`<div class="small muted" style="margin-top:6px">Coverage · ${MLABEL[metric]}</div>`+strip(p,metric,days):''}</section>`;
   app.innerHTML=`
   <div class="crumb"><button class="back" data-back>← Back to overview</button></div>
-  <div class="prof-h"><span class="bigcode">${p.id}</span><div><div style="font-size:18px;font-weight:600">${esc(p.name)}<span class="tag">name source to confirm</span></div>
-    <div class="kv"><span><span class="dev ${p.dev}">${p.dev}</span> ${fit?'Google Health':'WHOOP API'}</span><span>Enrolled <b>${dLong(p.joined)}</b></span><span>Device issued <b>${p.issued?dLong(p.issued):'not recorded'}</b><span class="tag">no source yet</span></span><span>Sharing <b>individual</b></span></div></div>
-    <div class="seg" role="group" aria-label="Period" style="margin-left:auto"><button type="button" data-range="30" aria-pressed="${state.range===30}">30 days</button><button type="button" data-range="all" aria-pressed="${state.range!==30}">Since 1 Oct</button></div></div>
-  <div class="status"><b>Today so far</b>${fit?(today&&today.steps!=null?`<span class="num">${fmt(today.steps)} steps (partial)</span>`:'<span class="muted">No readings yet today</span>'):'<span class="muted">WHOOP supplies no intraday steps or heart rate</span>'}<span class="muted">Latest reading ${latestTime}</span>${fit&&!DELAYED[p.id]?`<button class="entry-link back" data-go="${p.id}-day-${NOW.date}">Open today →</button>`:''}</div>
+  <div class="prof-h"><span class="bigcode">${p.id}</span><div><div style="font-size:18px;font-weight:600">${LIVE?'<span class="muted small">Pseudonymous code; Sentra stores no names</span>':esc(p.name)+'<span class="tag">name source to confirm</span>'}</div>
+    <div class="kv">${LIVE?`<span><span class="dev ${p.dev}">${p.dev}</span> ${fit?'Google Health':'WHOOP API'}</span><span>Sharing <b>individual</b></span>`:`<span><span class="dev ${p.dev}">${p.dev}</span> ${fit?'Google Health':'WHOOP API'}</span><span>Enrolled <b>${dLong(p.joined)}</b></span><span>Device issued <b>${p.issued?dLong(p.issued):'not recorded'}</b><span class="tag">no source yet</span></span><span>Sharing <b>individual</b></span>`}</div></div>
+    <div class="seg" role="group" aria-label="Period" style="margin-left:auto"><button type="button" data-range="30" aria-pressed="${state.range===30}">30 days</button><button type="button" data-range="all" aria-pressed="${state.range!==30}">Since ${dShort(START)}</button></div></div>
+  ${LIVE?`<div class="status"><b>Latest readings</b><span class="muted num">${esc(latestTime)}</span><span class="muted small">Processed values appear after the daily refresh; partial-day readings are not collected.</span></div>`:`<div class="status"><b>Today so far</b>${fit?(today&&today.steps!=null?`<span class="num">${fmt(today.steps)} steps (partial)</span>`:'<span class="muted">No readings yet today</span>'):'<span class="muted">WHOOP supplies no intraday steps or heart rate</span>'}<span class="muted">Latest reading ${latestTime}</span>${fit&&!DELAYED[p.id]?`<button class="entry-link back" data-go="${p.id}-day-${NOW.date}">Open today →</button>`:''}</div>`}
   <div class="sections">
    ${sec('Sleep',svgBars(days,vals('sleep'),{label:'Asleep minutes',refLine:base('sleep'),color:shortCol,yfmt:v=>(v/60).toFixed(0)+'h',tip:hm,click:'night'})+`<p class="note">Bars: asleep time by wake date. Line: usual (previous 28 days). Amber: under 6 hours. Select a bar to open that night.</p>`,'sleep')}
-   ${sec('Heart rate and HRV',svgLine([{points:vals('rhr'),color:'var(--red)'},{points:base('rhr'),color:'var(--red)',dash:1}],{x:days,label:'Resting heart rate'})+svgLine([{points:vals('hrv'),color:'var(--accent)'},{points:base('hrv'),color:'var(--accent)',dash:1}],{x:days,h:140,label:'HRV'})+`<p class="note">Solid: resting heart rate (bpm, red) and HRV (ms, violet). Dashed: usual.</p><div class="entry">${fit?`<button data-go="${p.id}-day-${NOW.latest}">Minute heart rate, ${dShort(NOW.latest)}</button>`:''}</div>`,'rhr')}
+   ${sec('Heart rate and HRV',svgLine([{points:vals('rhr'),color:'var(--red)'},{points:base('rhr'),color:'var(--red)',dash:1}],{x:days,label:'Resting heart rate'})+svgLine([{points:vals('hrv'),color:'var(--accent)'},{points:base('hrv'),color:'var(--accent)',dash:1}],{x:days,h:140,label:'HRV'})+`<p class="note">Solid: resting heart rate (bpm, red) and HRV (ms, violet). Dashed: usual.</p><div class="entry">${fit&&!LIVE?`<button data-go="${p.id}-day-${NOW.latest}">Minute heart rate, ${dShort(NOW.latest)}</button>`:''}</div>`,'rhr')}
    ${sec('Activity',fit?svgBars(days,vals('steps'),{label:'Steps',tip:v=>fmt(v)+' steps',click:'day'})+`<p class="note">Steps from minute rollups (the board's source). Select a bar to open the day's minute steps.</p>`:svgBars(days,vals('strain'),{label:'Strain',tip:v=>fmt(v,1),yfmt:v=>v.toFixed(0),click:'day'})+`<p class="note">WHOOP day strain per cycle. WHOOP steps are not available in Sentra.</p>`,fit?'steps':'strain')}
-   ${sec('Workouts',workouts.length?`<div class="tablewrap"><table><thead><tr><th>Date</th><th>Type</th><th>Duration</th><th>Avg HR</th>${fit?'<th>Calories</th>':'<th>Strain</th>'}</tr></thead><tbody>${workouts.slice(-10).reverse().map(w=>`<tr><td class="num"><a href="#${p.id}-${fit?'ex':'wo'}-${w.d}">${dShort(w.d)}</a></td><td>${w.type}</td><td class="num">${w.dur} min</td><td class="num">${w.avghr} bpm</td><td class="num">${fit?w.cal+' kcal':fmt(w.strain,1)}</td></tr>`).join('')}</tbody></table></div><p class="note">${workouts.length} sessions in this period; latest 10 shown.</p>`:'<p class="muted">No sessions in this period.</p>',null)}
-   ${sec('Other vitals',svgLine([{points:vals('br'),color:'var(--accent)'}],{x:days,h:120,label:'Breathing rate'})+`<div class="tiles" style="margin-top:8px"><div class="tile"><div class="k">Skin temperature, latest</div><div class="v num">${valueText('temp',[...days].reverse().map(d=>p.byDay[d].temp).find(v=>v!=null))}</div></div><div class="tile ${fit?'dim':''}"><div class="k">Blood oxygen, latest</div><div class="v num">${fit?'No readings returned':valueText('spo2',[...days].reverse().map(d=>p.byDay[d].spo2).find(v=>v!=null))}</div>${fit?'<div class="n">Requested; Google returned no records</div>':''}</div>${fit?'<div class="tile dim"><div class="k">VO2 max</div><div class="v">No readings returned</div></div>':''}</div><p class="note">Line: breathing rate (breaths/min).</p>`,'br')}
+   ${sec('Workouts',LIVE?'<p class="muted">Workout sessions are stored but not processed yet. Open Workouts in the sidebar to see them for this person.</p>':workouts.length?`<div class="tablewrap"><table><thead><tr><th>Date</th><th>Type</th><th>Duration</th><th>Avg HR</th>${fit?'<th>Calories</th>':'<th>Strain</th>'}</tr></thead><tbody>${workouts.slice(-10).reverse().map(w=>`<tr><td class="num"><a href="#${p.id}-${fit?'ex':'wo'}-${w.d}">${dShort(w.d)}</a></td><td>${w.type}</td><td class="num">${w.dur} min</td><td class="num">${w.avghr} bpm</td><td class="num">${fit?w.cal+' kcal':fmt(w.strain,1)}</td></tr>`).join('')}</tbody></table></div><p class="note">${workouts.length} sessions in this period; latest 10 shown.</p>`:'<p class="muted">No sessions in this period.</p>',null)}
+   ${sec('Other vitals',svgLine([{points:vals('br'),color:'var(--accent)'}],{x:days,h:120,label:'Breathing rate'})+`<div class="tiles" style="margin-top:8px"><div class="tile"><div class="k">Skin temperature, latest</div><div class="v num">${valueText('temp',[...days].reverse().map(d=>p.byDay[d].temp).find(v=>v!=null))}</div></div><div class="tile ${fit?'dim':''}"><div class="k">Blood oxygen, latest</div><div class="v num">${fit?(LIVE?'No processed value':'No readings returned'):valueText('spo2',[...days].reverse().map(d=>p.byDay[d].spo2).find(v=>v!=null))}</div>${fit&&!LIVE?'<div class="n">Requested; Google returned no records</div>':''}</div>${fit&&!LIVE?'<div class="tile dim"><div class="k">VO2 max</div><div class="v">No readings returned</div></div>':''}</div><p class="note">Line: breathing rate (breaths/min).</p>`,'br')}
    ${sec('Vendor scores',fit?'<div class="unsupported">Fitbit returns no recovery or strain score in the collected data.</div>':svgBars(days,vals('rec'),{label:'Recovery',tip:v=>v+' %',yfmt:v=>Math.round(v)+'%',color:(i,v)=>v<34?'var(--red)':v<67?'var(--amber)':'var(--ok)'})+`<p class="note">WHOOP recovery score per cycle; colours follow WHOOP's own bands. Score status is shown on each night.</p>`,fit?null:'rec')}
   </div>`;
   bindBack();
   app.querySelectorAll('[data-range]').forEach(b=>b.onclick=()=>{state.range=b.dataset.range==='30'?30:'all';renderProfile(p)});
-  app.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>{location.hash=b.dataset.go});
-  app.querySelectorAll('svg[data-click]').forEach(svg=>svg.addEventListener('click',e=>{const i=e.target.dataset&&e.target.dataset.i;if(i==null)return;const d=days[Number(i)];location.hash=`${p.id}-${svg.dataset.click}-${d}`}));
+  app.querySelectorAll('[data-go]').forEach(b=>b.onclick=()=>go(b.dataset.go));
+  app.querySelectorAll('svg[data-click]').forEach(svg=>svg.addEventListener('click',e=>{const i=e.target.dataset&&e.target.dataset.i;if(i==null)return;const d=days[Number(i)];go(`${p.id}-${svg.dataset.click}-${d}`)}));
 }
-function bindBack(){app.querySelectorAll('[data-back]').forEach(b=>b.onclick=()=>{if(history.length>1&&state.cameFrom)history.back();else location.hash='overview'})}
+function bindBack(){app.querySelectorAll('[data-back]').forEach(b=>b.onclick=goBack)}
 window.addEventListener('hashchange',()=>{state.cameFrom=true});
 
 function zoneBars(z){const W=640,H=150,L=40,B=24,T=10,hi=Math.max(...z,1)*1.15,bw=(W-L-12)/z.length,Y=v=>T+(hi-v)*(H-T-B)/hi;
@@ -1696,6 +1741,7 @@ function navDates(p,kind,d){const prev=addDays(d,-1),next=addDays(d,1);return `<
 /* ------- detail ------- */
 function renderDetail(p,kind,d){
   if(!p||!visible(p.id)){renderUnavailable();return}
+  if(LIVE){liveDetail(p,kind,d);return}
   const r=p.byDay[d];const fit=p.dev==='Fitbit';
   const head=`<div class="crumb"><button class="back" data-back>← Back</button><a class="code" href="#${p.id}">${p.id}</a><span class="muted">${esc(p.name)}</span><span class="dev ${p.dev}">${p.dev}</span>${navDates(p,kind,d)}</div>`;
   if(!r){app.innerHTML=head+'<div class="empty">Outside the collected period.</div>';bindBack();return}
@@ -1757,8 +1803,23 @@ function renderDetail(p,kind,d){
   }
   bindBack();
 }
+/* Live day: every published value with its usual, the day's signals and assessment; minute detail loads on request. */
+function liveDetail(p,kind,d){
+  const r=p.byDay[d];
+  const head=`<div class="crumb"><button class="back" data-back>← Back</button><a class="code" href="#${p.id}">${p.id}</a><span class="dev ${p.dev}">${p.dev}</span>${navDates(p,kind,d)}</div><h1 style="margin-bottom:10px">${kind==='night'?'Night ending ':''}${dLong(d)}</h1>`;
+  if(!r||!r.published){app.innerHTML=head+'<div class="empty">No processed values for this day. Empty days are left empty; nothing is estimated.</div>';bindBack();return}
+  const sig=signals(p,d);
+  const keys=[['sleep','Asleep'],['deep','Deep sleep'],['rem','REM sleep'],['sleep_hr','Sleeping heart rate'],['rhr','Resting heart rate'],['hrv','Heart rate variability'],['br','Breathing rate'],['temp','Skin temperature'],['spo2','Blood oxygen'],['steps','Steps'],['wear','Worn time'],['rec','Recovery'],['strain','Day strain']].filter(([k])=>r[k]!=null);
+  const show=(k,v)=>k==='deep'||k==='rem'||k==='wear'?hm(v):valueText(k,v);
+  const tiles=keys.map(([k,l])=>`<div class="tile"><div class="k">${l}</div><div class="v num">${show(k,r[k])}</div>${LIVE_BASE[k]&&r[LIVE_BASE[k]]!=null?`<div class="n">usual ${show(k,r[LIVE_BASE[k]])}</div>`:''}</div>`).join('');
+  const sigs=sig.list.length?`<p>${sig.list.map(s=>`<span class="pill ${sig.lvl==='red'?'red':'amber'}">${s.label}</span>`).join(' ')} <span class="muted small">Provisional signal; ${esc(sig.state)} assessment</span></p>`:`<p class="muted small">No provisional signal; ${esc(sig.state)} assessment${r.m&&r.m.length?' ('+esc(r.m.map(reasonText).join(', '))+')':''}.</p>`;
+  app.innerHTML=head+sigs+`<div class="stack"><section class="card"><div class="tiles">${tiles}</div></section>
+    <section class="card"><div class="card-h"><h2>Source</h2></div>${provenance([['Source','Published wellness board (board/board.json), '+stamp(LIVE.built_at)+' Beirut'],['Date basis','sleep by wake date; WHOOP recovery and strain by cycle start; Fitbit daily values by civil date (Asia/Beirut)'],['Missing values','left empty; nothing is estimated'],['Minute-level detail','On request: open Sleep or Daily activity in the sidebar, choose '+p.id+' and '+dLong(d)+', then Load selected data.']])}</section></div>`;
+  bindBack();
+}
 function renderWorkout(p,d){
   if(!p||!visible(p.id)){renderUnavailable();return}
+  if(LIVE){app.innerHTML=`<div class="crumb"><button class="back" data-back>← Back</button></div><div class="empty">Workout sessions are not processed yet. Open Workouts in the sidebar to see them.</div>`;bindBack();return}
   const r=p.byDay[d];const w=r&&r.workouts[0];const fit=p.dev==='Fitbit';
   const head=`<div class="crumb"><button class="back" data-back>← Back</button><a class="code" href="#${p.id}">${p.id}</a><span class="dev ${p.dev}">${p.dev}</span></div>`;
   if(!w){app.innerHTML=head+'<div class="empty">No session recorded on this date.</div>';bindBack();return}
@@ -1788,5 +1849,12 @@ function renderSources(){
   <section class="card" style="margin-top:16px"><div class="card-h"><h2>Decisions to bring back to the owner</h2></div><ul class="wl">${decisions.map(([t,x])=>`<li><b>${t}</b><span class="muted">${x}</span></li>`).join('')}</ul></section>`;
 }
 
+if(LIVE){
+  document.getElementById('org-label').textContent=LIVE.viewer||'Signed in';
+  const chip=document.getElementById('mode-chip');chip.textContent='Live data · private';chip.classList.add('live');
+  document.getElementById('foot-note').textContent='Readings from the published wellness board for people who share individual details with you. '
+    +'Group figures are computed on the server and need at least '+TH.k+' eligible contributors per device, date and statistic. '
+    +"Wellness information only, compared with each person's own pattern; not a medical assessment. Signals are provisional.";
+}
 route();
 </script>
