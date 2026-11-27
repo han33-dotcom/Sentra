@@ -24,7 +24,7 @@ from test_viewer_app import FakeReader
 
 TEAM = ['team@example.test']
 # 'Page · View' also selects a view inside the page.
-PAGES = ('Daily activity', 'Sleep', 'Workouts', 'Data availability', 'Wellness board',
+PAGES = ('Daily activity', 'Sleep', 'Workouts', 'Data availability', 'Wellness board', 'Reviewer',
          'Organization overview', 'Profiles', 'Trends · One person', 'Trends · Group', 'Follow-ups', 'Reports')
 USERS = [{'org_id': 'org-a', 'email': 'officer@a.test', 'role': 'officer', 'active': True},
          {'org_id': 'org-a', 'email': 'reviewer@a.test', 'role': 'reviewer', 'active': True},
@@ -40,7 +40,7 @@ EVERYONE = [f'p9{i}' for i in range(1, 9)]
 CAN_SEE = {'officer@a.test': {'p91'}, 'reviewer@a.test': {'p91'}, 'officer@b.test': {'p96'}}
 # Pages that list permitted individuals: the permitted person must appear there, so an empty page
 # cannot pass the "only permitted participants" check by showing nobody.
-INDIVIDUAL_PAGES = ('Daily activity', 'Sleep', 'Workouts', 'Data availability', 'Wellness board', 'Profiles',
+INDIVIDUAL_PAGES = ('Daily activity', 'Sleep', 'Workouts', 'Data availability', 'Wellness board', 'Reviewer', 'Profiles',
                     'Trends · One person', 'Follow-ups', 'Reports')  # Reports: every offered person selected
 FOLLOW_UP_NOTES = {pid: f'Individual note marker {i}' for i, pid in enumerate(EVERYONE)}
 FOLLOW_UP_HISTORY = {pid: f'History note marker {i}' for i, pid in enumerate(EVERYONE)}
@@ -192,6 +192,18 @@ class PrivacyMatrixTests(unittest.TestCase):
         self.assertFalse(app.exception, page)
         self.assertEqual([e.value for e in app.error], [], page)
         return rendered(app)
+
+    def test_reviewer_reads_one_board_on_first_visit_and_one_on_reload(self):
+        app = self.open('officer@a.test', consents())
+        with patch.object(EveryoneReader, 'group_board', side_effect=board) as group_read, \
+             patch.object(EveryoneReader, 'board', side_effect=AssertionError('duplicate board read')):
+            self.assertEqual(shown_ids(self.visit(app, 'Reviewer')), {'p91'})
+            self.assertEqual(group_read.call_count, 1)
+            app.run()
+            self.assertEqual(group_read.call_count, 1)
+            next(b for b in app.button if b.label == 'Reload reviewer').click().run()
+            self.assertEqual(list(app.error), [])
+            self.assertEqual(group_read.call_count, 2)
 
     def test_organization_users_see_only_permitted_participants_on_every_page(self):
         for email, allowed in CAN_SEE.items():
