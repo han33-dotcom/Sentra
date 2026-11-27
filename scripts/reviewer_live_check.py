@@ -179,12 +179,13 @@ def summarize(board, catalog, consents, detail_rows, coverage_rows, failure_rows
             out['rows'] = v['rows']
             out['latest_day_reached_by_5'] = kth(v['latest'], k, latest=True)
         datasets_out[f'{provider} {dataset}'] = out
-    detail = defaultdict(lambda: {'people': set(), 'person_days': 0, 'first': [], 'last': [], 'stages': set(), 'unplaced': 0})
+    detail = defaultdict(lambda: {'people': set(), 'person_days': 0, 'first': [], 'last': [], 'stages': set(), 'unplaced': set()})
     for row in detail_rows:
         if row.get('participant_id') not in contributors:
             continue
         item = detail[(row.get('provider'), row.get('dataset'))]
-        item['unplaced'] += row.get('unplaced_rows') or 0
+        if (row.get('unplaced_rows') or 0) > 0:
+            item['unplaced'].add(row['participant_id'])
         if (row.get('person_days') or 0) > 0:
             item['people'].add(row['participant_id'])
             item['person_days'] += row['person_days']
@@ -195,7 +196,9 @@ def summarize(board, catalog, consents, detail_rows, coverage_rows, failure_rows
     detail_out = {}
     for (provider, dataset), v in sorted(detail.items(), key=str):
         n = len(v['people'])
-        out = {'people_with_days': count(n, k), 'rows_without_a_day': 'present' if v['unplaced'] else 'none'}
+        if max(n, len(v['unplaced']), len(v['stages'])) < k:
+            continue
+        out = {'people_with_days': count(n, k), 'people_with_undated_rows': count(len(v['unplaced']), k)}
         if n >= k:
             out.update(person_days=v['person_days'], first_day_reached_by_5=kth(v['first'], k),
                        latest_day_reached_by_5=kth(v['last'], k, latest=True))
@@ -232,7 +235,7 @@ def summarize(board, catalog, consents, detail_rows, coverage_rows, failure_rows
     return {
         'scope': {'organization': org_id, 'population': 'current contributors (individual or group-only consent)',
                   'contributors': count(len(contributors), k), 'minimum_group': k, 'share_with': DESTINATION},
-        'board': {'built_at': board.get('built_at'), 'data_through': board.get('data_through'),
+        'board': {'built_at': board.get('built_at'),
                   'assessment_version': board.get('assessment_version'), 'board_version': board.get('board_version'),
                   'by_device': _board(board, contributors, k)},
         'datasets': datasets_out,

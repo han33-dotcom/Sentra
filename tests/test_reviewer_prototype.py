@@ -150,8 +150,21 @@ class ReviewerLiveCheckTests(unittest.TestCase):
         self.assertEqual(s['board']['by_device']['WHOOP'], {'people': 'fewer than 5'})
         self.assertEqual(s['datasets']['whoop sleep'],
                          {'people_with_rows': 'fewer than 5', 'authorization': {'revoked': 'fewer than 5'}})
-        self.assertEqual(s['detail']['whoop sleep'], {'people_with_days': 'fewer than 5', 'rows_without_a_day': 'present',
-                                                      'people_with_stage_timeline': 'fewer than 5'})
+        self.assertNotIn('whoop sleep', s['detail'])
+
+    def test_undated_rows_count_distinct_people_and_hide_subthreshold_changes(self):
+        baseline = self.summary()
+        rows = [dict(row) for row in self.detail]
+        for row in rows[:4]:
+            row['unplaced_rows'] = 19
+        self.assertEqual(self.summary(detail_rows=rows), baseline)
+        rows[4]['unplaced_rows'] = 1
+        self.assertEqual(self.summary(detail_rows=rows)['detail']['google_health sleep']['people_with_undated_rows'], 5)
+        undated = dict(rows[0], dataset='daily_steps', person_days=0, stage_rows=0)
+        self.assertEqual(self.summary(detail_rows=self.detail + [undated] * 5), baseline)
+
+    def test_global_data_through_cannot_change_the_report(self):
+        self.assertEqual(self.summary(), self.summary(board=dict(self.board, data_through='2099-01-01')))
 
     def test_null_values_are_not_counted_and_zero_is(self):
         fields = self.summary()['board']['by_device']['Fitbit']['fields']
