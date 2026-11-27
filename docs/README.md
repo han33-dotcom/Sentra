@@ -43,6 +43,7 @@ Tasks belong in [GitHub Issues](https://github.com/han33-dotcom/Sentra/issues); 
 - [pr policy activation](pr-policy-activation.md)
 - [privacy checks](privacy-checks.md)
 - [reports](reports.md)
+- [reviewer data connections](reviewer-data-connections.md): the redesigned reviewer prototype and the real source for each of its fields
 - [processing](processing.md)
 - [read api](read-api.md)
 - [schema](schema.md)
